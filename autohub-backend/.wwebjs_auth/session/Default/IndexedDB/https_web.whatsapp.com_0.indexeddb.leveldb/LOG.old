@@ -1,0 +1,29 @@
+2025/10/22-15:05:24.601 b103 Reusing MANIFEST /Users/eracode/partsthub_pro/PartsHub-Pro/autohub-backend/.wwebjs_auth/session/Default/IndexedDB/https_web.whatsapp.com_0.indexeddb.leveldb/MANIFEST-000001
+2025/10/22-15:05:24.602 b103 Recovering log #1063
+2025/10/22-15:05:24.604 b103 Reusing old log /Users/eracode/partsthub_pro/PartsHub-Pro/autohub-backend/.wwebjs_auth/session/Default/IndexedDB/https_web.whatsapp.com_0.indexeddb.leveldb/001063.log 
+2025/10/22-15:05:26.324 bf03 Level-0 table #1071: started
+2025/10/22-15:05:26.328 bf03 Level-0 table #1071: 68448 bytes OK
+2025/10/22-15:05:26.334 bf03 Delete type=0 #1063
+2025/10/22-15:05:26.334 bf03 Manual compaction at level-0 from '\x001\x00\x00\x00' @ 72057594037927935 : 1 .. '\x002\x00\x00\x00' @ 0 : 0; will stop at '\x001\x00\x00\x05' @ 3411221 : 1
+2025/10/22-15:05:26.334 bf03 Compacting 1@0 + 1@1 files
+2025/10/22-15:05:26.340 bf03 Generated table #1072@0: 1479 keys, 30538 bytes
+2025/10/22-15:05:26.343 bf03 Generated table #1073@0: 42 keys, 3012 bytes
+2025/10/22-15:05:26.343 bf03 Compacted 1@0 + 1@1 files => 33550 bytes
+2025/10/22-15:05:26.349 bf03 compacted to: files[ 0 2 22 0 0 0 0 ]
+2025/10/22-15:05:26.350 bf03 Delete type=2 #1071
+2025/10/22-15:05:26.350 bf03 Manual compaction at level-0 from '\x001\x00\x00\x05' @ 3411221 : 1 .. '\x002\x00\x00\x00' @ 0 : 0; will stop at (end)
+2025/10/22-15:05:27.736 b103 Compacting 1@1 + 2@2 files
+2025/10/22-15:05:27.783 b103 Generated table #1074@1: 47274 keys, 2206843 bytes
+2025/10/22-15:05:27.830 b103 Generated table #1075@1: 40234 keys, 2205019 bytes
+2025/10/22-15:05:27.830 b103 Compacted 1@1 + 2@2 files => 4411862 bytes
+2025/10/22-15:05:27.837 b103 compacted to: files[ 0 1 22 0 0 0 0 ]
+2025/10/22-15:05:27.837 b103 Delete type=2 #1068
+2025/10/22-15:05:27.837 b103 Delete type=2 #1072
+2025/10/22-15:05:27.837 b103 Delete type=2 #1066
+2025/10/22-15:05:27.837 b103 Delete type=2 #1067
+2025/10/22-15:05:33.512 16817 Compacting 1@1 + 1@2 files
+2025/10/22-15:05:33.541 16817 Generated table #1076@1: 12647 keys, 2176375 bytes
+2025/10/22-15:05:33.541 16817 Compacted 1@1 + 1@2 files => 2176375 bytes
+2025/10/22-15:05:33.549 16817 compacted to: files[ 0 0 22 0 0 0 0 ]
+2025/10/22-15:05:33.549 16817 Delete type=2 #1053
+2025/10/22-15:05:33.549 16817 Delete type=2 #1073
