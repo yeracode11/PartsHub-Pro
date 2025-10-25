@@ -1,0 +1,197 @@
+# Git ignore для PartsHub-Pro
+
+# Игнорировать все MD файлы
+*.md
+!README.md
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Thumbnails
+._*
+
+# Files that might appear in the root of a volume
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Directories potentially created on remote AFP share
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Node modules
+node_modules/
+npm-debug.log*
+yarn-error.log
+
+# IDE - VSCode
+.vscode/
+*.code-workspace
+
+# IDE - IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# IDE - Android Studio
+.idea/
+.gradle/
+local.properties
+*.iml
+*.ipr
+*.iws
+out/
+.externalNativeBuild
+.cxx/
+captures/
+
+# Flutter
+**/build/
+**/.dart_tool/
+**/GeneratedPluginRegistrant.dart
+**/GeneratedPluginRegistrant.java
+**/GeneratedPluginRegistrant.swift
+**/generated_plugin_registrant.dart
+**/generated_plugin_registrant.java
+**/generated_plugin_registrant.swift
+
+# Flutter MacOS
+**/Flutter/ephemeral/
+**/Flutter/Generated.xcconfig
+**/Flutter/flutter_export_environment.sh
+**/Flutter/AppFrameworkInfo.plist
+
+# Flutter iOS
+**/ios/Flutter/App.framework
+**/ios/Flutter/Flutter.framework
+**/ios/Flutter/Flutter.podspec
+**/ios/Flutter/Generated.xcconfig
+**/ios/Flutter/ephemeral/
+**/ios/Pods/
+**/ios/.symlinks/
+**/ios/Flutter/App.framework
+**/ios/Flutter/Flutter.framework
+**/ios/Flutter/Generated.xcconfig
+**/ios/Flutter/ephemeral/
+**/ios/Flutter/flutter_export_environment.sh
+**/ios/ServiceDefinitions.json
+**/ios/Runner/GeneratedPluginRegistrant.*
+
+# Flutter Android
+**/android/.gradle/
+**/android/captures/
+**/android/gradlew
+**/android/gradlew.bat
+**/android/local.properties
+**/android/app/build/
+**/android/app/debug/
+**/android/app/profile/
+**/android/app/release/
+**/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
+**/android/.idea/
+**/android/.gradle/
+**/android/build/
+**/android/app/build/
+**/android/app/debug/
+**/android/app/profile/
+**/android/app/release/
+**/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
+**/android/.idea/
+**/android/app/release/
+**/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Logs
+logs/
+*.log
+
+# OS files
+Thumbs.db
+
+# Compiled source
+*.com
+*.class
+*.dll
+*.exe
+*.o
+*.so
+
+# Packages
+*.7z
+*.dmg
+*.gz
+*.iso
+*.jar
+*.rar
+*.tar
+*.zip
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+*~
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Uploads
+**/uploads/**
+!**/uploads/.gitkeep
+
+# WhatsApp WebJS cache
+**/.wwebjs_*/
+
+# Flutter pub cache
+**/.pub-cache/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**.flutter-plugin-registrant.kt
+**.flutter-plugin-registrant.swift
+
+# Build directories
+build/
+dist/
+*.tgz
+
+# Test coverage
+coverage/
+*.lcov
+.nyc_output/
+
+# Temporary directories
+.tmp/
+temp/
+tmp/
+
+# Lock files
+package-lock.json
+yarn.lock
+Gemfile.lock
+
+# Firebase
+**/firebase_options.dart
+**/google-services.json
+**/GoogleService-Info.plist
+
+# Backup files
+*.backup
+*.bak
+
