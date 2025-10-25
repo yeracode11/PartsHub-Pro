@@ -201,16 +201,11 @@ flutter build web
 
 MIT License
 
-## 👥 Авторы
-
-- **Frontend Dev** — Flutter, UI/UX, локальная БД
-- **Backend Dev** — NestJS, PostgreSQL, WebSocket
-- **PM/Founder** — Концепция, приоритизация
 
 ## 📞 Контакты
 
-- Email: support@autohub.kz
-- Telegram: @autohub_support
+- Email: eracode11@gmail.com
+- Telegram: @erasoft1
 
 ---
 
