@@ -218,38 +218,47 @@ export class B2CController {
   // Публичный endpoint для создания заказа B2C
   @Post('orders')
   async createOrder(@Body() data: any) {
-    console.log('📦 Creating B2C order:', data);
-    
-    // Используем первую доступную организацию (можно улучшить логику)
-    const organizations = await this.organizationsService.findAll();
-    // Ищем активную организацию с типом 'parts' (авторазбор) или 'service' (сервис)
-    const firstOrg = organizations.find(org => 
-      (org.businessType === 'parts' || org.businessType === 'service') && org.isActive
-    );
-    
-    if (!firstOrg) {
-      throw new Error('No active organization found for B2C orders');
-    }
+    try {
+      console.log('📦 Creating B2C order:', JSON.stringify(data, null, 2));
+      
+      // Используем первую доступную организацию (можно улучшить логику)
+      const organizations = await this.organizationsService.findAll();
+      // Ищем активную организацию с типом 'parts' (авторазбор) или 'service' (сервис)
+      const firstOrg = organizations.find(org => 
+        (org.businessType === 'parts' || org.businessType === 'service') && org.isActive
+      );
+      
+      if (!firstOrg) {
+        console.error('❌ No active organization found');
+        throw new Error('No active organization found for B2C orders');
+      }
 
-    // Формируем данные для создания заказа
-    const orderData = {
-      items: data.items || [],
-      customerId: data.customerId || null,
-      notes: data.notes || null,
-      status: 'pending',
-      paymentStatus: 'pending',
-    };
+      // Формируем данные для создания заказа
+      const orderData = {
+        items: data.items || [],
+        customerId: data.customerId || null,
+        notes: data.notes || null,
+        status: 'pending',
+        paymentStatus: 'pending',
+      };
 
-    console.log('📦 Creating order with org:', firstOrg.id);
-    const order = await this.ordersService.create(firstOrg.id, orderData);
-    
-    if (!order) {
-      throw new Error('Failed to create order');
+      console.log('📦 Creating order with org:', firstOrg.id);
+      console.log('📦 Order data:', JSON.stringify(orderData, null, 2));
+      
+      const order = await this.ordersService.create(firstOrg.id, orderData);
+      
+      if (!order) {
+        console.error('❌ Failed to create order');
+        throw new Error('Failed to create order');
+      }
+      
+      console.log('✅ Order created:', order.id);
+      return {
+        data: order,
+      };
+    } catch (error) {
+      console.error('❌ Error creating B2C order:', error);
+      throw error;
     }
-    
-    console.log('✅ Order created:', order.id);
-    return {
-      data: order,
-    };
   }
 }
