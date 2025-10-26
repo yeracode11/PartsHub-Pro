@@ -241,6 +241,7 @@ export class B2CController {
       const b2cOrders = orders.map(order => ({
         id: order.id,
         orderNumber: order.orderNumber,
+        organizationId: order.organizationId,
         customerId: order.customerId,
         items: (order.items || []).map(item => ({
           id: item.id,

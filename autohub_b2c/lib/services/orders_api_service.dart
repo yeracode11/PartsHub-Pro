@@ -47,9 +47,17 @@ class OrdersApiService {
   // Получить заказ по ID
   Future<Order> getOrder(String orderId) async {
     try {
-      final response = await _apiClient.get('/orders/$orderId');
-      return Order.fromJson(response.data);
+      print('📦 Loading order details for ID: $orderId');
+      // Получаем все заказы и находим нужный
+      final orders = await getUserOrders();
+      final order = orders.firstWhere(
+        (o) => o.id.toString() == orderId,
+        orElse: () => throw Exception('Order not found'),
+      );
+      print('✅ Found order: ${order.orderNumber}');
+      return order;
     } catch (e) {
+      print('❌ Error loading order: $e');
       // Fallback to mock data
       return _getMockOrder(orderId);
     }

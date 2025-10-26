@@ -236,6 +236,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
                     itemCount: order.items.length,
                     itemBuilder: (context, index) {
                       final item = order.items[index];
+                      final imageUrl = item.productImage.isNotEmpty 
+                          ? ApiClient.getImageUrl(item.productImage)
+                          : '';
                       return Container(
                         width: 50,
                         margin: const EdgeInsets.only(right: 8),
@@ -243,11 +246,11 @@ class _OrdersScreenState extends State<OrdersScreen> {
                           borderRadius: BorderRadius.circular(8),
                           color: Colors.grey[100],
                         ),
-                        child: item.productImage.isNotEmpty
+                        child: imageUrl.isNotEmpty
                             ? ClipRRect(
                                 borderRadius: BorderRadius.circular(8),
                                 child: Image.network(
-                                  item.productImage,
+                                  imageUrl,
                                   fit: BoxFit.cover,
                                   errorBuilder: (context, error, stackTrace) =>
                                       const Icon(Icons.image, size: 24),

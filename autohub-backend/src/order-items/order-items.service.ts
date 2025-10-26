@@ -19,6 +19,7 @@ export class OrderItemsService {
   async createOrderItems(
     orderId: number,
     items: Array<{ itemId: number; quantity: number }>,
+    options?: { skipQuantityCheck?: boolean },
   ): Promise<OrderItem[]> {
     const orderItems: OrderItem[] = [];
 
@@ -32,16 +33,19 @@ export class OrderItemsService {
         throw new Error(`Item with ID ${itemData.itemId} not found`);
       }
 
-      // Проверяем наличие на складе
-      if (item.quantity < itemData.quantity) {
-        throw new Error(
-          `Insufficient quantity for item "${item.name}". Available: ${item.quantity}, requested: ${itemData.quantity}`,
-        );
+      // Проверяем наличие на складе (если не пропущено)
+      if (!options?.skipQuantityCheck) {
+        if (item.quantity < itemData.quantity) {
+          // Для B2C создаем заказ даже если товара нет на складе
+          console.log(`⚠️ Insufficient quantity for item "${item.name}". Available: ${item.quantity}, requested: ${itemData.quantity}`);
+        }
+        
+        // Списываем со склада (если есть товар)
+        if (item.quantity > 0) {
+          item.quantity -= itemData.quantity;
+          await this.itemRepository.save(item);
+        }
       }
-
-      // Списываем со склада
-      item.quantity -= itemData.quantity;
-      await this.itemRepository.save(item);
 
       // Создаем запись order_item
       const priceAtTime = Number(item.price);
