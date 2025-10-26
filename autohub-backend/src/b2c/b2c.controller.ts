@@ -6,13 +6,18 @@ import {
   Param,
   Body,
 } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { ItemsService } from '../items/items.service';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { OrdersService } from '../orders/orders.service';
+import { Order } from '../orders/entities/order.entity';
 
 @Controller('api/b2c')
 export class B2CController {
   constructor(
+    @InjectRepository(Order)
+    private readonly orderRepository: Repository<Order>,
     private readonly itemsService: ItemsService,
     private readonly organizationsService: OrganizationsService,
     private readonly ordersService: OrdersService,
@@ -207,12 +212,68 @@ export class B2CController {
   // Публичный endpoint для получения всех заказов B2C пользователя
   @Get('orders')
   async getOrders() {
-    // Для B2C пока возвращаем пустой список или заказы без организации
-    // В будущем можно добавить аутентификацию пользователей B2C
-    return {
-      data: [],
-      total: 0,
-    };
+    try {
+      // Получаем первую доступную организацию
+      const organizations = await this.organizationsService.findAll();
+      const firstOrg = organizations.find(org => 
+        (org.businessType === 'parts' || org.businessType === 'service') && org.isActive
+      );
+      
+      if (!firstOrg) {
+        console.log('⚠️ No active organization found for B2C orders');
+        return {
+          data: [],
+          total: 0,
+        };
+      }
+
+      // Получаем все заказы для этой организации с items
+      console.log('📦 Fetching B2C orders for org:', firstOrg.id);
+      const orders = await this.orderRepository.find({
+        where: { organizationId: firstOrg.id },
+        relations: ['customer', 'items', 'items.item'],
+        order: { createdAt: 'DESC' },
+      });
+      
+      console.log(`✅ Found ${orders.length} B2C orders`);
+      
+      // Преобразуем заказы в формат для B2C
+      const b2cOrders = orders.map(order => ({
+        id: order.id,
+        orderNumber: order.orderNumber,
+        customerId: order.customerId,
+        items: (order.items || []).map(item => ({
+          id: item.id,
+          itemId: item.itemId,
+          item: item.item,
+          productId: item.itemId,
+          productName: item.item?.name || 'Unknown',
+          productImage: item.item?.imageUrl || '',
+          price: Number(item.priceAtTime),
+          priceAtTime: item.priceAtTime,
+          quantity: item.quantity,
+          total: Number(item.subtotal),
+          subtotal: item.subtotal,
+        })),
+        totalAmount: Number(order.totalAmount),
+        status: order.status,
+        paymentStatus: order.paymentStatus,
+        notes: order.notes,
+        createdAt: order.createdAt,
+        updatedAt: order.updatedAt,
+      }));
+
+      return {
+        data: b2cOrders,
+        total: b2cOrders.length,
+      };
+    } catch (error) {
+      console.error('❌ Error fetching B2C orders:', error);
+      return {
+        data: [],
+        total: 0,
+      };
+    }
   }
 
   // Публичный endpoint для создания заказа B2C
@@ -245,7 +306,8 @@ export class B2CController {
       console.log('📦 Creating order with org:', firstOrg.id);
       console.log('📦 Order data:', JSON.stringify(orderData, null, 2));
       
-      const order = await this.ordersService.create(firstOrg.id, orderData);
+      // Создаем заказ без проверки количества для B2C
+      const order = await this.ordersService.create(firstOrg.id, orderData, { skipQuantityCheck: true });
       
       if (!order) {
         console.error('❌ Failed to create order');

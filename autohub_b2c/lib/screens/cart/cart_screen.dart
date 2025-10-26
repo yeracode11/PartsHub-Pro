@@ -3,10 +3,13 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme.dart';
 import '../../models/cart_model.dart';
+import '../../models/product_model.dart';
 import '../../blocs/cart/cart_bloc.dart';
 import '../../blocs/cart/cart_event.dart';
 import '../../blocs/cart/cart_state.dart';
 import '../../widgets/cart_item_widget.dart';
+import '../../services/orders_api_service.dart';
+import '../../services/api_client.dart';
 
 class CartScreen extends StatefulWidget {
   const CartScreen({super.key});
@@ -16,6 +19,10 @@ class CartScreen extends StatefulWidget {
 }
 
 class _CartScreenState extends State<CartScreen> {
+  final TextEditingController _addressController = TextEditingController();
+  final TextEditingController _notesController = TextEditingController();
+  bool _isCreatingOrder = false;
+
   @override
   void initState() {
     super.initState();
@@ -24,6 +31,13 @@ class _CartScreenState extends State<CartScreen> {
         context.read<CartBloc>().add(CartLoadRequested());
       }
     });
+  }
+
+  @override
+  void dispose() {
+    _addressController.dispose();
+    _notesController.dispose();
+    super.dispose();
   }
 
   @override
@@ -251,27 +265,159 @@ class _CartScreenState extends State<CartScreen> {
     );
   }
 
-  void _showCheckoutDialog(BuildContext context, Cart cart) {
+  Future<void> _showCheckoutDialog(BuildContext context, Cart cart) async {
+    // Формируем OrderItem из корзины
+    final orderItems = cart.items.map((cartItem) {
+      return OrderItem(
+        id: 0, // Будет присвоено на бэкенде
+        productId: cartItem.product.id!,
+        productName: cartItem.product.name,
+        productImage: cartItem.product.images.isNotEmpty 
+            ? cartItem.product.images.first 
+            : '',
+        price: cartItem.product.price,
+        quantity: cartItem.quantity,
+        total: cartItem.totalPrice,
+      );
+    }).toList();
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Оформление заказа'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Товаров: ${cart.totalItems}'),
-            Text('Сумма: ${cart.totalAmountFormatted}'),
-            const SizedBox(height: 16),
-            const Text('Функция оформления заказа будет добавлена в следующих версиях.'),
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Оформление заказа'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Товаров: ${cart.totalItems}',
+                  style: Theme.of(context).textTheme.bodyLarge,
+                ),
+                Text(
+                  'Сумма: ${cart.totalAmountFormatted}',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.primaryColor,
+                      ),
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _addressController,
+                  decoration: const InputDecoration(
+                    labelText: 'Адрес доставки',
+                    hintText: 'Введите адрес доставки',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.location_on),
+                  ),
+                  maxLines: 2,
+                  enabled: !_isCreatingOrder,
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _notesController,
+                  decoration: const InputDecoration(
+                    labelText: 'Комментарий (необязательно)',
+                    hintText: 'Дополнительные пожелания...',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.note),
+                  ),
+                  maxLines: 2,
+                  enabled: !_isCreatingOrder,
+                ),
+                if (_isCreatingOrder) ...[
+                  const SizedBox(height: 16),
+                  const Center(child: CircularProgressIndicator()),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: _isCreatingOrder 
+                  ? null 
+                  : () => Navigator.of(dialogContext).pop(),
+              child: const Text('Отмена'),
+            ),
+            ElevatedButton(
+              onPressed: _isCreatingOrder ? null : () async {
+                if (_addressController.text.trim().isEmpty) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    const SnackBar(
+                      content: Text('Введите адрес доставки'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                  return;
+                }
+
+                setState(() {
+                  _isCreatingOrder = true;
+                });
+
+                try {
+                  final ordersApiService = OrdersApiService(ApiClient());
+                  final order = await ordersApiService.createOrder(
+                    items: orderItems,
+                    shippingAddress: _addressController.text.trim(),
+                    notes: _notesController.text.trim().isEmpty 
+                        ? null 
+                        : _notesController.text.trim(),
+                  );
+
+                  if (!mounted) return;
+
+                  // Очищаем корзину после создания заказа
+                  context.read<CartBloc>().add(CartCleared());
+                  
+                  // Закрываем диалог
+                  Navigator.of(dialogContext).pop();
+                  
+                  // Добавляем задержку для предотвращения ошибки навигации
+                  await Future.delayed(const Duration(milliseconds: 300));
+                  
+                  if (!mounted) return;
+                  
+                  // Закрываем корзину
+                  Navigator.of(context).pop();
+
+                  // Показываем успешное сообщение
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Заказ ${order.orderNumber} успешно оформлен!'),
+                        backgroundColor: Colors.green,
+                        duration: const Duration(seconds: 3),
+                        action: SnackBarAction(
+                          label: 'Посмотреть',
+                          textColor: Colors.white,
+                          onPressed: () {
+                            context.go('/orders');
+                          },
+                        ),
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (!mounted) return;
+                  
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    SnackBar(
+                      content: Text('Ошибка создания заказа: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                  
+                  setState(() {
+                    _isCreatingOrder = false;
+                  });
+                }
+              },
+              child: const Text('Оформить заказ'),
+            ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Понятно'),
-          ),
-        ],
       ),
     );
   }

@@ -177,14 +177,27 @@ class OrderItem {
   });
 
   factory OrderItem.fromJson(Map<String, dynamic> json) {
+    // Backend returns 'itemId' but we need 'productId'
+    final productId = json['productId'] ?? json['itemId'] ?? json['item']?['id'];
+    final productName = json['productName'] ?? json['item']?['name'] ?? 'Unknown';
+    final productImage = json['productImage'] ?? json['item']?['imageUrl'] ?? '';
+    
+    // price can be 'priceAtTime' in backend - handle both string and number
+    final priceRaw = json['price'] ?? json['priceAtTime'] ?? 0;
+    final price = priceRaw is String ? double.tryParse(priceRaw) ?? 0.0 : (priceRaw ?? 0).toDouble();
+    
+    // total can be 'subtotal' in backend - handle both string and number
+    final totalRaw = json['total'] ?? json['subtotal'] ?? 0;
+    final total = totalRaw is String ? double.tryParse(totalRaw) ?? 0.0 : (totalRaw ?? 0).toDouble();
+    
     return OrderItem(
       id: json['id'],
-      productId: json['productId'],
-      productName: json['productName'],
-      productImage: json['productImage'] ?? '',
-      price: (json['price'] ?? 0).toDouble(),
+      productId: productId is int ? productId : (productId is String ? int.tryParse(productId) ?? 0 : 0),
+      productName: productName is String ? productName : 'Unknown',
+      productImage: productImage is String ? productImage : '',
+      price: price,
       quantity: json['quantity'] ?? 1,
-      total: (json['total'] ?? 0).toDouble(),
+      total: total,
     );
   }
 
