@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../core/theme.dart';
 import '../../models/cart_model.dart';
+import '../../services/api_client.dart';
 
 class CartItemWidget extends StatelessWidget {
   final CartItem item;
@@ -24,8 +26,8 @@ class CartItemWidget extends StatelessWidget {
           children: [
             // Изображение товара
             Container(
-              width: 60,
-              height: 60,
+              width: 80,
+              height: 80,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(8),
                 color: Colors.grey[100],
@@ -33,10 +35,19 @@ class CartItemWidget extends StatelessWidget {
               child: item.product.images.isNotEmpty
                   ? ClipRRect(
                       borderRadius: BorderRadius.circular(8),
-                      child: Image.network(
-                        item.product.images.first,
+                      child: CachedNetworkImage(
+                        imageUrl: ApiClient.getImageUrl(item.product.images.first),
                         fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => const Icon(
+                        placeholder: (context, url) => Container(
+                          color: Colors.grey[200],
+                          child: const Center(
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.grey),
+                            ),
+                          ),
+                        ),
+                        errorWidget: (context, url, error) => const Icon(
                           Icons.image_not_supported,
                           color: Colors.grey,
                         ),
