@@ -94,7 +94,7 @@ class Product {
 class Order {
   final int id;
   final String orderNumber;
-  final int customerId;
+  final int? customerId;
   final List<OrderItem> items;
   final double totalAmount;
   final String status; // pending, processing, shipped, delivered, cancelled
@@ -107,7 +107,7 @@ class Order {
   Order({
     required this.id,
     required this.orderNumber,
-    required this.customerId,
+    this.customerId,
     required this.items,
     required this.totalAmount,
     required this.status,
@@ -126,7 +126,9 @@ class Order {
       items: (json['items'] as List<dynamic>?)
           ?.map((item) => OrderItem.fromJson(item))
           .toList() ?? [],
-      totalAmount: (json['totalAmount'] ?? 0).toDouble(),
+      totalAmount: json['totalAmount'] is String 
+          ? double.parse(json['totalAmount']) 
+          : (json['totalAmount'] ?? 0).toDouble(),
       status: json['status'],
       paymentStatus: json['paymentStatus'],
       shippingAddress: json['shippingAddress'],
@@ -142,7 +144,7 @@ class Order {
       'orderNumber': orderNumber,
       'customerId': customerId,
       'items': items.map((item) => item.toJson()).toList(),
-      'totalAmount': totalAmount,
+      'totalAmount': totalAmount.toStringAsFixed(2),
       'status': status,
       'paymentStatus': paymentStatus,
       'shippingAddress': shippingAddress,
