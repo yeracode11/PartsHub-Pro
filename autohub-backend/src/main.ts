@@ -7,8 +7,9 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   
   // Включаем CORS для работы с Flutter приложением
+  const corsOrigin = process.env.CORS_ORIGIN || '*';
   app.enableCors({
-    origin: '*', // В production заменить на конкретный домен
+    origin: corsOrigin === '*' ? '*' : corsOrigin.split(','),
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
   });
