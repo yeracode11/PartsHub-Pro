@@ -22,6 +22,7 @@ import 'blocs/marketplace/marketplace_bloc.dart';
 import 'blocs/services/services_bloc.dart';
 import 'blocs/vehicle/vehicle_bloc.dart';
 import 'blocs/cart/cart_bloc.dart';
+import 'blocs/cart/cart_event.dart';
 
 Future<String> _getInitialRoute() async {
   final prefs = await SharedPreferences.getInstance();
@@ -83,7 +84,7 @@ class AutoHubB2CApp extends StatelessWidget {
           create: (context) => VehicleBloc(),
         ),
         BlocProvider(
-          create: (context) => CartBloc(),
+          create: (context) => CartBloc()..add(CartLoadRequested()),
         ),
       ],
       child: BlocBuilder<ThemeBloc, ThemeState>(
