@@ -1,17 +1,21 @@
 import {
   Controller,
   Get,
+  Post,
   Query,
   Param,
+  Body,
 } from '@nestjs/common';
 import { ItemsService } from '../items/items.service';
 import { OrganizationsService } from '../organizations/organizations.service';
+import { OrdersService } from '../orders/orders.service';
 
 @Controller('api/b2c')
 export class B2CController {
   constructor(
     private readonly itemsService: ItemsService,
     private readonly organizationsService: OrganizationsService,
+    private readonly ordersService: OrdersService,
   ) {}
 
   // Публичный endpoint для получения всех запчастей для B2C
@@ -197,6 +201,55 @@ export class B2CController {
         createdAt: org.createdAt,
         updatedAt: org.updatedAt,
       })),
+    };
+  }
+
+  // Публичный endpoint для получения всех заказов B2C пользователя
+  @Get('orders')
+  async getOrders() {
+    // Для B2C пока возвращаем пустой список или заказы без организации
+    // В будущем можно добавить аутентификацию пользователей B2C
+    return {
+      data: [],
+      total: 0,
+    };
+  }
+
+  // Публичный endpoint для создания заказа B2C
+  @Post('orders')
+  async createOrder(@Body() data: any) {
+    console.log('📦 Creating B2C order:', data);
+    
+    // Используем первую доступную организацию (можно улучшить логику)
+    const organizations = await this.organizationsService.findAll();
+    // Ищем активную организацию с типом 'parts' (авторазбор) или 'service' (сервис)
+    const firstOrg = organizations.find(org => 
+      (org.businessType === 'parts' || org.businessType === 'service') && org.isActive
+    );
+    
+    if (!firstOrg) {
+      throw new Error('No active organization found for B2C orders');
+    }
+
+    // Формируем данные для создания заказа
+    const orderData = {
+      items: data.items || [],
+      customerId: data.customerId || null,
+      notes: data.notes || null,
+      status: 'pending',
+      paymentStatus: 'pending',
+    };
+
+    console.log('📦 Creating order with org:', firstOrg.id);
+    const order = await this.ordersService.create(firstOrg.id, orderData);
+    
+    if (!order) {
+      throw new Error('Failed to create order');
+    }
+    
+    console.log('✅ Order created:', order.id);
+    return {
+      data: order,
     };
   }
 }

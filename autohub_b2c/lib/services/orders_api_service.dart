@@ -27,12 +27,20 @@ class OrdersApiService {
   // Получить все заказы пользователя
   Future<List<Order>> getUserOrders() async {
     try {
-      final response = await _apiClient.get('/orders');
-      final data = response.data as List<dynamic>;
-      return data.map((json) => Order.fromJson(json)).toList();
+      print('📦 Loading user orders from B2C API...');
+      final response = await _apiClient.get('/b2c/orders');
+      print('📦 B2C API response: ${response.statusCode}');
+      
+      // B2C API возвращает объект с data
+      final responseData = response.data;
+      final data = responseData['data'] as List<dynamic>;
+      final orders = data.map((json) => Order.fromJson(json)).toList();
+      print('✅ Loaded ${orders.length} orders');
+      return orders;
     } catch (e) {
-      // Fallback to mock data
-      return _getMockUserOrders();
+      print('❌ Error loading orders from B2C API: $e');
+      // Возвращаем пустой список вместо моковых данных
+      return [];
     }
   }
 
@@ -54,19 +62,25 @@ class OrdersApiService {
     String? notes,
   }) async {
     try {
+      print('📝 Creating B2C order with ${items.length} items...');
+      
       final orderData = {
-        'items': items.map((item) => {
-          'productId': item.productId,
+        'items': items.map((item) => ({
+          'itemId': item.productId,
           'quantity': item.quantity,
-          'price': item.price,
-        }).toList(),
-        'shippingAddress': shippingAddress,
+        })).toList(),
         'notes': notes,
       };
 
-      final response = await _apiClient.post('/orders', data: orderData);
-      return Order.fromJson(response.data);
+      print('📝 B2C Order data: $orderData');
+      
+      final response = await _apiClient.post('/b2c/orders', data: orderData);
+      print('✅ B2C Order created: ${response.statusCode}');
+      
+      // B2C API возвращает объект с data
+      return Order.fromJson(response.data['data']);
     } catch (e) {
+      print('❌ Error creating B2C order: $e');
       throw Exception('Не удалось создать заказ: $e');
     }
   }
