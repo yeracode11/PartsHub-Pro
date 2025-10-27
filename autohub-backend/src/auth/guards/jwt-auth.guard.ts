@@ -34,10 +34,12 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     try {
       // Вызываем родительский метод для проверки токена (асинхронно)
       const result = await super.canActivate(context);
-      console.log('🔐 JwtAuthGuard: Passport result:', result);
-      return result;
+      console.log('🔐 JwtAuthGuard: Passport result type:', typeof result);
+      console.log('🔐 JwtAuthGuard: Passport result value:', result);
+      return result as boolean;
     } catch (error) {
       console.log('❌ JwtAuthGuard: Passport error:', error.message);
+      console.log('❌ JwtAuthGuard: Error stack:', error.stack);
       return false;
     }
   }
