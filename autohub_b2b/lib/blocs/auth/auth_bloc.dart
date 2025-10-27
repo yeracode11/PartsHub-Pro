@@ -65,6 +65,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       AuthSignInRequested event, Emitter<AuthState> emit) async {
     try {
       print('🔐 AuthBloc: Starting sign in...');
+      
+      // Очищаем старые токены перед входом
+      await _storage.clearAll();
+      print('🧹 Cleared old tokens');
+      
       emit(AuthLoading());
       
       // Шаг 1: Авторизация через Firebase (получаем ID Token)
