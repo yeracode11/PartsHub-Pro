@@ -14,7 +14,7 @@ class ApiClient {
   ApiClient._internal() {
     dio = Dio(
       BaseOptions(
-        baseUrl: 'http://localhost:3000',
+        baseUrl: 'http://78.140.246.83:3000', // Production API сервер
         connectTimeout: const Duration(seconds: 30),
         receiveTimeout: const Duration(seconds: 30),
         headers: {

@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class ApiClient {
   static const String baseUrl = kDebugMode
       ? 'http://192.168.2.240:3000/api'  // Локальный IP для эмулятора
-      : 'https://api.autohub.kz/api';
+      : 'http://78.140.246.83:3000/api'; // Production API сервер
 
   late final Dio _dio;
 
