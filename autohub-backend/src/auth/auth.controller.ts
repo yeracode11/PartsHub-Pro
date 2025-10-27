@@ -8,7 +8,15 @@ export class AuthController {
 
   @Post('login')
   async login(@Body() loginDto: LoginDto) {
-    return this.authService.login(loginDto);
+    console.log('🔐 AuthController: Login request for:', loginDto.email);
+    try {
+      const result = await this.authService.login(loginDto);
+      console.log('✅ AuthController: Login successful');
+      return result;
+    } catch (error) {
+      console.error('❌ AuthController: Login failed:', error);
+      throw error;
+    }
   }
 
   @Post('refresh')
