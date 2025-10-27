@@ -21,6 +21,7 @@ import { B2CModule } from './b2c/b2c.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      envFilePath: '.env',
     }),
 
     TypeOrmModule.forRootAsync({
