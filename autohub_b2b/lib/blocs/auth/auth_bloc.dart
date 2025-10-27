@@ -28,29 +28,15 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         print('✅ AuthBloc: Found saved user data');
         print('   Token starts with: ${token.substring(0, 30)}...');
         
-        // Проверяем что токен не Firebase (RS256)
-        if (token.startsWith('eyJhbGciOiJSUzI1NiIs')) {
-          print('⚠️ AuthBloc: Old Firebase token detected, clearing...');
-          await _storage.clearAll();
-          emit(AuthUnauthenticated());
-          return;
-        }
+        // TEMPORARY: Очищаем ВСЕ сохраненные токены для чистого входа
+        print('⚠️ AuthBloc: Clearing all saved tokens for fresh login...');
+        await _storage.clearAll();
+        emit(AuthUnauthenticated());
+        return;
         
-        final userModel = UserModel(
-          uid: userData['uid'],
-          name: userData['name'] ?? 'User',
-          email: userData['email'] ?? '',
-          role: UserRole.values.firstWhere(
-            (e) => e.toString() == userData['role'],
-            orElse: () => UserRole.owner,
-          ),
-          businessType: BusinessType.values.firstWhere(
-            (e) => e.toString() == userData['businessType'],
-            orElse: () => BusinessType.service,
-          ),
-          createdAt: DateTime.parse(userData['createdAt']),
-        );
-        emit(AuthAuthenticated(userModel));
+        // Uncomment when working:
+        // final userModel = UserModel(...);
+        // emit(AuthAuthenticated(userModel));
       } else {
         print('ℹ️ AuthBloc: No saved user data found');
         emit(AuthUnauthenticated());
