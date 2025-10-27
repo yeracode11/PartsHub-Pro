@@ -3,7 +3,7 @@
 echo "🔧 Running database migration..."
 
 # Add password column to users table
-psql -h localhost -U eracode -d AutohubDB << EOF
+psql -h localhost -U eracode -d autohubdb << EOF
 -- Add password column
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "password" character varying(255) NULL;
 

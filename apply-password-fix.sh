@@ -3,7 +3,7 @@
 echo "🔧 Setting up user password on production database..."
 
 # Connect to database and apply password
-psql -h localhost -U eracode -d AutohubDB << EOF
+psql -h localhost -U eracode -d autohubdb << EOF
 
 -- Update existing user with password
 UPDATE users 
