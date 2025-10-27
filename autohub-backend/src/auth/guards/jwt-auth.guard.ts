@@ -5,7 +5,7 @@ import { AuthGuard } from '@nestjs/passport';
 export class JwtAuthGuard extends AuthGuard('jwt') {
   canActivate(context: ExecutionContext) {
     const request = context.switchToHttp().getRequest();
-    const url = request.url;
+    const url = request.url.split('?')[0]; // Remove query params
     
     // Публичные эндпоинты - не требуют авторизации
     const publicRoutes = [
@@ -21,13 +21,20 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       return true;
     }
     
-    console.log('🔐 JwtAuthGuard: Checking request to:', url);
-    console.log('🔐 JwtAuthGuard: Authorization header:', request.headers.authorization ? 'Present' : 'Missing');
-    if (request.headers.authorization) {
-      console.log('🔐 JwtAuthGuard: Token:', request.headers.authorization.substring(0, 30) + '...');
+    // Проверяем есть ли токен
+    const authHeader = request.headers.authorization;
+    if (!authHeader) {
+      console.log('❌ JwtAuthGuard: No Authorization header');
+      return false;
     }
     
-    return super.canActivate(context);
+    console.log('🔐 JwtAuthGuard: Checking request to:', url);
+    console.log('🔐 JwtAuthGuard: Token present');
+    
+    // Вызываем родительский метод для проверки токена
+    const result = super.canActivate(context);
+    console.log('🔐 JwtAuthGuard: Result:', result);
+    return result;
   }
 }
 
