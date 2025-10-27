@@ -51,6 +51,8 @@ export class AuthService {
       const accessToken = this.jwtService.sign(payload);
       const refreshToken = this.jwtService.sign(payload, { expiresIn: '30d' });
 
+      console.log('✅ JWT tokens generated successfully');
+      
       return {
         accessToken,
         refreshToken,
@@ -64,6 +66,7 @@ export class AuthService {
         },
       };
     } catch (error) {
+      console.error('❌ Login error:', error);
       throw new UnauthorizedException('Invalid credentials');
     }
   }
