@@ -23,24 +23,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       final token = await _storage.getAuthToken();
 
       if (userData != null && token != null) {
-        print('✅ AuthBloc: Found saved user data');
-        print('   Token starts with: ${token.substring(0, 30)}...');
-        
-        final userModel = UserModel(
-          uid: userData['uid'],
-          name: userData['name'] ?? 'User',
-          email: userData['email'] ?? '',
-          role: UserRole.values.firstWhere(
-            (e) => e.toString() == userData['role'],
-            orElse: () => UserRole.owner,
-          ),
-          businessType: BusinessType.values.firstWhere(
-            (e) => e.toString() == userData['businessType'],
-            orElse: () => BusinessType.service,
-          ),
-          createdAt: DateTime.parse(userData['createdAt']),
-        );
-        emit(AuthAuthenticated(userModel));
+        print('⚠️ AuthBloc: Found old token, clearing storage');
+        // Временно очищаем старые токены для перелогина
+        await _storage.clearAll();
+        emit(AuthUnauthenticated());
       } else {
         print('ℹ️ AuthBloc: No saved user data found');
         emit(AuthUnauthenticated());
