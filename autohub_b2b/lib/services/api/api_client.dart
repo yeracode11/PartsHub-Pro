@@ -53,10 +53,18 @@ class ApiClient {
           print('   Message: ${error.message}');
           print('   Data: ${error.response?.data}');
 
-          // Обработка 401 - токен истек
+          // Обработка 401 - токен истек или невалиден
           if (error.response?.statusCode == 401) {
-            print('⚠️ Token expired or invalid');
-            // TODO: Implement token refresh logic
+            print('⚠️ Token expired or invalid - clearing storage');
+            
+            // Очищаем хранилище
+            try {
+              final storage = SecureStorageService();
+              await storage.clearAll();
+              print('✅ Storage cleared - user needs to re-login');
+            } catch (e) {
+              print('❌ Error clearing storage: $e');
+            }
           }
 
           return handler.next(error);

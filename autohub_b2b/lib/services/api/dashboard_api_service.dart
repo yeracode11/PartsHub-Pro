@@ -4,7 +4,7 @@ import 'package:autohub_b2b/models/order_model.dart';
 
 /// API сервис для работы с дашбордом
 /// 
-/// ВАЖНО: Бэкенд запущен на http://localhost:3000
+/// ВАЖНО: Бэкенд запущен на http://78.140.246.83:3000
 /// Убедитесь что NestJS сервер запущен: cd autohub-backend && npm run start:dev
 class DashboardApiService extends BaseApiService {
   // ✅ Бэкенд готов! Используем реальные данные

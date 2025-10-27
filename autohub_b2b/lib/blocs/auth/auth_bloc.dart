@@ -77,7 +77,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       print('   Firebase ID Token: ${firebaseResponse['idToken'].substring(0, 20)}...');
 
       // Шаг 2: Обмениваем Firebase ID Token на JWT от нашего бэкенда
-      final dio = Dio(BaseOptions(baseUrl: 'http://localhost:3000'));
+      final dio = Dio(BaseOptions(baseUrl: 'http://78.140.246.83:3000'));
       final jwtResponse = await dio.post('/api/auth/login', data: {
         'email': event.email,
         'firebaseIdToken': firebaseResponse['idToken'],

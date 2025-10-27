@@ -44,9 +44,10 @@ class ApiClient {
         onError: (error, handler) async {
           // Обработка ошибок
           if (error.response?.statusCode == 401) {
-            // Токен истек - очищаем токен
+            print('⚠️ 401 Error - clearing auth token');
+            // Токен истек или невалиден - очищаем токен
             await clearAuthToken();
-            // TODO: Перенаправить на экран логина
+            print('✅ Auth token cleared - user needs to re-login');
           }
           return handler.next(error);
         },

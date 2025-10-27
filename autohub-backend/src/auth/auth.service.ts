@@ -14,61 +14,52 @@ export class AuthService {
   ) {}
 
   /**
-   * Логин пользователя через email (упрощенная версия)
+   * Логин пользователя через email (для Firebase auth)
    */
   async login(loginDto: LoginDto) {
-    try {
-      console.log('🔐 Login attempt for email:', loginDto.email);
-      
-      // Ищем пользователя по email
-      const user = await this.userRepository.findOne({
-        where: { email: loginDto.email },
-        relations: ['organization'],
-      });
+    console.log('🔐 Login attempt for email:', loginDto.email);
+    
+    // Ищем пользователя по email
+    const user = await this.userRepository.findOne({
+      where: { email: loginDto.email },
+      relations: ['organization'],
+    });
 
-      if (!user) {
-        console.log('❌ User not found for email:', loginDto.email);
-        throw new UnauthorizedException(
-          'Пользователь не зарегистрирован в системе',
-        );
-      }
-
-      if (!user.isActive) {
-        console.log('❌ User is inactive:', user.id);
-        throw new UnauthorizedException('Пользователь деактивирован');
-      }
-      
-      console.log('✅ User found:', user.id, 'with org:', user.organizationId);
-
-      // Генерируем JWT токены
-      const payload = {
-        sub: user.id,
-        email: user.email,
-        organizationId: user.organizationId,
-        role: user.role,
-      };
-
-      const accessToken = this.jwtService.sign(payload);
-      const refreshToken = this.jwtService.sign(payload, { expiresIn: '30d' });
-
-      console.log('✅ JWT tokens generated successfully');
-      
-      return {
-        accessToken,
-        refreshToken,
-        user: {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          role: user.role,
-          organizationId: user.organizationId,
-          organization: user.organization,
-        },
-      };
-    } catch (error) {
-      console.error('❌ Login error:', error);
-      throw new UnauthorizedException('Invalid credentials');
+    if (!user) {
+      console.log('❌ User not found:', loginDto.email);
+      throw new UnauthorizedException('Пользователь не найден');
     }
+
+    if (!user.isActive) {
+      console.log('❌ User inactive:', user.id);
+      throw new UnauthorizedException('Пользователь деактивирован');
+    }
+
+    console.log('✅ User found:', user.id);
+
+    // Генерируем JWT токены
+    const payload = {
+      sub: user.id,
+      email: user.email,
+      organizationId: user.organizationId,
+      role: user.role,
+    };
+
+    const accessToken = this.jwtService.sign(payload);
+    const refreshToken = this.jwtService.sign(payload, { expiresIn: '30d' });
+
+    return {
+      accessToken,
+      refreshToken,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        organizationId: user.organizationId,
+        organization: user.organization,
+      },
+    };
   }
 
   /**

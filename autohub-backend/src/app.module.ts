@@ -26,7 +26,7 @@ import { B2CModule } from './b2c/b2c.module';
         type: 'postgres',
         url: process.env.DATABASE_URL, // 👈 используем именно это
         autoLoadEntities: true,
-        synchronize: true, // ⚠️ Для создания таблиц в production
+        synchronize: false, // ⚠️ Для создания таблиц в production
         ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : undefined,
       }),
     }),

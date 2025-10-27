@@ -3,7 +3,7 @@ class Environment {
   // API Base URL
   static const String apiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://localhost:3000/api',
+    defaultValue: 'http://78.140.246.83:3000/api',
   );
   
   // Флаг разработки
