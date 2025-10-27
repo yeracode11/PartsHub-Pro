@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { DashboardModule } from './dashboard/dashboard.module';
@@ -16,19 +17,20 @@ import { B2CModule } from './b2c/b2c.module';
 
 @Module({
   imports: [
-    // PostgreSQL + TypeORM настройка
-    TypeOrmModule.forRoot({
-      type: 'postgres',
-      host: process.env.DB_HOST || 'localhost',
-      port: parseInt(process.env.DB_PORT || '5432'),
-      username: process.env.DB_USER || 'eracode', // macOS username
-      password: process.env.DB_PASSWORD || '', // По умолчанию пусто
-      database: process.env.DB_NAME || 'autohub',
-      entities: [__dirname + '/**/*.entity{.ts,.js}'],
-      synchronize: process.env.NODE_ENV !== 'production', // false в production
-      logging: process.env.NODE_ENV === 'development',
-      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : undefined,
+    ConfigModule.forRoot({
+      isGlobal: true,
     }),
+
+    TypeOrmModule.forRootAsync({
+      useFactory: () => ({
+        type: 'postgres',
+        url: process.env.DATABASE_URL, // 👈 используем именно это
+        autoLoadEntities: true,
+        synchronize: process.env.NODE_ENV !== 'production',
+        ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : undefined,
+      }),
+    }),
+
     AuthModule,
     DashboardModule,
     OrdersModule,
