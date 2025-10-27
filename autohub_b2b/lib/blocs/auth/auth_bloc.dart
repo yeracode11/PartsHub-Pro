@@ -3,11 +3,9 @@ import 'package:autohub_b2b/blocs/auth/auth_event.dart';
 import 'package:autohub_b2b/blocs/auth/auth_state.dart';
 import 'package:autohub_b2b/models/user_model.dart';
 import 'package:autohub_b2b/services/auth/secure_storage_service.dart';
-import 'package:autohub_b2b/services/auth/firebase_auth_service.dart';
 import 'package:dio/dio.dart';
 
 class AuthBloc extends Bloc<AuthEvent, AuthState> {
-  final FirebaseAuthService _authService = FirebaseAuthService();
   final SecureStorageService _storage = SecureStorageService();
 
   AuthBloc() : super(AuthInitial()) {
@@ -28,15 +26,21 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         print('✅ AuthBloc: Found saved user data');
         print('   Token starts with: ${token.substring(0, 30)}...');
         
-        // TEMPORARY: Очищаем ВСЕ сохраненные токены для чистого входа
-        print('⚠️ AuthBloc: Clearing all saved tokens for fresh login...');
-        await _storage.clearAll();
-        emit(AuthUnauthenticated());
-        return;
-        
-        // Uncomment when working:
-        // final userModel = UserModel(...);
-        // emit(AuthAuthenticated(userModel));
+        final userModel = UserModel(
+          uid: userData['uid'],
+          name: userData['name'] ?? 'User',
+          email: userData['email'] ?? '',
+          role: UserRole.values.firstWhere(
+            (e) => e.toString() == userData['role'],
+            orElse: () => UserRole.owner,
+          ),
+          businessType: BusinessType.values.firstWhere(
+            (e) => e.toString() == userData['businessType'],
+            orElse: () => BusinessType.service,
+          ),
+          createdAt: DateTime.parse(userData['createdAt']),
+        );
+        emit(AuthAuthenticated(userModel));
       } else {
         print('ℹ️ AuthBloc: No saved user data found');
         emit(AuthUnauthenticated());
@@ -58,20 +62,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       
       emit(AuthLoading());
       
-      // Шаг 1: Авторизация через Firebase (получаем ID Token)
-      final firebaseResponse = await _authService.signInWithEmailAndPassword(
-        email: event.email,
-        password: event.password,
-      );
-
-      print('✅ AuthBloc: Firebase auth successful');
-      print('   Firebase ID Token: ${firebaseResponse['idToken'].substring(0, 20)}...');
-
-      // Шаг 2: Обмениваем Firebase ID Token на JWT от нашего бэкенда
+      // Шаг 1: Прямая авторизация через наш бэкенд
       final dio = Dio(BaseOptions(baseUrl: 'http://78.140.246.83:3000'));
       final jwtResponse = await dio.post('/api/auth/login', data: {
         'email': event.email,
-        'firebaseIdToken': firebaseResponse['idToken'],
+        'password': event.password,
       });
 
       final jwtData = jwtResponse.data;
@@ -112,10 +107,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       print('✅ AuthBloc: AuthAuthenticated state emitted');
     } on DioException catch (e) {
       print('❌ AuthBloc: DioException - ${e.response?.data}');
-      emit(AuthError(e.response?.data['message'] ?? 'Ошибка авторизации'));
-    } on FirebaseAuthRestException catch (e) {
-      print('❌ AuthBloc: FirebaseAuthRestException - ${e.message}');
-      emit(AuthError(e.message));
+      emit(AuthError(e.response?.data['message'] ?? 'Неверный email или пароль'));
     } catch (e) {
       print('❌ AuthBloc: Generic error - $e');
       emit(AuthError('Произошла ошибка: $e'));
@@ -154,40 +146,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       AuthSignUpRequested event, Emitter<AuthState> emit) async {
     try {
       emit(AuthLoading());
-      
-      // Используем REST API вместо Firebase SDK (обход Keychain)
-      final response = await _authService.createUserWithEmailAndPassword(
-        email: event.email,
-        password: event.password,
-      );
-
-      final userModel = UserModel(
-        uid: response['localId'],
-        name: event.name,
-        email: event.email,
-        role: event.role,
-        businessType: event.businessType,
-        createdAt: DateTime.now(),
-      );
-
-      // Сохраняем данные пользователя и токены локально
-      await _storage.saveUserData({
-        'uid': userModel.uid,
-        'name': userModel.name,
-        'email': userModel.email,
-        'role': userModel.role.toString(),
-        'businessType': userModel.businessType.toString(),
-        'createdAt': userModel.createdAt.toIso8601String(),
-      });
-      
-      await _storage.saveAuthTokens(
-        authToken: response['idToken'],
-        refreshToken: response['refreshToken'],
-      );
-      
-      emit(AuthAuthenticated(userModel));
-    } on FirebaseAuthRestException catch (e) {
-      emit(AuthError(e.message));
+      emit(AuthError('Регистрация временно недоступна. Обратитесь к администратору.'));
     } catch (e) {
       emit(AuthError('Произошла ошибка: $e'));
     }

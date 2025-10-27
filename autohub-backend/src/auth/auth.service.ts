@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import * as bcrypt from 'bcrypt';
 import { User } from '../users/entities/user.entity';
 import { LoginDto } from './dto/login.dto';
 
@@ -27,7 +28,7 @@ export class AuthService {
 
     if (!user) {
       console.log('❌ User not found:', loginDto.email);
-      throw new UnauthorizedException('Пользователь не найден');
+      throw new UnauthorizedException('Неверный email или пароль');
     }
 
     if (!user.isActive) {
@@ -35,7 +36,19 @@ export class AuthService {
       throw new UnauthorizedException('Пользователь деактивирован');
     }
 
-    console.log('✅ User found:', user.id);
+    // Проверяем пароль если он есть
+    if (user.password) {
+      const isPasswordValid = await bcrypt.compare(loginDto.password, user.password);
+      if (!isPasswordValid) {
+        console.log('❌ Invalid password for user:', user.id);
+        throw new UnauthorizedException('Неверный email или пароль');
+      }
+    } else {
+      // Если пароля нет, разрешаем вход без пароля (для существующих пользователей)
+      console.log('⚠️ User has no password, allowing login');
+    }
+
+    console.log('✅ User authenticated:', user.id);
 
     // Генерируем JWT токены
     const payload = {

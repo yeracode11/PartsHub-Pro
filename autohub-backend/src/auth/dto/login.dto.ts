@@ -7,6 +7,6 @@ export class LoginDto {
 
   @IsString()
   @IsNotEmpty()
-  firebaseIdToken: string; // ID Token от Firebase
+  password: string; // Пароль для авторизации
 }
 

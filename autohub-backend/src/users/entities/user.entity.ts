@@ -15,11 +15,14 @@ export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ type: 'varchar', length: 255, unique: true })
-  firebaseUid: string; // ID из Firebase Auth
+  @Column({ type: 'varchar', length: 255, unique: true, nullable: true })
+  firebaseUid: string; // ID из Firebase Auth (опционально)
 
   @Column({ type: 'varchar', length: 255 })
   email: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  password: string; // Хешированный пароль
 
   @Column({ type: 'varchar', length: 255 })
   name: string;
