@@ -19,14 +19,15 @@ import { B2CModule } from './b2c/b2c.module';
     // PostgreSQL + TypeORM настройка
     TypeOrmModule.forRoot({
       type: 'postgres',
-      host: 'localhost',
-      port: 5432,
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT || '5432'),
       username: process.env.DB_USER || 'eracode', // macOS username
       password: process.env.DB_PASSWORD || '', // По умолчанию пусто
-      database: 'autohub',
+      database: process.env.DB_NAME || 'autohub',
       entities: [__dirname + '/**/*.entity{.ts,.js}'],
-      synchronize: true, // ⚠️ Только для dev! В production - migrations
-      logging: true, // Логирование SQL запросов
+      synchronize: process.env.NODE_ENV !== 'production', // false в production
+      logging: process.env.NODE_ENV === 'development',
+      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : undefined,
     }),
     AuthModule,
     DashboardModule,
