@@ -14,10 +14,12 @@ export class AuthService {
   ) {}
 
   /**
-   * Логин пользователя через Firebase ID Token
+   * Логин пользователя через email (упрощенная версия)
    */
   async login(loginDto: LoginDto) {
     try {
+      console.log('🔐 Login attempt for email:', loginDto.email);
+      
       // Ищем пользователя по email
       const user = await this.userRepository.findOne({
         where: { email: loginDto.email },
@@ -25,14 +27,18 @@ export class AuthService {
       });
 
       if (!user) {
+        console.log('❌ User not found for email:', loginDto.email);
         throw new UnauthorizedException(
           'Пользователь не зарегистрирован в системе',
         );
       }
 
       if (!user.isActive) {
+        console.log('❌ User is inactive:', user.id);
         throw new UnauthorizedException('Пользователь деактивирован');
       }
+      
+      console.log('✅ User found:', user.id, 'with org:', user.organizationId);
 
       // Генерируем JWT токены
       const payload = {
