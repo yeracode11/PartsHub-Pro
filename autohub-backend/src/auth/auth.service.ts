@@ -58,8 +58,13 @@ export class AuthService {
       role: user.role,
     };
 
+    console.log('🔐 Generating JWT with payload:', JSON.stringify(payload));
+    console.log('🔐 JWT_SECRET from env:', process.env.JWT_SECRET ? 'SET' : 'NOT SET');
+    
     const accessToken = this.jwtService.sign(payload);
     const refreshToken = this.jwtService.sign(payload, { expiresIn: '30d' });
+    
+    console.log('✅ Generated accessToken:', accessToken.substring(0, 50) + '...');
 
     return {
       accessToken,
