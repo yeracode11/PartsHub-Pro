@@ -4,12 +4,16 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @Controller('api/dashboard')
-//@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard)
 export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
 
   @Get('stats')
   getStats(@CurrentUser() user: any) {
+    console.log('🔍 Dashboard getStats - user:', user);
+    if (!user) {
+      throw new Error('User not authenticated');
+    }
     return this.dashboardService.getStats(user.organizationId);
   }
 

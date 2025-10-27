@@ -35,13 +35,17 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       console.log('   User role:', user.role);
       console.log('   Organization ID:', user.organizationId);
       
-      // Добавляем organizationId в request
-      return {
+      const result = {
         userId: user.id,
         email: user.email,
         organizationId: user.organizationId,
         role: user.role,
       };
+      
+      console.log('📤 JWT Strategy: Returning user data:', JSON.stringify(result, null, 2));
+      
+      // Добавляем organizationId в request
+      return result;
     } catch (error) {
       console.log('❌ JWT Strategy: Validation error');
       console.log('   Error message:', error.message);
