@@ -15,17 +15,23 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: any) {
-    console.log('🔐 JWT Strategy: Validating token for userId:', payload.sub);
+    console.log('🔐 JWT Strategy: Validating token');
+    console.log('   Payload:', JSON.stringify(payload, null, 2));
+    console.log('   UserId from token:', payload.sub);
     
     try {
       const user = await this.authService.validateUser(payload.sub);
       
       if (!user) {
-        console.log('❌ JWT Strategy: User not found');
+        console.log('❌ JWT Strategy: User not found for ID:', payload.sub);
         throw new UnauthorizedException();
       }
 
-      console.log('✅ JWT Strategy: User validated:', user.email);
+      console.log('✅ JWT Strategy: User validated');
+      console.log('   User ID:', user.id);
+      console.log('   User email:', user.email);
+      console.log('   User role:', user.role);
+      console.log('   Organization ID:', user.organizationId);
       
       // Добавляем organizationId в request
       return {
@@ -35,7 +41,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         role: user.role,
       };
     } catch (error) {
-      console.log('❌ JWT Strategy: Validation error:', error.message);
+      console.log('❌ JWT Strategy: Validation error');
+      console.log('   Error message:', error.message);
+      console.log('   Error stack:', error.stack);
       throw error;
     }
   }
