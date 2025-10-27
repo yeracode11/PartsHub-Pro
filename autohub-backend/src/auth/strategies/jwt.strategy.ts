@@ -6,12 +6,14 @@ import { AuthService } from '../auth.service';
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(private readonly authService: AuthService) {
+    const secret = process.env.JWT_SECRET || 'Rtw+Dir1+3+AgjWFCOHJzQJng3FYhWXoNs5HUCkS23Q=';
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: process.env.JWT_SECRET || 'your-secret-key-change-in-production',
+      secretOrKey: secret,
+      algorithms: ['HS256'],
     });
-    console.log('🔐 JWT Strategy initialized with secret:', process.env.JWT_SECRET ? 'SET' : 'NOT SET');
+    console.log('🔐 JWT Strategy initialized with secret:', process.env.JWT_SECRET ? 'SET' : 'USING_FALLBACK');
   }
 
   async validate(payload: any) {
