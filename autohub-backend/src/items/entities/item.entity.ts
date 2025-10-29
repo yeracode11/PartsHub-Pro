@@ -52,6 +52,9 @@ export class Item {
   @Column({ type: 'boolean', default: false })
   synced: boolean; // Для оффлайн синхронизации
 
+  @Column({ type: 'boolean', default: false })
+  syncedToB2C: boolean; // Синхронизирован с B2C магазином
+
   @CreateDateColumn()
   createdAt: Date;
 

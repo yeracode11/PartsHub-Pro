@@ -23,6 +23,15 @@ export class OrdersService {
     return { orders };
   }
 
+  // Получить только заказы из B2C магазина
+  async findB2COrders(organizationId: string) {
+    return await this.orderRepository.find({
+      where: { organizationId, isB2C: true },
+      relations: ['customer', 'items', 'items.item'],
+      order: { createdAt: 'DESC' },
+    });
+  }
+
   // CRUD методы для управления заказами
   async findAll(organizationId: string) {
     // TODO: В production включить фильтрацию по organizationId для безопасности
@@ -94,6 +103,7 @@ export class OrdersService {
       status: data.status || 'pending',
       paymentStatus: data.paymentStatus || 'pending',
       notes: data.notes,
+      isB2C: (data as any).isB2C || false, // Помечаем заказ из B2C
       totalAmount: 0, // Пока 0, посчитаем после добавления товаров
     });
     

@@ -69,6 +69,9 @@ export class Order {
   @Column({ type: 'boolean', default: false })
   synced: boolean;
 
+  @Column({ type: 'boolean', default: false })
+  isB2C: boolean; // Флаг: заказ из B2C магазина
+
   @OneToMany(() => OrderItem, (orderItem) => orderItem.order, { cascade: true })
   items: OrderItem[];
 

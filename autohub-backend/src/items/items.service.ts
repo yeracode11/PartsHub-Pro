@@ -52,6 +52,7 @@ export class ItemsService {
     const item = this.itemRepository.create({
       ...data,
       organizationId,
+      syncedToB2C: true, // Автоматически синхронизируем новые товары в B2C
     });
     return await this.itemRepository.save(item);
   }
@@ -75,11 +76,13 @@ export class ItemsService {
     limit?: number;
     offset?: number;
   }) {
+    console.log('🔍 findAllForB2C called with options:', options);
+    
     const queryBuilder = this.itemRepository
       .createQueryBuilder('item')
       .leftJoinAndSelect('item.organization', 'organization')
-      .where('item.quantity > 0') // Только товары в наличии
-      .andWhere('item.synced = true'); // Только синхронизированные товары
+      .where('item.quantity > 0'); // Только товары в наличии
+      // Временно убираем проверку synced для показа всех товаров
 
     if (options.category && options.category !== 'Все') {
       queryBuilder.andWhere('item.category = :category', { category: options.category });
@@ -102,7 +105,15 @@ export class ItemsService {
 
     queryBuilder.orderBy('item.createdAt', 'DESC');
 
-    return await queryBuilder.getMany();
+    const sql = queryBuilder.getSql();
+    const params = queryBuilder.getParameters();
+    console.log('🔍 SQL Query:', sql);
+    console.log('🔍 Query Params:', params);
+    
+    const items = await queryBuilder.getMany();
+    console.log(`✅ findAllForB2C found ${items.length} items`);
+    
+    return items;
   }
 
   async getPopularForB2C(limit: number) {
@@ -110,7 +121,7 @@ export class ItemsService {
       .createQueryBuilder('item')
       .leftJoinAndSelect('item.organization', 'organization')
       .where('item.quantity > 0')
-      .andWhere('item.synced = true')
+      // Временно убираем проверку synced
       .orderBy('item.quantity', 'DESC') // Популярность по количеству на складе
       .limit(limit)
       .getMany();
@@ -122,7 +133,7 @@ export class ItemsService {
       .leftJoinAndSelect('item.organization', 'organization')
       .where('item.id = :id', { id })
       .andWhere('item.quantity > 0')
-      .andWhere('item.synced = true')
+      // Убираем проверку synced - показываем все товары в наличии
       .getOne();
   }
 
@@ -173,6 +184,39 @@ export class ItemsService {
     
     item.imageUrl = imageUrl;
     return await this.itemRepository.save(item);
+  }
+
+  // Синхронизировать товар в B2C магазин
+  async syncToB2C(id: number, organizationId: string) {
+    const item = await this.findOne(id, organizationId);
+    item.syncedToB2C = true;
+    const updatedItem = await this.itemRepository.save(item);
+    
+    console.log(`✅ Item ${item.id} (${item.name}) synced to B2C marketplace`);
+    return updatedItem;
+  }
+
+  // Синхронизировать все товары организации в B2C
+  async syncAllToB2C(organizationId: string) {
+    const items = await this.itemRepository.find({
+      where: { organizationId },
+    });
+    
+    let syncedCount = 0;
+    for (const item of items) {
+      if (!item.syncedToB2C) {
+        item.syncedToB2C = true;
+        await this.itemRepository.save(item);
+        syncedCount++;
+      }
+    }
+    
+    console.log(`✅ Synced ${syncedCount} items to B2C marketplace`);
+    return { 
+      synced: syncedCount, 
+      total: items.length,
+      message: `Синхронизировано ${syncedCount} из ${items.length} товаров в B2C магазин`
+    };
   }
 }
 

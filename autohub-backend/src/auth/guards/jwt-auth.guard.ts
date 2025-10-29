@@ -3,7 +3,7 @@ import { AuthGuard } from '@nestjs/passport';
 
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('jwt') {
-  async canActivate(context: ExecutionContext) {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
     const url = request.url.split('?')[0]; // Remove query params
 
@@ -36,7 +36,10 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       const result = await super.canActivate(context);
       console.log('🔐 JwtAuthGuard: Passport result type:', typeof result);
       console.log('🔐 JwtAuthGuard: Passport result value:', result);
-      return result as boolean;
+      
+      // Преобразуем результат в boolean (result может быть boolean | Observable<boolean>)
+      const resultValue = result as any;
+      return resultValue === true || resultValue === 'true' || resultValue === 1;
     } catch (error) {
       console.log('❌ JwtAuthGuard: Passport error:', error.message);
       console.log('❌ JwtAuthGuard: Error stack:', error.stack);

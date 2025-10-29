@@ -45,6 +45,18 @@ export class ItemsController {
     return this.itemsService.findOne(+id, user.organizationId);
   }
 
+  @Post(':id/sync-to-b2c')
+  @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.STOREKEEPER)
+  syncToB2C(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.itemsService.syncToB2C(+id, user.organizationId);
+  }
+
+  @Post('sync-all-to-b2c')
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  syncAllToB2C(@CurrentUser() user: any) {
+    return this.itemsService.syncAllToB2C(user.organizationId);
+  }
+
   @Post()
   @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.STOREKEEPER) // Только эти роли могут создавать
   create(@CurrentUser() user: any, @Body() data: any) {

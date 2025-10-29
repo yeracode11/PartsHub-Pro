@@ -31,6 +31,7 @@ export class B2CController {
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
   ) {
+    console.log('📦 B2C getParts called with:', { category, search, limit, offset });
     // Получаем все товары из всех организаций для B2C
     const items = await this.itemsService.findAllForB2C({
       category,
@@ -38,8 +39,11 @@ export class B2CController {
       limit: limit ? parseInt(limit) : undefined,
       offset: offset ? parseInt(offset) : undefined,
     });
+    console.log(`📦 Found ${items.length} items for B2C`);
 
     // Преобразуем в формат для B2C
+    const baseUrl = process.env.API_BASE_URL || 'http://78.140.246.83:3000';
+    
     return {
       data: items.map(item => {
         // Обрабатываем изображения - конвертируем относительные пути в полные URL
@@ -50,8 +54,8 @@ export class B2CController {
           if (img.startsWith('http')) {
             return img;
           }
-          // Иначе добавляем базовый URL
-          const fullUrl = `http://localhost:3000${img}`;
+          // Иначе добавляем базовый URL из переменной окружения
+          const fullUrl = `${baseUrl}${img}`;
           console.log('📸 Converting image URL:', img, '->', fullUrl);
           return fullUrl;
         });
@@ -86,6 +90,9 @@ export class B2CController {
   async getPopularParts(@Query('limit') limit?: string) {
     const limitNum = limit ? parseInt(limit) : 5;
     const items = await this.itemsService.getPopularForB2C(limitNum);
+    
+    // Используем тот же baseUrl для изображений
+    const baseUrl = process.env.API_BASE_URL || 'http://78.140.246.83:3000';
 
     return {
       data: items.map(item => {
@@ -95,7 +102,7 @@ export class B2CController {
           if (img.startsWith('http')) {
             return img;
           }
-          return `http://localhost:3000${img}`;
+          return `${baseUrl}${img}`;
         });
 
         return {
@@ -302,6 +309,7 @@ export class B2CController {
         notes: data.notes || null,
         status: 'pending',
         paymentStatus: 'pending',
+        isB2C: true, // Помечаем что это заказ из B2C магазина
       };
 
       console.log('📦 Creating order with org:', firstOrg.id);
