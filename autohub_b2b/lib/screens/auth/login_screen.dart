@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:autohub_b2b/blocs/auth/auth_bloc.dart';
 import 'package:autohub_b2b/blocs/auth/auth_event.dart';
 import 'package:autohub_b2b/blocs/auth/auth_state.dart';
+import 'package:autohub_b2b/screens/auth/register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -175,7 +176,11 @@ class _LoginScreenState extends State<LoginScreen> {
                       // Ссылка на регистрацию
                       TextButton(
                         onPressed: () {
-                          // TODO: Navigate to registration
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => const RegisterScreen(),
+                            ),
+                          );
                         },
                         child: const Text('Нет аккаунта? Зарегистрироваться'),
                       ),

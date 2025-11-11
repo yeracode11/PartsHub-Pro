@@ -131,9 +131,68 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   Future<void> _onSignUpRequested(
       AuthSignUpRequested event, Emitter<AuthState> emit) async {
     try {
+      print('📝 AuthBloc: Starting registration...');
+      
+      // Очищаем старые токены перед регистрацией
+      await _storage.clearAll();
+      print('🧹 Cleared old tokens');
+      
       emit(AuthLoading());
-      emit(AuthError('Регистрация временно недоступна. Обратитесь к администратору.'));
+      
+      // Регистрация через наш бэкенд
+      final dio = Dio(BaseOptions(baseUrl: 'http://78.140.246.83:3000'));
+      final registerResponse = await dio.post('/api/auth/register', data: {
+        'email': event.email,
+        'password': event.password,
+        'name': event.name,
+        if (event.organizationName != null) 'organizationName': event.organizationName,
+        if (event.businessType != null) 'businessType': event.businessType,
+      });
+
+      final registerData = registerResponse.data;
+      print('✅ AuthBloc: Registration successful!');
+      print('   User: ${registerData['user']['name']}');
+      print('   Role: ${registerData['user']['role']}');
+      print('   Organization: ${registerData['user']['organization']['name']}');
+
+      // Создаем UserModel из данных бэкенда
+      final userModel = UserModel(
+        uid: registerData['user']['id'],
+        name: registerData['user']['name'] ?? 'User',
+        email: registerData['user']['email'],
+        role: _parseRole(registerData['user']['role']),
+        businessType: _parseBusinessType(registerData['user']['organization']['businessType']),
+        createdAt: DateTime.now(),
+      );
+      
+      // Сохраняем JWT токены и полные данные пользователя
+      await _storage.saveUserData({
+        'uid': userModel.uid,
+        'name': userModel.name,
+        'email': userModel.email,
+        'role': userModel.role.toString(),
+        'businessType': userModel.businessType.toString(),
+        'createdAt': userModel.createdAt.toIso8601String(),
+        'organizationId': registerData['user']['organizationId'],
+        'organization': registerData['user']['organization'],
+      });
+      
+      await _storage.saveAuthTokens(
+        authToken: registerData['accessToken'],
+        refreshToken: registerData['refreshToken'],
+      );
+      
+      print('✅ AuthBloc: JWT tokens and user data saved');
+      emit(AuthAuthenticated(userModel));
+      print('✅ AuthBloc: AuthAuthenticated state emitted');
+    } on DioException catch (e) {
+      print('❌ AuthBloc: DioException - ${e.response?.data}');
+      final errorMessage = e.response?.data['message'] ?? 
+                          e.response?.data['error'] ?? 
+                          'Ошибка регистрации';
+      emit(AuthError(errorMessage));
     } catch (e) {
+      print('❌ AuthBloc: Generic error - $e');
       emit(AuthError('Произошла ошибка: $e'));
     }
   }

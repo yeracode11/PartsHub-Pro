@@ -1,10 +1,14 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { User } from '../users/entities/user.entity';
 import { LoginDto } from './dto/login.dto';
+import { RegisterDto } from './dto/register.dto';
+import { OrganizationsService } from '../organizations/organizations.service';
+import { BusinessType } from '../common/enums/business-type.enum';
+import { UserRole } from '../common/enums/user-role.enum';
 
 @Injectable()
 export class AuthService {
@@ -12,6 +16,7 @@ export class AuthService {
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
     private readonly jwtService: JwtService,
+    private readonly organizationsService: OrganizationsService,
   ) {}
 
   /**
@@ -119,6 +124,84 @@ export class AuthService {
     } catch (error) {
       throw new UnauthorizedException('Invalid refresh token');
     }
+  }
+
+  /**
+   * Регистрация нового пользователя с созданием организации
+   */
+  async register(registerDto: RegisterDto) {
+    console.log('📝 Registration attempt for email:', registerDto.email);
+
+    // Проверяем, не существует ли уже пользователь с таким email
+    const existingUser = await this.userRepository.findOne({
+      where: { email: registerDto.email },
+    });
+
+    if (existingUser) {
+      console.log('❌ User already exists:', registerDto.email);
+      throw new ConflictException('Пользователь с таким email уже существует');
+    }
+
+    // Создаем новую организацию
+    const organizationName = registerDto.organizationName || `${registerDto.name} - Организация`;
+    const businessType = (registerDto.businessType as BusinessType) || BusinessType.SERVICE;
+
+    console.log('🏢 Creating organization:', organizationName);
+    const organization = await this.organizationsService.create({
+      name: organizationName,
+      businessType: businessType,
+      isActive: true,
+    } as any);
+
+    console.log('✅ Organization created:', organization.id);
+
+    // Хешируем пароль
+    const hashedPassword = await bcrypt.hash(registerDto.password, 10);
+
+    // Создаем пользователя с ролью owner
+    const user = this.userRepository.create({
+      email: registerDto.email,
+      password: hashedPassword,
+      name: registerDto.name,
+      role: UserRole.OWNER,
+      organizationId: organization.id,
+      isActive: true,
+    });
+
+    const savedUser = await this.userRepository.save(user);
+    console.log('✅ User created:', savedUser.id);
+
+    // Загружаем пользователя с организацией для ответа
+    const userWithOrg = await this.userRepository.findOne({
+      where: { id: savedUser.id },
+      relations: ['organization'],
+    });
+
+    // Генерируем JWT токены
+    const payload = {
+      sub: userWithOrg.id,
+      email: userWithOrg.email,
+      organizationId: userWithOrg.organizationId,
+      role: userWithOrg.role,
+    };
+
+    const accessToken = this.jwtService.sign(payload);
+    const refreshToken = this.jwtService.sign(payload, { expiresIn: '30d' });
+
+    console.log('✅ Registration successful for:', registerDto.email);
+
+    return {
+      accessToken,
+      refreshToken,
+      user: {
+        id: userWithOrg.id,
+        email: userWithOrg.email,
+        name: userWithOrg.name,
+        role: userWithOrg.role,
+        organizationId: userWithOrg.organizationId,
+        organization: userWithOrg.organization,
+      },
+    };
   }
 
   /**

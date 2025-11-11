@@ -1,6 +1,7 @@
 import { Controller, Post, Body } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
+import { RegisterDto } from './dto/register.dto';
 
 @Controller('api/auth')
 export class AuthController {
@@ -15,6 +16,19 @@ export class AuthController {
       return result;
     } catch (error) {
       console.error('❌ AuthController: Login failed:', error);
+      throw error;
+    }
+  }
+
+  @Post('register')
+  async register(@Body() registerDto: RegisterDto) {
+    console.log('📝 AuthController: Registration request for:', registerDto.email);
+    try {
+      const result = await this.authService.register(registerDto);
+      console.log('✅ AuthController: Registration successful');
+      return result;
+    } catch (error) {
+      console.error('❌ AuthController: Registration failed:', error);
       throw error;
     }
   }
