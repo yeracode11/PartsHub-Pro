@@ -7,7 +7,6 @@ import {
   Query,
   Body,
   Param,
-  Req,
   UseGuards,
   UseInterceptors,
   UploadedFiles,
