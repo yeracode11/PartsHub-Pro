@@ -177,6 +177,11 @@ export class AuthService {
       relations: ['organization'],
     });
 
+    if (!userWithOrg) {
+      console.error('❌ User not found after creation:', savedUser.id);
+      throw new Error('Ошибка при создании пользователя');
+    }
+
     // Генерируем JWT токены
     const payload = {
       sub: userWithOrg.id,
