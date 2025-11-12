@@ -17,6 +17,7 @@ import 'package:autohub_b2b/screens/crm/crm_screen.dart';
 import 'package:autohub_b2b/screens/analytics/analytics_screen.dart';
 import 'package:autohub_b2b/screens/whatsapp/whatsapp_screen.dart';
 import 'package:autohub_b2b/screens/vehicles/vehicles_screen.dart';
+import 'package:autohub_b2b/screens/profile/profile_screen.dart';
 import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/models/user_model.dart';
 
@@ -261,54 +262,68 @@ class _MainScreenState extends State<MainScreen> {
                             userEmail = state.user.email;
                           }
                           
-                          return Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: AppTheme.primaryColor.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: AppTheme.primaryColor.withOpacity(0.2),
+                          return InkWell(
+                            onTap: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (context) => const ProfileScreen(),
+                                ),
+                              );
+                            },
+                            borderRadius: BorderRadius.circular(12),
+                            child: Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primaryColor.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: AppTheme.primaryColor.withOpacity(0.2),
+                                ),
                               ),
-                            ),
-                            child: Row(
-                              children: [
-                                CircleAvatar(
-                                  radius: 20,
-                                  backgroundColor: AppTheme.primaryColor,
-                                  child: Text(
-                                    userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
+                              child: Row(
+                                children: [
+                                  CircleAvatar(
+                                    radius: 20,
+                                    backgroundColor: AppTheme.primaryColor,
+                                    child: Text(
+                                      userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                      ),
                                     ),
                                   ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(
-                                        userName,
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 14,
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          userName,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 14,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
                                         ),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      Text(
-                                        userEmail,
-                                        style: const TextStyle(
-                                          fontSize: 11,
-                                          color: AppTheme.textSecondary,
+                                        Text(
+                                          userEmail,
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                            color: AppTheme.textSecondary,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
                                         ),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ],
+                                      ],
+                                    ),
                                   ),
-                                ),
-                              ],
+                                  const Icon(
+                                    Icons.chevron_right,
+                                    color: AppTheme.textSecondary,
+                                  ),
+                                ],
+                              ),
                             ),
                           );
                         },
