@@ -20,6 +20,7 @@ import 'package:autohub_b2b/screens/vehicles/vehicles_screen.dart';
 import 'package:autohub_b2b/screens/profile/profile_screen.dart';
 import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/models/user_model.dart';
+import 'package:autohub_b2b/services/auth/secure_storage_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -252,79 +253,101 @@ class _MainScreenState extends State<MainScreen> {
                       padding: const EdgeInsets.all(16),
                       child: BlocBuilder<AuthBloc, AuthState>(
                         builder: (context, state) {
-                          String userName = 'Пользователь';
-                          String userEmail = '';
-                          
-                          if (state is AuthAuthenticated) {
-                            userName = state.user.name.isNotEmpty 
-                                ? state.user.name 
-                                : state.user.email.split('@')[0];
-                            userEmail = state.user.email;
-                          }
-                          
-                          return InkWell(
-                            onTap: () {
-                              Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (context) => const ProfileScreen(),
+                          return FutureBuilder<Map<String, dynamic>?>(
+                            future: SecureStorageService().getUserData(),
+                            builder: (context, snapshot) {
+                              String userName = 'Пользователь';
+                              String userEmail = '';
+                              String? organizationName;
+                              
+                              if (state is AuthAuthenticated) {
+                                userName = state.user.name.isNotEmpty 
+                                    ? state.user.name 
+                                    : state.user.email.split('@')[0];
+                                userEmail = state.user.email;
+                              }
+                              
+                              if (snapshot.hasData && snapshot.data?['organization'] != null) {
+                                organizationName = snapshot.data!['organization']['name'] as String?;
+                              }
+                              
+                              return InkWell(
+                                onTap: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (context) => const ProfileScreen(),
+                                    ),
+                                  );
+                                },
+                                borderRadius: BorderRadius.circular(12),
+                                child: Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.primaryColor.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: AppTheme.primaryColor.withOpacity(0.2),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      CircleAvatar(
+                                        radius: 20,
+                                        backgroundColor: AppTheme.primaryColor,
+                                        child: Text(
+                                          userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Text(
+                                              userName,
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: 14,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                            if (organizationName != null) ...[
+                                              Text(
+                                                organizationName!,
+                                                style: const TextStyle(
+                                                  fontSize: 10,
+                                                  color: AppTheme.textSecondary,
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ] else ...[
+                                              Text(
+                                                userEmail,
+                                                style: const TextStyle(
+                                                  fontSize: 11,
+                                                  color: AppTheme.textSecondary,
+                                                ),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                      ),
+                                      const Icon(
+                                        Icons.chevron_right,
+                                        color: AppTheme.textSecondary,
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               );
                             },
-                            borderRadius: BorderRadius.circular(12),
-                            child: Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: AppTheme.primaryColor.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: AppTheme.primaryColor.withOpacity(0.2),
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  CircleAvatar(
-                                    radius: 20,
-                                    backgroundColor: AppTheme.primaryColor,
-                                    child: Text(
-                                      userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Text(
-                                          userName,
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.w600,
-                                            fontSize: 14,
-                                          ),
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                        Text(
-                                          userEmail,
-                                          style: const TextStyle(
-                                            fontSize: 11,
-                                            color: AppTheme.textSecondary,
-                                          ),
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const Icon(
-                                    Icons.chevron_right,
-                                    color: AppTheme.textSecondary,
-                                  ),
-                                ],
-                              ),
-                            ),
                           );
                         },
                       ),

@@ -5,9 +5,39 @@ import 'package:autohub_b2b/blocs/auth/auth_event.dart';
 import 'package:autohub_b2b/blocs/auth/auth_state.dart';
 import 'package:autohub_b2b/models/user_model.dart';
 import 'package:autohub_b2b/core/theme.dart';
+import 'package:autohub_b2b/services/auth/secure_storage_service.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  String? _organizationName;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadOrganizationName();
+  }
+
+  Future<void> _loadOrganizationName() async {
+    final storage = SecureStorageService();
+    final userData = await storage.getUserData();
+    if (userData != null && userData['organization'] != null) {
+      setState(() {
+        _organizationName = userData['organization']['name'] as String?;
+        _loading = false;
+      });
+    } else {
+      setState(() {
+        _loading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -68,6 +98,17 @@ class ProfileScreen extends StatelessWidget {
                       color: Colors.grey[600],
                     ),
                   ),
+                  if (_organizationName != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      _organizationName!,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[700],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   // Роль и тип бизнеса
                   Row(
@@ -114,6 +155,14 @@ class ProfileScreen extends StatelessWidget {
                   value: user.role.displayName,
                 ),
                 const Divider(height: 1),
+                if (_organizationName != null) ...[
+                  _buildInfoTile(
+                    icon: Icons.business_center,
+                    title: 'Организация',
+                    value: _organizationName!,
+                  ),
+                  const Divider(height: 1),
+                ],
                 _buildInfoTile(
                   icon: Icons.business,
                   title: 'Тип бизнеса',
