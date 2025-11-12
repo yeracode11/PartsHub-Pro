@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'firebase_options.dart';
 import 'core/theme.dart';
 import 'core/router.dart';
 import 'services/api_client.dart';
@@ -35,17 +33,6 @@ void main() async {
 
   // Определяем начальный роут
   final initialRoute = await _getInitialRoute();
-
-  // Инициализация Firebase с обработкой ошибок
-  try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
-    print('✅ Firebase инициализирован успешно');
-  } catch (e) {
-    print('⚠️ Firebase не инициализирован: $e');
-    print('💡 Приложение будет работать без Firebase функций');
-  }
 
   runApp(AutoHubB2CApp(initialRoute: initialRoute));
 }

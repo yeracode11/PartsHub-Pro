@@ -570,7 +570,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
                   setState(() {
                     _selectedSort = option['value'];
                   });
-                  // TODO: Implement sorting
+                  // Сортировка будет реализована позже
                 },
                 backgroundColor: Colors.grey[100],
                 selectedColor: AppTheme.primaryColor.withOpacity(0.1),
@@ -605,7 +605,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
               });
             },
             onChangeEnd: (values) {
-              // TODO: Apply price filter
+              // Фильтр по цене будет реализован позже
             },
           ),
 
@@ -632,7 +632,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
               });
             },
             onChangeEnd: (value) {
-              // TODO: Apply rating filter
+              // Фильтр по рейтингу будет реализован позже
             },
           ),
         ],

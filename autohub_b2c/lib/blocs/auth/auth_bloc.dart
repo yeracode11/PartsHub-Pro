@@ -19,12 +19,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     if (!isClosed) emit(AuthLoading());
     
     try {
-      // TODO: Check if user is already authenticated
-      // For now, we'll simulate checking stored credentials
+      // Проверяем сохраненные токены авторизации
       await Future.delayed(const Duration(seconds: 1));
       
-      // Mock: Check if demo user is "logged in"
-      // In real app, check Firebase Auth or stored tokens
+      // Проверка токенов будет реализована позже
       if (!isClosed) emit(AuthUnauthenticated());
     } catch (e) {
       if (!isClosed) emit(AuthError('Ошибка проверки авторизации: $e'));
@@ -38,10 +36,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     if (!isClosed) emit(AuthLoading());
     
     try {
-      // TODO: Replace with real Firebase Auth
+      // Авторизация через backend API
       await Future.delayed(const Duration(seconds: 2));
       
-      // Mock authentication
+      // Временная mock авторизация (будет заменена на реальный API)
       if (event.email == 'demo@autohub.kz' && event.password == 'demo123') {
         final customer = Customer(
           id: 1,
@@ -67,10 +65,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     if (!isClosed) emit(AuthLoading());
     
     try {
-      // TODO: Replace with real Firebase Auth registration
+      // Регистрация через backend API
       await Future.delayed(const Duration(seconds: 2));
       
-      // Mock registration
+      // Временная mock регистрация (будет заменена на реальный API)
       final customer = Customer(
         id: DateTime.now().millisecondsSinceEpoch,
         name: event.name,
@@ -93,7 +91,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     if (!isClosed) emit(AuthLoading());
     
     try {
-      // TODO: Sign out from Firebase Auth
+      // Выход из системы
       await Future.delayed(const Duration(milliseconds: 500));
       
       if (!isClosed) emit(AuthUnauthenticated());

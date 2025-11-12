@@ -139,7 +139,7 @@ class ProfileScreen extends StatelessWidget {
                           subtitle: const Text('Настройки приложения'),
                           trailing: const Icon(Icons.arrow_forward_ios),
                           onTap: () {
-                            // TODO: Navigate to settings
+                            // Настройки будут реализованы позже
                           },
                         ),
                         const Divider(height: 1),
@@ -149,7 +149,7 @@ class ProfileScreen extends StatelessWidget {
                           subtitle: const Text('Справка и поддержка'),
                           trailing: const Icon(Icons.arrow_forward_ios),
                           onTap: () {
-                            // TODO: Navigate to help
+                            // Помощь будет реализована позже
                           },
                         ),
                       ],

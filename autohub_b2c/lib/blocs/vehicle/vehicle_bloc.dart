@@ -16,7 +16,7 @@ class VehicleBloc extends Bloc<VehicleEvent, VehicleState> {
     if (!isClosed) emit(VehicleLoading());
     
     try {
-      // TODO: Replace with real API call
+      // API вызов будет реализован позже
       await Future.delayed(const Duration(seconds: 1));
       
       final vehicles = <Vehicle>[];

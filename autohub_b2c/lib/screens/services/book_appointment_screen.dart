@@ -190,7 +190,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
         
         await _servicesApiService.createAppointment(
           serviceId: widget.service.id,
-          userId: 'user1', // TODO: Get from auth service
+          userId: 'user1', // Получение userId из auth service будет реализовано позже
           vehicleId: _selectedVehicle!.id.toString(),
           serviceName: _selectedService!,
           appointmentDate: _selectedDate!,
