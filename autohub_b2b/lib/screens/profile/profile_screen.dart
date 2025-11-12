@@ -188,7 +188,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   title: const Text('Редактировать профиль'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () {
-                    // TODO: Реализовать редактирование профиля
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
                         content: Text('Редактирование профиля будет доступно в следующей версии'),
@@ -202,7 +201,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   title: const Text('Изменить пароль'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () {
-                    // TODO: Реализовать смену пароля
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
                         content: Text('Смена пароля будет доступна в следующей версии'),
@@ -216,7 +214,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   title: const Text('Настройки'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () {
-                    // TODO: Переход в настройки
+                    // Настройки будут реализованы позже
                   },
                 ),
               ],

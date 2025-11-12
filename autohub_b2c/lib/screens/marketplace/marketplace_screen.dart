@@ -95,7 +95,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: const Text('AutoHub Маркетплейс'),
+        title: const Text('MyAuto Маркетплейс'),
         backgroundColor: AppTheme.primaryColor.withOpacity(0.9),
         elevation: 0,
         flexibleSpace: Container(
@@ -452,7 +452,12 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
                                   );
                                 },
                                 onAddToCart: () {
-                                  // TODO: Implement add to cart functionality
+                                  // Добавляем товар в корзину через BLoC
+                                  context.read<CartBloc>().add(CartItemAdded(
+                                    product: product,
+                                    quantity: 1,
+                                  ));
+                                  
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
                                       content: Row(

@@ -42,11 +42,6 @@ dependencies:
   path_provider: ^2.1.4
   path: ^1.9.0
   
-  # Firebase
-  firebase_core: ^3.8.1
-  firebase_auth: ^5.3.3
-  firebase_storage: ^12.3.7
-  
   # HTTP & WebSocket
   dio: ^5.7.0
   web_socket_channel: ^3.0.1

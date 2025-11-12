@@ -171,7 +171,7 @@ class ProfileScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'AutoHub B2C v1.0.0',
+                            'MyAuto B2C v1.0.0',
                             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                                   color: AppTheme.textSecondary,
                                 ),

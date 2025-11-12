@@ -3,9 +3,8 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiClient {
-  static const String baseUrl = kDebugMode
-      ? 'http://192.168.2.240:3000/api'  // Локальный IP для эмулятора
-      : 'http://78.140.246.83:3000/api'; // Production API сервер
+  // Используем production API для всех режимов
+  static const String baseUrl = 'http://78.140.246.83:3000/api';
 
   late final Dio _dio;
 
@@ -56,13 +55,29 @@ class ApiClient {
   }
 
   // Преобразует относительный URL изображения в полный URL
-  static String getImageUrl(String imageUrl) {
+  static String getImageUrl(String imageUrl, {int? width, int? height}) {
+    if (imageUrl.isEmpty) {
+      // Если нет изображения, возвращаем placeholder из интернета
+      return _getPlaceholderImageUrl(width ?? 400, height ?? 400);
+    }
+    
     if (imageUrl.startsWith('http')) {
       return imageUrl;
     }
     // Извлекаем базовый URL без /api
     final baseUrlWithoutApi = baseUrl.replaceAll('/api', '');
     return '$baseUrlWithoutApi$imageUrl';
+  }
+
+  // Получает URL placeholder изображения из интернета
+  static String _getPlaceholderImageUrl(int width, int height) {
+    // Используем Picsum Photos - бесплатный сервис placeholder изображений
+    // Можно также использовать: placeholder.com, dummyimage.com
+    return 'https://picsum.photos/$width/$height?random=${DateTime.now().millisecondsSinceEpoch}';
+    
+    // Альтернативные источники placeholder изображений:
+    // 'https://via.placeholder.com/${width}x${height}?text=No+Image'
+    // 'https://dummyimage.com/${width}x${height}/cccccc/999999&text=No+Image'
   }
 
   Dio get dio => _dio;

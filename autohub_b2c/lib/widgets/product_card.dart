@@ -47,9 +47,12 @@ class ProductCard extends StatelessWidget {
                 borderRadius: const BorderRadius.vertical(
                   top: Radius.circular(8),
                 ),
-                child: product.images.isNotEmpty
-                    ? CachedNetworkImage(
-                        imageUrl: ApiClient.getImageUrl(product.images.first),
+                child: CachedNetworkImage(
+                        imageUrl: ApiClient.getImageUrl(
+                          product.images.isNotEmpty ? product.images.first : '',
+                          width: 400,
+                          height: 400,
+                        ),
                         fit: BoxFit.cover,
                         width: double.infinity,
                         height: 200,
@@ -71,14 +74,6 @@ class ProductCard extends StatelessWidget {
                           ),
                         ),
                       )
-                    : Container(
-                        color: Colors.grey[100],
-                        child: const Icon(
-                          Icons.image_not_supported,
-                          size: 40,
-                          color: Colors.grey,
-                        ),
-                      ),
               ),
             ),
 

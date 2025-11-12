@@ -58,18 +58,10 @@ class BaseApiService {
             print('   Data: ${error.response?.data}');
           }
 
-          // Обработка 401 - обновление токена
+          // Обработка 401 - токен истек
           if (error.response?.statusCode == 401) {
-            try {
-              final refreshToken = await _storage.getRefreshToken();
-              if (refreshToken != null) {
-                // TODO: Implement token refresh logic
-                // final newToken = await refreshAuthToken(refreshToken);
-                // Retry the request with new token
-              }
-            } catch (e) {
-              print('⚠️ Token refresh failed: $e');
-            }
+            // Токен истек - пользователю нужно перелогиниться
+            print('⚠️ Token expired - user needs to re-login');
           }
 
           return handler.next(error);

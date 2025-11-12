@@ -26,11 +26,18 @@ class MarketplaceApiService {
       );
 
       final data = response.data['data'] as List<dynamic>;
+      
+      // Если данных нет, используем моковые данные
+      if (data.isEmpty) {
+        print('⚠️ API вернул пустой массив, используем моковые данные');
+        return _getMockProducts();
+      }
+      
       return data.map((json) => Product.fromJson(json)).toList();
     } catch (e) {
-      // Если API недоступен, возвращаем пустой список
-      print('API недоступен: $e');
-      return [];
+      // Если API недоступен, используем моковые данные
+      print('⚠️ API недоступен: $e, используем моковые данные');
+      return _getMockProducts();
     }
   }
 
@@ -43,11 +50,18 @@ class MarketplaceApiService {
       );
 
       final data = response.data['data'] as List<dynamic>;
+      
+      // Если данных нет, используем первые 5 моковых данных
+      if (data.isEmpty) {
+        print('⚠️ API вернул пустой массив, используем моковые данные');
+        return _getMockProducts().take(limit).toList();
+      }
+      
       return data.map((json) => Product.fromJson(json)).toList();
     } catch (e) {
-      // Если API недоступен, возвращаем пустой список
-      print('API недоступен: $e');
-      return [];
+      // Если API недоступен, используем моковые данные
+      print('⚠️ API недоступен: $e, используем моковые данные');
+      return _getMockProducts().take(limit).toList();
     }
   }
 

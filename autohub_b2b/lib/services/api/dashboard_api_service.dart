@@ -11,7 +11,6 @@ class DashboardApiService extends BaseApiService {
   static const bool useMockData = false;
   /// Получить статистику дашборда
   Future<DashboardStats> getStats() async {
-    // TODO: Удалить mock данные после подключения бэкенда
     if (useMockData) {
       await Future.delayed(const Duration(milliseconds: 500)); // Имитация задержки сети
       return DashboardStats(
@@ -36,7 +35,6 @@ class DashboardApiService extends BaseApiService {
   /// Получить данные графика продаж
   /// [period] - период: '7d', '30d', '90d'
   Future<SalesChartData> getSalesChart({String period = '7d'}) async {
-    // TODO: Удалить mock данные после подключения бэкенда
     if (useMockData) {
       await Future.delayed(const Duration(milliseconds: 300));
       
@@ -70,7 +68,6 @@ class DashboardApiService extends BaseApiService {
   /// Получить последние заказы
   /// [limit] - количество заказов
   Future<List<OrderModel>> getRecentOrders({int limit = 5}) async {
-    // TODO: Удалить mock данные после подключения бэкенда
     if (useMockData) {
       await Future.delayed(const Duration(milliseconds: 400));
       
@@ -112,7 +109,6 @@ class DashboardApiService extends BaseApiService {
   /// Получить популярные товары
   /// [limit] - количество товаров
   Future<List<PopularItem>> getPopularItems({int limit = 5}) async {
-    // TODO: Удалить mock данные после подключения бэкенда
     if (useMockData) {
       await Future.delayed(const Duration(milliseconds: 350));
       

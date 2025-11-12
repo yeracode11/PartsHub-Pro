@@ -32,31 +32,30 @@ class CartItemWidget extends StatelessWidget {
                 borderRadius: BorderRadius.circular(8),
                 color: Colors.grey[100],
               ),
-              child: item.product.images.isNotEmpty
-                  ? ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: CachedNetworkImage(
-                        imageUrl: ApiClient.getImageUrl(item.product.images.first),
-                        fit: BoxFit.cover,
-                        placeholder: (context, url) => Container(
-                          color: Colors.grey[200],
-                          child: const Center(
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.grey),
-                            ),
-                          ),
-                        ),
-                        errorWidget: (context, url, error) => const Icon(
-                          Icons.image_not_supported,
-                          color: Colors.grey,
+              child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: CachedNetworkImage(
+                    imageUrl: ApiClient.getImageUrl(
+                      item.product.images.isNotEmpty ? item.product.images.first : '',
+                      width: 200,
+                      height: 200,
+                    ),
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => Container(
+                      color: Colors.grey[200],
+                      child: const Center(
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.grey),
                         ),
                       ),
-                    )
-                  : const Icon(
+                    ),
+                    errorWidget: (context, url, error) => const Icon(
                       Icons.image_not_supported,
                       color: Colors.grey,
                     ),
+                  ),
+                ),
             ),
 
             const SizedBox(width: 12),

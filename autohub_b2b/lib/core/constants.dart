@@ -6,7 +6,7 @@ class AppConstants {
   static const String appDescription = 'Platform for auto dismantlers, car services and car washes';
 
   // API endpoints
-  static const String baseUrl = 'https://api.autohub.kz'; // TODO: Replace with actual API URL
+  static const String baseUrl = 'http://78.140.246.83:3000';
   static const String apiVersion = 'v1';
   
   // Sync settings

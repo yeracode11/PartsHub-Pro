@@ -272,19 +272,10 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   }
 
   Widget _buildImageGallery(Product product) {
-    if (product.images.isEmpty) {
-      return Container(
-        height: 300,
-        color: Colors.grey[200],
-        child: const Center(
-          child: Icon(
-            Icons.image_not_supported,
-            size: 64,
-            color: Colors.grey,
-          ),
-        ),
-      );
-    }
+    // Всегда показываем карусель, даже если нет изображений (с placeholder)
+    final images = product.images.isEmpty 
+        ? [''] // Пустая строка для placeholder
+        : product.images;
 
     return Stack(
       children: [
@@ -298,9 +289,13 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
               });
             },
           ),
-          items: product.images.map((imageUrl) {
+          items: images.map((imageUrl) {
             return CachedNetworkImage(
-              imageUrl: ApiClient.getImageUrl(imageUrl),
+              imageUrl: ApiClient.getImageUrl(
+                imageUrl,
+                width: 600,
+                height: 600,
+              ),
               fit: BoxFit.cover,
               width: double.infinity,
               placeholder: (context, url) => Container(
@@ -324,14 +319,14 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
         ),
 
         // Индикатор страниц
-        if (product.images.length > 1)
+        if (images.length > 1)
           Positioned(
             bottom: 16,
-            left: 0,
-            right: 0,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: product.images.asMap().entries.map((entry) {
+              left: 0,
+              right: 0,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: images.asMap().entries.map((entry) {
                 return Container(
                   width: 8,
                   height: 8,
@@ -439,11 +434,24 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
           Expanded(
             child: ElevatedButton(
               onPressed: () {
-                // TODO: Implement add to cart
+                // Добавляем товар в корзину через BLoC
+                context.read<CartBloc>().add(CartItemAdded(
+                  product: product,
+                  quantity: _quantity,
+                ));
+                
+                // Показываем уведомление
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('Добавлено в корзину: ${product.name}'),
+                    content: Text('Добавлено в корзину: ${product.name} (${_quantity} шт.)'),
                     duration: const Duration(seconds: 2),
+                    action: SnackBarAction(
+                      label: 'Открыть корзину',
+                      textColor: Colors.white,
+                      onPressed: () {
+                        GoRouter.of(context).go('/cart');
+                      },
+                    ),
                   ),
                 );
               },

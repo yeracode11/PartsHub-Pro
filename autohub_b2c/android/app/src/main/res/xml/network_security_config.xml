@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Разрешить HTTP трафик для загрузки изображений -->
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+    
+    <!-- Разрешить доступ к конкретным доменам -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">picsum.photos</domain>
+        <domain includeSubdomains="true">78.140.246.83</domain>
+        <domain includeSubdomains="true">localhost</domain>
+        <domain includeSubdomains="true">192.168.2.240</domain>
+    </domain-config>
+</network-security-config>

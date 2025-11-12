@@ -1,8 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'firebase_options.dart';
 import 'package:autohub_b2b/blocs/auth/auth_bloc.dart';
 import 'package:autohub_b2b/blocs/auth/auth_event.dart';
 import 'package:autohub_b2b/blocs/auth/auth_state.dart';
@@ -24,11 +21,6 @@ import 'package:autohub_b2b/services/auth/secure_storage_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // Инициализация Firebase
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
   
   // Инициализация базы данных
   final database = AppDatabase();

@@ -199,7 +199,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                     const SizedBox(width: 16),
                     OutlinedButton.icon(
                       onPressed: () {
-                        // TODO: Показать фильтры
+                        // Фильтры будут реализованы позже
                       },
                       icon: const Icon(Icons.filter_list),
                       label: const Text('Фильтры'),

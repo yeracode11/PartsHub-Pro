@@ -64,7 +64,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 8),
                 
                 Text(
-                  'Войдите в свой аккаунт AutoHub',
+                  'Войдите в свой аккаунт MyAuto',
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                         color: AppTheme.textSecondary,
                       ),
