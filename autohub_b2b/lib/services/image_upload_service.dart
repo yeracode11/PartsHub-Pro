@@ -86,7 +86,8 @@ class ImageUploadService {
   Future<void> removeImage(int itemId, String imageUrl) async {
     try {
       final response = await _apiClient.dio.delete(
-        '/api/items/$itemId/images/$imageUrl',
+        '/api/items/$itemId/images',
+        data: {'imageUrl': imageUrl},
       );
 
       if (response.statusCode != 200 && response.statusCode != 204) {
