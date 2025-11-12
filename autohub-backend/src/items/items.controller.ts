@@ -7,6 +7,7 @@ import {
   Query,
   Body,
   Param,
+  Req,
   UseGuards,
   UseInterceptors,
   UploadedFiles,
@@ -121,14 +122,15 @@ export class ItemsController {
   }
 
   // Удаление изображения
-  @Delete(':id/images/:imageUrl')
+  @Delete(':id/images')
   @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.STOREKEEPER)
   async removeImage(
     @Param('id') id: string,
-    @Param('imageUrl') imageUrl: string,
+    @Body() body: { imageUrl: string },
     @CurrentUser() user: any,
   ) {
-    return this.itemsService.removeImage(+id, user.organizationId, imageUrl);
+    console.log('🗑️ Removing image:', body.imageUrl);
+    return this.itemsService.removeImage(+id, user.organizationId, body.imageUrl);
   }
 }
 
