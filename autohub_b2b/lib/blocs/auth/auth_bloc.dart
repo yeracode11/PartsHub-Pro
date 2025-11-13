@@ -23,10 +23,24 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       final token = await _storage.getAuthToken();
 
       if (userData != null && token != null) {
-        print('⚠️ AuthBloc: Found old token, clearing storage');
-        // Временно очищаем старые токены для перелогина
-        await _storage.clearAll();
-        emit(AuthUnauthenticated());
+        print('✅ AuthBloc: Found saved user data, restoring session');
+        // Восстанавливаем пользователя из сохраненных данных
+        try {
+          final userModel = UserModel(
+            uid: userData['uid'] ?? '',
+            name: userData['name'] ?? 'User',
+            email: userData['email'] ?? '',
+            role: _parseRole(userData['role']),
+            businessType: _parseBusinessType(userData['businessType']),
+            createdAt: DateTime.parse(userData['createdAt'] ?? DateTime.now().toIso8601String()),
+          );
+          emit(AuthAuthenticated(userModel));
+          print('✅ AuthBloc: User session restored');
+        } catch (e) {
+          print('❌ AuthBloc: Error restoring user session: $e');
+          await _storage.clearAll();
+          emit(AuthUnauthenticated());
+        }
       } else {
         print('ℹ️ AuthBloc: No saved user data found');
         emit(AuthUnauthenticated());
@@ -200,9 +214,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   Future<void> _onSignOutRequested(
       AuthSignOutRequested event, Emitter<AuthState> emit) async {
     try {
+      print('🚪 AuthBloc: Signing out...');
       await _storage.clearAll();
+      print('✅ AuthBloc: Storage cleared');
       emit(AuthUnauthenticated());
+      print('✅ AuthBloc: AuthUnauthenticated state emitted');
     } catch (e) {
+      print('❌ AuthBloc: Error signing out: $e');
       emit(AuthError(e.toString()));
     }
   }

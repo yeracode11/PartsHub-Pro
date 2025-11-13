@@ -47,13 +47,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
         title: const Text('Профиль'),
         elevation: 0,
       ),
-      body: BlocBuilder<AuthBloc, AuthState>(
-        builder: (context, state) {
-          if (state is AuthAuthenticated) {
-            return _buildProfileContent(context, state.user);
+      body: BlocListener<AuthBloc, AuthState>(
+        listener: (context, state) {
+          // Если пользователь вышел, закрываем экран профиля
+          if (state is AuthUnauthenticated) {
+            Navigator.of(context).popUntil((route) => route.isFirst);
           }
-          return const Center(child: CircularProgressIndicator());
         },
+        child: BlocBuilder<AuthBloc, AuthState>(
+          builder: (context, state) {
+            if (state is AuthAuthenticated) {
+              return _buildProfileContent(context, state.user);
+            }
+            return const Center(child: CircularProgressIndicator());
+          },
+        ),
       ),
     );
   }
