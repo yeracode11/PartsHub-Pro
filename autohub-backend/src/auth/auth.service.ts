@@ -41,16 +41,16 @@ export class AuthService {
       throw new UnauthorizedException('Пользователь деактивирован');
     }
 
-    // Проверяем пароль если он есть
-    if (user.password) {
-      const isPasswordValid = await bcrypt.compare(loginDto.password, user.password);
-      if (!isPasswordValid) {
-        console.log('❌ Invalid password for user:', user.id);
-        throw new UnauthorizedException('Неверный email или пароль');
-      }
-    } else {
-      // Если пароля нет, разрешаем вход без пароля (для существующих пользователей)
-      console.log('⚠️ User has no password, allowing login');
+    // Проверяем пароль - обязательно должен быть
+    if (!user.password) {
+      console.log('❌ User has no password set:', user.id);
+      throw new UnauthorizedException('Пароль не установлен. Обратитесь к администратору.');
+    }
+
+    const isPasswordValid = await bcrypt.compare(loginDto.password, user.password);
+    if (!isPasswordValid) {
+      console.log('❌ Invalid password for user:', user.id);
+      throw new UnauthorizedException('Неверный email или пароль');
     }
 
     console.log('✅ User authenticated:', user.id);
