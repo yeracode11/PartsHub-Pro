@@ -1,5 +1,7 @@
 import { Injectable, ExecutionContext } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { Observable } from 'rxjs';
+import { firstValueFrom } from 'rxjs';
 
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('jwt') {
@@ -10,6 +12,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     // Публичные эндпоинты - не требуют авторизации
     const publicRoutes = [
       '/api/auth/login',
+      '/api/auth/register',
       '/api/auth/refresh',
       '/api/b2c/parts',
       '/api/b2c/services',
@@ -24,7 +27,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     // Проверяем есть ли токен
     const authHeader = request.headers.authorization;
     if (!authHeader) {
-      console.log('❌ JwtAuthGuard: No Authorization header');
+      console.log('❌ JwtAuthGuard: No Authorization header for:', url);
       return false;
     }
 
@@ -32,14 +35,22 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     console.log('🔐 JwtAuthGuard: Token present, calling Passport...');
 
     try {
-      // Вызываем родительский метод для проверки токена (асинхронно)
-      const result = await super.canActivate(context);
-      console.log('🔐 JwtAuthGuard: Passport result type:', typeof result);
-      console.log('🔐 JwtAuthGuard: Passport result value:', result);
+      // Вызываем родительский метод для проверки токена
+      const result = super.canActivate(context);
       
-      // Преобразуем результат в boolean (result может быть boolean | Observable<boolean>)
-      const resultValue = result as any;
-      return resultValue === true || resultValue === 'true' || resultValue === 1;
+      // Обрабатываем результат (может быть boolean или Observable<boolean>)
+      if (result instanceof Observable) {
+        const value = await firstValueFrom(result);
+        console.log('🔐 JwtAuthGuard: Observable result:', value);
+        return value === true;
+      } else if (result instanceof Promise) {
+        const value = await result;
+        console.log('🔐 JwtAuthGuard: Promise result:', value);
+        return value === true;
+      } else {
+        console.log('🔐 JwtAuthGuard: Direct result:', result);
+        return result === true;
+      }
     } catch (error) {
       console.log('❌ JwtAuthGuard: Passport error:', error.message);
       console.log('❌ JwtAuthGuard: Error stack:', error.stack);
