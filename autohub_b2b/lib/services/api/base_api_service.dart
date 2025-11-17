@@ -58,6 +58,15 @@ class BaseApiService {
             print('   Data: ${error.response?.data}');
           }
 
+          // Обработка ошибок подключения
+          if (error.type == DioExceptionType.connectionError || 
+              error.type == DioExceptionType.connectionTimeout) {
+            if (Environment.enableApiLogs) {
+              print('⚠️ Connection Error - Backend server may be down');
+              print('   Check if backend is running on: ${error.requestOptions.baseUrl}');
+            }
+          }
+
           // Обработка 401 - токен истек
           if (error.response?.statusCode == 401) {
             // Токен истек - пользователю нужно перелогиниться
