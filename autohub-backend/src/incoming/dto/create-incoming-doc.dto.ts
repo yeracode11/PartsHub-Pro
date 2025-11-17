@@ -1,12 +1,12 @@
-import { IsString, IsOptional, IsEnum, IsDateString, IsUUID, IsNumber, Min } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsDateString, IsUUID, IsNumber, Min, ValidateIf } from 'class-validator';
 import { IncomingDocType } from '../entities/incoming-doc.entity';
 
 export class CreateIncomingDocDto {
   @IsDateString()
   date: string;
 
-  @IsOptional()
-  @IsUUID()
+  @ValidateIf((o) => o.supplierId !== null && o.supplierId !== undefined && o.supplierId !== '')
+  @IsUUID(undefined, { message: 'supplierId must be a valid UUID' })
   supplierId?: string;
 
   @IsOptional()

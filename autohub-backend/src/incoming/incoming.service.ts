@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, HttpException, HttpStatus } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { IncomingDoc, IncomingDocStatus } from './entities/incoming-doc.entity';
@@ -31,24 +31,244 @@ export class IncomingService {
 
   // Создание приходной накладной
   async create(organizationId: string, userId: string, dto: CreateIncomingDocDto): Promise<IncomingDoc> {
-    const docNumber = await this.generateDocNumber(organizationId);
+    try {
+      console.log('📦 IncomingService.create - Starting');
+      console.log('   organizationId:', organizationId);
+      console.log('   userId:', userId);
+      console.log('   dto.type:', dto.type);
 
-    const doc = this.incomingDocRepository.create({
-      organizationId,
-      createdById: userId,
-      docNumber,
-      date: new Date(dto.date),
-      supplierId: dto.supplierId || null,
-      supplierName: dto.supplierName || null,
-      type: dto.type,
-      warehouse: dto.warehouse || null,
-      notes: dto.notes || null,
-      docPhotos: dto.docPhotos || null,
-      status: IncomingDocStatus.DRAFT,
-      totalAmount: 0,
-    });
+      // Валидация типа
+      if (!Object.values(IncomingDocType).includes(dto.type)) {
+        throw new Error(`Invalid type: ${dto.type}. Must be one of: ${Object.values(IncomingDocType).join(', ')}`);
+      }
 
-    return await this.incomingDocRepository.save(doc);
+      const docNumber = await this.generateDocNumber(organizationId);
+      console.log('   Generated docNumber:', docNumber);
+
+      // Валидация userId
+      if (!userId || userId.trim() === '') {
+        throw new HttpException(
+          {
+            statusCode: HttpStatus.BAD_REQUEST,
+            message: 'User ID is required',
+            error: 'Bad Request',
+          },
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      // Обработка supplierId - если пустая строка, то null
+      const supplierId = dto.supplierId && dto.supplierId.trim() !== '' ? dto.supplierId : null;
+      
+      console.log('   Creating doc with userId:', userId);
+      console.log('   userId type:', typeof userId);
+      console.log('   userId length:', userId?.length);
+      console.log('   userId value (stringified):', JSON.stringify(userId));
+      
+      // Проверяем, что userId действительно строка UUID
+      if (typeof userId !== 'string' || userId.trim() === '') {
+        throw new HttpException(
+          {
+            statusCode: HttpStatus.BAD_REQUEST,
+            message: `Invalid userId: ${userId} (type: ${typeof userId})`,
+            error: 'Bad Request',
+          },
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+      
+      // Создаем объект напрямую, без использования create()
+      const doc = new IncomingDoc();
+      doc.organizationId = organizationId;
+      doc.createdById = userId.trim(); // Явно устанавливаем значение и обрезаем пробелы
+      doc.docNumber = docNumber;
+      doc.date = new Date(dto.date);
+      doc.supplierId = supplierId;
+      doc.supplierName = dto.supplierName || null;
+      doc.type = dto.type;
+      doc.warehouse = dto.warehouse || null;
+      doc.notes = dto.notes || null;
+      doc.docPhotos = dto.docPhotos || null;
+      doc.status = IncomingDocStatus.DRAFT;
+      doc.totalAmount = 0;
+      
+      console.log('   Doc object created:');
+      console.log('     organizationId:', doc.organizationId);
+      console.log('     createdById:', doc.createdById);
+      console.log('     createdById type:', typeof doc.createdById);
+      console.log('     createdById length:', doc.createdById?.length);
+      console.log('     docNumber:', doc.docNumber);
+
+      console.log('   Created doc entity, saving...');
+      console.log('   Doc object before save:');
+      console.log('     organizationId:', doc.organizationId);
+      console.log('     createdById:', doc.createdById);
+      console.log('     docNumber:', doc.docNumber);
+      console.log('     type:', doc.type);
+      console.log('     status:', doc.status);
+      
+      // Проверяем, что createdById установлен перед сохранением
+      if (!doc.createdById) {
+        console.error('   ❌ ERROR: createdById is not set!');
+        console.error('   userId parameter:', userId);
+        console.error('   userId type:', typeof userId);
+        throw new HttpException(
+          {
+            statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+            message: 'createdById is not set before save',
+            error: 'Internal Server Error',
+          },
+          HttpStatus.INTERNAL_SERVER_ERROR,
+        );
+      }
+      
+      // Используем прямой SQL запрос для гарантии, что все поля передаются
+      // TypeORM может игнорировать createdById из-за связи @ManyToOne
+      const queryRunner = this.dataSource.createQueryRunner();
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+      
+      try {
+        console.log('   Executing direct SQL insert...');
+        console.log('   createdById value for SQL:', doc.createdById);
+        console.log('   createdById type:', typeof doc.createdById);
+        
+        // Используем прямой SQL запрос для гарантии передачи всех полей
+        const insertResult = await queryRunner.query(
+          `INSERT INTO "incoming_docs" (
+            "id", 
+            "organizationId", 
+            "docNumber", 
+            "date", 
+            "supplierId", 
+            "supplierName", 
+            "type", 
+            "status", 
+            "warehouse", 
+            "notes", 
+            "docPhotos", 
+            "createdById", 
+            "totalAmount"
+          ) VALUES (
+            gen_random_uuid(),
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+          ) RETURNING *`,
+          [
+            doc.organizationId,
+            doc.docNumber,
+            doc.date,
+            doc.supplierId,
+            doc.supplierName,
+            doc.type,
+            doc.status,
+            doc.warehouse,
+            doc.notes,
+            doc.docPhotos ? JSON.stringify(doc.docPhotos) : null,
+            doc.createdById, // Явно передаем как параметр
+            doc.totalAmount,
+          ]
+        );
+        
+        await queryRunner.commitTransaction();
+        
+        console.log('   Insert result:', JSON.stringify(insertResult, null, 2));
+        
+        if (!insertResult || insertResult.length === 0) {
+          await queryRunner.rollbackTransaction();
+          throw new HttpException(
+            {
+              statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+              message: 'Failed to create document',
+              error: 'Internal Server Error',
+            },
+            HttpStatus.INTERNAL_SERVER_ERROR,
+          );
+        }
+        
+        // Получаем созданную запись через репозиторий для правильной десериализации
+        const createdDoc = await this.incomingDocRepository.findOne({
+          where: { id: insertResult[0].id },
+        });
+        
+        if (!createdDoc) {
+          throw new HttpException(
+            {
+              statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+              message: 'Failed to retrieve created document',
+              error: 'Internal Server Error',
+            },
+            HttpStatus.INTERNAL_SERVER_ERROR,
+          );
+        }
+        
+        console.log('✅ IncomingService.create - Success, doc ID:', createdDoc.id);
+        
+        return createdDoc;
+      } catch (error) {
+        await queryRunner.rollbackTransaction();
+        throw error;
+      } finally {
+        await queryRunner.release();
+      }
+    } catch (error) {
+      console.error('❌ IncomingService.create - Error:', error);
+      console.error('   Error name:', error?.constructor?.name);
+      console.error('   Error message:', error?.message);
+      console.error('   Error code:', (error as any)?.code);
+      console.error('   Error detail:', (error as any)?.detail);
+      console.error('   Error stack:', error?.stack);
+      
+      // Проверяем специфичные ошибки БД
+      if ((error as any)?.code === '23505') {
+        // Unique constraint violation
+        throw new HttpException(
+          {
+            statusCode: HttpStatus.CONFLICT,
+            message: 'Накладная с таким номером уже существует',
+            error: 'Conflict',
+          },
+          HttpStatus.CONFLICT,
+        );
+      }
+      if ((error as any)?.code === '42P01') {
+        // Table does not exist
+        throw new HttpException(
+          {
+            statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+            message: 'Таблица incoming_docs не существует в базе данных. Проверьте миграции.',
+            error: 'Database Error',
+          },
+          HttpStatus.INTERNAL_SERVER_ERROR,
+        );
+      }
+      if ((error as any)?.code === '42704') {
+        // Type does not exist (enum)
+        throw new HttpException(
+          {
+            statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+            message: 'Тип данных enum не существует. Проверьте миграции базы данных.',
+            error: 'Database Error',
+          },
+          HttpStatus.INTERNAL_SERVER_ERROR,
+        );
+      }
+      
+      // Если это уже HttpException, пробрасываем как есть
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      
+      // Для остальных ошибок создаем HttpException
+      throw new HttpException(
+        {
+          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+          message: error?.message || 'Ошибка при создании накладной',
+          error: 'Internal Server Error',
+          details: error?.message,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 
   // Получение всех накладных организации

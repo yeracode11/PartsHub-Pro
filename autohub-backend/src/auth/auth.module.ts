@@ -24,7 +24,7 @@ import { OrganizationsModule } from '../organizations/organizations.module';
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy, JwtAuthGuard],
-  exports: [AuthService, JwtStrategy, JwtAuthGuard, PassportModule],
+  exports: [AuthService, JwtStrategy, JwtAuthGuard, PassportModule, TypeOrmModule],
 })
 export class AuthModule {}
 
