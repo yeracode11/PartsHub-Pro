@@ -107,8 +107,29 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       emit(AuthAuthenticated(userModel));
       print('✅ AuthBloc: AuthAuthenticated state emitted');
     } on DioException catch (e) {
-      print('❌ AuthBloc: DioException - ${e.response?.data}');
-      emit(AuthError(e.response?.data['message'] ?? 'Неверный email или пароль'));
+      print('❌ AuthBloc: DioException');
+      print('   Type: ${e.type}');
+      print('   Message: ${e.message}');
+      print('   Response: ${e.response?.data}');
+      print('   Status Code: ${e.response?.statusCode}');
+      
+      // Обработка ошибок подключения
+      if (e.type == DioExceptionType.connectionError || 
+          e.type == DioExceptionType.connectionTimeout ||
+          e.message?.contains('Connection refused') == true) {
+        emit(AuthError('Не удалось подключиться к серверу. Проверьте, что backend запущен.'));
+        return;
+      }
+      
+      // Обработка HTTP ошибок
+      if (e.response != null) {
+        final errorMessage = e.response?.data['message'] ?? 
+                            e.response?.data['error'] ?? 
+                            'Неверный email или пароль';
+        emit(AuthError(errorMessage));
+      } else {
+        emit(AuthError('Ошибка подключения к серверу'));
+      }
     } catch (e) {
       print('❌ AuthBloc: Generic error - $e');
       emit(AuthError('Произошла ошибка: $e'));
@@ -201,11 +222,29 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       emit(AuthAuthenticated(userModel));
       print('✅ AuthBloc: AuthAuthenticated state emitted');
     } on DioException catch (e) {
-      print('❌ AuthBloc: DioException - ${e.response?.data}');
-      final errorMessage = e.response?.data['message'] ?? 
-                          e.response?.data['error'] ?? 
-                          'Ошибка регистрации';
-      emit(AuthError(errorMessage));
+      print('❌ AuthBloc: DioException');
+      print('   Type: ${e.type}');
+      print('   Message: ${e.message}');
+      print('   Response: ${e.response?.data}');
+      print('   Status Code: ${e.response?.statusCode}');
+      
+      // Обработка ошибок подключения
+      if (e.type == DioExceptionType.connectionError || 
+          e.type == DioExceptionType.connectionTimeout ||
+          e.message?.contains('Connection refused') == true) {
+        emit(AuthError('Не удалось подключиться к серверу. Проверьте, что backend запущен.'));
+        return;
+      }
+      
+      // Обработка HTTP ошибок
+      if (e.response != null) {
+        final errorMessage = e.response?.data['message'] ?? 
+                            e.response?.data['error'] ?? 
+                            'Ошибка регистрации';
+        emit(AuthError(errorMessage));
+      } else {
+        emit(AuthError('Ошибка подключения к серверу'));
+      }
     } catch (e) {
       print('❌ AuthBloc: Generic error - $e');
       emit(AuthError('Произошла ошибка: $e'));
