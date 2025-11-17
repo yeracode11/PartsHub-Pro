@@ -248,7 +248,7 @@ export class IncomingService {
           const newItem = new Item();
           newItem.organizationId = organizationId;
           newItem.name = incomingItem.name;
-          newItem.sku = incomingItem.sku || null;
+          newItem.sku = incomingItem.sku || undefined;
           newItem.category = incomingItem.category || 'Общее';
           newItem.price = incomingItem.purchasePrice;
           newItem.quantity = incomingItem.quantity;
@@ -257,7 +257,7 @@ export class IncomingService {
             ? `VIN: ${incomingItem.vin}${incomingItem.carBrand ? `, ${incomingItem.carBrand} ${incomingItem.carModel || ''}` : ''}`
             : incomingItem.carBrand
               ? `${incomingItem.carBrand} ${incomingItem.carModel || ''}`
-              : null;
+              : undefined;
           newItem.images = incomingItem.photos || [];
           newItem.syncedToB2C = true; // Автоматически синхронизируем в B2C
 
