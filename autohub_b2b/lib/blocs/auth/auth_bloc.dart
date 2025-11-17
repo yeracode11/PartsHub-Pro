@@ -13,6 +13,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthSignInRequested>(_onSignInRequested);
     on<AuthSignUpRequested>(_onSignUpRequested);
     on<AuthSignOutRequested>(_onSignOutRequested);
+    on<AuthProfileUpdated>(_onProfileUpdated);
   }
 
   Future<void> _onAuthCheckRequested(
@@ -221,6 +222,30 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       print('✅ AuthBloc: AuthUnauthenticated state emitted');
     } catch (e) {
       print('❌ AuthBloc: Error signing out: $e');
+      emit(AuthError(e.toString()));
+    }
+  }
+
+  Future<void> _onProfileUpdated(
+      AuthProfileUpdated event, Emitter<AuthState> emit) async {
+    try {
+      print('📝 AuthBloc: Updating profile...');
+      
+      // Обновляем сохраненные данные пользователя
+      await _storage.saveUserData({
+        'uid': event.user.uid,
+        'name': event.user.name,
+        'email': event.user.email,
+        'role': event.user.role.toString(),
+        'businessType': event.user.businessType.toString(),
+        'createdAt': event.user.createdAt.toIso8601String(),
+      });
+      
+      // Обновляем состояние
+      emit(AuthAuthenticated(event.user));
+      print('✅ AuthBloc: Profile updated');
+    } catch (e) {
+      print('❌ AuthBloc: Error updating profile: $e');
       emit(AuthError(e.toString()));
     }
   }

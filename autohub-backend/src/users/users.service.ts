@@ -58,4 +58,21 @@ export class UsersService {
     // Создаем нового
     return await this.create(createDto);
   }
+
+  // Обновить профиль пользователя
+  async updateProfile(userId: string, updateDto: { name?: string; email?: string }): Promise<User> {
+    const user = await this.findOne(userId);
+    
+    if (updateDto.name !== undefined) {
+      user.name = updateDto.name;
+    }
+    if (updateDto.email !== undefined) {
+      user.email = updateDto.email;
+    }
+    
+    const savedUser = await this.userRepository.save(user);
+    
+    // Загружаем с организацией для ответа
+    return await this.findOne(savedUser.id);
+  }
 }

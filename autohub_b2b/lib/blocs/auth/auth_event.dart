@@ -44,3 +44,12 @@ class AuthSignUpRequested extends AuthEvent {
 
 class AuthSignOutRequested extends AuthEvent {}
 
+class AuthProfileUpdated extends AuthEvent {
+  final UserModel user;
+
+  const AuthProfileUpdated(this.user);
+
+  @override
+  List<Object?> get props => [user];
+}
+

@@ -6,6 +6,7 @@ import 'package:autohub_b2b/blocs/auth/auth_state.dart';
 import 'package:autohub_b2b/models/user_model.dart';
 import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/services/auth/secure_storage_service.dart';
+import 'package:autohub_b2b/screens/profile/edit_profile_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -191,18 +192,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Card(
             child: Column(
               children: [
-                ListTile(
-                  leading: const Icon(Icons.edit),
-                  title: const Text('Редактировать профиль'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Редактирование профиля будет доступно в следующей версии'),
-                      ),
-                    );
-                  },
-                ),
+                if (user.role == UserRole.owner)
+                  ListTile(
+                    leading: const Icon(Icons.edit),
+                    title: const Text('Редактировать профиль'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => EditProfileScreen(user: user),
+                        ),
+                      );
+                    },
+                  ),
                 const Divider(height: 1),
                 ListTile(
                   leading: const Icon(Icons.lock),
