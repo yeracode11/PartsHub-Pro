@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import 'package:autohub_b2b/models/incoming_item_model.dart';
 
 enum IncomingDocStatus {
   draft,
