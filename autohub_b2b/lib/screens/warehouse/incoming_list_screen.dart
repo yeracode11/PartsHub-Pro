@@ -27,6 +27,8 @@ class _IncomingListScreenState extends State<IncomingListScreen> {
   }
 
   Future<void> _loadDocuments() async {
+    if (!mounted) return;
+    
     setState(() {
       _isLoading = true;
       _error = null;
@@ -36,11 +38,16 @@ class _IncomingListScreenState extends State<IncomingListScreen> {
       final docs = await _apiService.getDocuments(
         status: _filterStatus?.name,
       );
+      
+      if (!mounted) return;
+      
       setState(() {
         _documents = docs;
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
+      
       setState(() {
         _error = e.toString();
         _isLoading = false;

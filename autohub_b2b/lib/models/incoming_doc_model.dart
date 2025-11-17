@@ -98,6 +98,15 @@ class IncomingDocModel extends Equatable {
     required this.updatedAt,
   });
 
+  static double _parseDouble(dynamic value) {
+    if (value == null) return 0.0;
+    if (value is num) return value.toDouble();
+    if (value is String) {
+      return double.tryParse(value) ?? 0.0;
+    }
+    return 0.0;
+  }
+
   factory IncomingDocModel.fromJson(Map<String, dynamic> json) {
     return IncomingDocModel(
       id: json['id'] as String,
@@ -114,7 +123,7 @@ class IncomingDocModel extends Equatable {
           : null,
       createdById: json['createdById'] as String,
       createdByName: json['createdBy']?['name'] as String?,
-      totalAmount: (json['totalAmount'] as num?)?.toDouble() ?? 0.0,
+      totalAmount: _parseDouble(json['totalAmount']),
       items: json['items'] != null
           ? (json['items'] as List)
               .map((item) => IncomingItemModel.fromJson(item as Map<String, dynamic>))

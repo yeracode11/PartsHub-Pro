@@ -26,6 +26,8 @@ class _SalesScreenState extends State<SalesScreen> {
   }
 
   Future<void> _loadOrders() async {
+    if (!mounted) return;
+    
     setState(() {
       isLoading = true;
       error = null;
@@ -35,11 +37,15 @@ class _SalesScreenState extends State<SalesScreen> {
       final response = await dio.get('/api/orders');
       final List<dynamic> data = response.data;
       
+      if (!mounted) return;
+      
       setState(() {
         orders = data.map((json) => OrderModel.fromJson(json)).toList();
         isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
+      
       setState(() {
         error = e.toString();
         isLoading = false;

@@ -37,19 +37,48 @@ class IncomingItemModel extends Equatable {
     required this.updatedAt,
   });
 
+  static int? _parseInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) {
+      return int.tryParse(value);
+    }
+    return null;
+  }
+
+  static int _parseIntRequired(dynamic value) {
+    if (value == null) return 0;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) {
+      return int.tryParse(value) ?? 0;
+    }
+    return 0;
+  }
+
+  static double _parseDouble(dynamic value) {
+    if (value == null) return 0.0;
+    if (value is num) return value.toDouble();
+    if (value is String) {
+      return double.tryParse(value) ?? 0.0;
+    }
+    return 0.0;
+  }
+
   factory IncomingItemModel.fromJson(Map<String, dynamic> json) {
     return IncomingItemModel(
       id: json['id'] as String,
       docId: json['docId'] as String,
-      itemId: json['itemId'] as int?,
+      itemId: _parseInt(json['itemId']),
       name: json['name'] as String,
       category: json['category'] as String?,
       carBrand: json['carBrand'] as String?,
       carModel: json['carModel'] as String?,
       vin: json['vin'] as String?,
       condition: json['condition'] as String?,
-      quantity: json['quantity'] as int,
-      purchasePrice: (json['purchasePrice'] as num).toDouble(),
+      quantity: _parseIntRequired(json['quantity']),
+      purchasePrice: _parseDouble(json['purchasePrice']),
       warehouseCell: json['warehouseCell'] as String?,
       photos: json['photos'] != null
           ? List<String>.from(json['photos'] as List)

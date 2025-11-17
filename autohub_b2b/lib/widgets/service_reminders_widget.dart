@@ -23,17 +23,23 @@ class _ServiceRemindersWidgetState extends State<ServiceRemindersWidget> {
   }
 
   Future<void> _loadUpcomingService() async {
+    if (!mounted) return;
+    
     setState(() => isLoading = true);
 
     try {
       final response = await dio.get('/api/vehicles/upcoming-service');
       final List<dynamic> data = response.data;
 
+      if (!mounted) return;
+      
       setState(() {
         upcomingService = data.map((json) => VehicleModel.fromJson(json)).toList();
         isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
+      
       setState(() => isLoading = false);
       print('Error loading upcoming service: $e');
     }

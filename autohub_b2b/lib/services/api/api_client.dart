@@ -15,8 +15,9 @@ class ApiClient {
     dio = Dio(
       BaseOptions(
         baseUrl: 'http://78.140.246.83:3000', // Production API сервер
-        connectTimeout: const Duration(seconds: 30),
-        receiveTimeout: const Duration(seconds: 30),
+        connectTimeout: const Duration(seconds: 60), // Увеличено до 60 секунд
+        receiveTimeout: const Duration(seconds: 60), // Увеличено до 60 секунд
+        sendTimeout: const Duration(seconds: 60), // Таймаут отправки
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',

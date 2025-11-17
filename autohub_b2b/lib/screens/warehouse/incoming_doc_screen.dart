@@ -6,6 +6,7 @@ import 'package:autohub_b2b/models/incoming_item_model.dart';
 import 'package:autohub_b2b/models/customer_model.dart';
 import 'package:autohub_b2b/services/api/api_client.dart';
 import 'package:autohub_b2b/services/api/incoming_api_service.dart';
+import 'package:autohub_b2b/services/hardware/thermal_printer_service.dart';
 import 'package:autohub_b2b/screens/warehouse/incoming_add_item_screen.dart';
 
 class IncomingDocScreen extends StatefulWidget {
@@ -20,6 +21,7 @@ class IncomingDocScreen extends StatefulWidget {
 class _IncomingDocScreenState extends State<IncomingDocScreen> {
   final IncomingApiService _apiService = IncomingApiService(ApiClient());
   final ApiClient _apiClient = ApiClient();
+  final ThermalPrinterService _printer = ThermalPrinterService();
   
   final _formKey = GlobalKey<FormState>();
   final _dateController = TextEditingController();
@@ -108,22 +110,33 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
     });
 
     try {
-      final data = {
+      final data = <String, dynamic>{
         'date': _dateController.text,
-        'supplierId': _selectedSupplierId,
-        'supplierName': _supplierNameController.text.isEmpty
-            ? null
-            : _supplierNameController.text,
         'type': _selectedType == IncomingDocType.usedParts
             ? 'used_parts'
             : _selectedType == IncomingDocType.newParts
                 ? 'new_parts'
                 : 'own_production',
-        'warehouse': _warehouseController.text.isEmpty
-            ? null
-            : _warehouseController.text,
-        'notes': _notesController.text.isEmpty ? null : _notesController.text,
       };
+
+      // Добавляем supplierId только если он выбран
+      if (_selectedSupplierId != null && _selectedSupplierId!.isNotEmpty) {
+        data['supplierId'] = _selectedSupplierId;
+      }
+
+      // Добавляем supplierName только если он указан и supplierId не выбран
+      if (_selectedSupplierId == null && _supplierNameController.text.isNotEmpty) {
+        data['supplierName'] = _supplierNameController.text;
+      }
+
+      // Добавляем остальные поля только если они не пустые
+      if (_warehouseController.text.isNotEmpty) {
+        data['warehouse'] = _warehouseController.text;
+      }
+
+      if (_notesController.text.isNotEmpty) {
+        data['notes'] = _notesController.text;
+      }
 
       if (_document == null) {
         // Создание новой накладной
@@ -445,7 +458,7 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
                   'Позиции (${items.length})',
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
-                if (_document!.status == IncomingDocStatus.draft)
+                if (_document!.status == IncomingDocStatus.draft) ...[
                   ElevatedButton.icon(
                     onPressed: () async {
                       final result = await Navigator.of(context).push(
@@ -463,6 +476,14 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
                     icon: const Icon(Icons.add),
                     label: const Text('Добавить позицию'),
                   ),
+                  const SizedBox(width: 8),
+                  if (items.isNotEmpty)
+                    OutlinedButton.icon(
+                      onPressed: () => _printAllLabels(items),
+                      icon: const Icon(Icons.print),
+                      label: const Text('Печать всех наклеек'),
+                    ),
+                ],
               ],
             ),
             const SizedBox(height: 16),
@@ -524,8 +545,18 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
               Text('Ячейка: ${item.warehouseCell}'),
           ],
         ),
-        trailing: _document?.status == IncomingDocStatus.draft
-            ? IconButton(
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Кнопка печати наклейки
+            IconButton(
+              icon: const Icon(Icons.print, color: AppTheme.primaryColor),
+              onPressed: () => _printLabel(item),
+              tooltip: 'Печать наклейки',
+            ),
+            // Кнопка удаления (только для черновиков)
+            if (_document?.status == IncomingDocStatus.draft)
+              IconButton(
                 icon: const Icon(Icons.delete, color: Colors.red),
                 onPressed: () async {
                   final confirmed = await showDialog<bool>(
@@ -561,10 +592,265 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
                     }
                   }
                 },
-              )
-            : null,
+              ),
+          ],
+        ),
       ),
     );
+  }
+
+  /// Печать наклейки для одного товара
+  Future<void> _printLabel(IncomingItemModel item) async {
+    try {
+      // Показываем диалог подключения принтера
+      if (!_printer.isConnected) {
+        final shouldConnect = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Подключение принтера'),
+            content: const Text(
+              'Принтер не подключен. Хотите подключиться к USB принтеру?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Отмена'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Подключить'),
+              ),
+            ],
+          ),
+        );
+
+        if (shouldConnect != true) return;
+
+        // Показываем индикатор загрузки
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const Center(
+            child: CircularProgressIndicator(),
+          ),
+        );
+
+        final connected = await _printer.connectUSB();
+        
+        if (mounted) {
+          Navigator.of(context).pop(); // Закрываем индикатор загрузки
+        }
+
+        if (!connected) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Не удалось подключиться к принтеру. Проверьте подключение.'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+          return;
+        }
+      }
+
+      // Показываем индикатор печати
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('Печать наклейки...'),
+              ],
+            ),
+          ),
+        );
+      }
+
+      final success = await _printer.printLabel(
+        itemName: item.name,
+        sku: item.sku,
+        price: item.purchasePrice,
+        warehouseCell: item.warehouseCell,
+        quantity: item.quantity,
+      );
+
+      if (mounted) {
+        Navigator.of(context).pop(); // Закрываем индикатор печати
+      }
+
+      if (success) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Напечатано наклеек: ${item.quantity}'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Ошибка печати. Проверьте подключение принтера.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop(); // Закрываем индикатор, если открыт
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка печати: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Печать наклеек для всех товаров в накладной
+  Future<void> _printAllLabels(List<IncomingItemModel> items) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Печать всех наклеек'),
+        content: Text(
+          'Будет напечатано наклеек для ${items.length} позиций. Продолжить?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Отмена'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Печать'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      // Показываем диалог подключения принтера
+      if (!_printer.isConnected) {
+        final shouldConnect = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Подключение принтера'),
+            content: const Text(
+              'Принтер не подключен. Хотите подключиться к USB принтеру?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Отмена'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Подключить'),
+              ),
+            ],
+          ),
+        );
+
+        if (shouldConnect != true) return;
+
+        // Показываем индикатор загрузки
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const Center(
+            child: CircularProgressIndicator(),
+          ),
+        );
+
+        final connected = await _printer.connectUSB();
+        
+        if (mounted) {
+          Navigator.of(context).pop(); // Закрываем индикатор загрузки
+        }
+
+        if (!connected) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Не удалось подключиться к принтеру. Проверьте подключение.'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+          return;
+        }
+      }
+
+      // Показываем индикатор печати
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => StatefulBuilder(
+            builder: (context, setState) {
+              int printed = 0;
+              return AlertDialog(
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const CircularProgressIndicator(),
+                    const SizedBox(height: 16),
+                    Text('Печать наклеек: $printed / ${items.length}'),
+                  ],
+                ),
+              );
+            },
+          ),
+        );
+      }
+
+      int totalPrinted = 0;
+      for (final item in items) {
+        final success = await _printer.printLabel(
+          itemName: item.name,
+          sku: item.sku,
+          price: item.purchasePrice,
+          warehouseCell: item.warehouseCell,
+          quantity: item.quantity,
+        );
+        
+        if (success) {
+          totalPrinted += item.quantity;
+        }
+      }
+
+      if (mounted) {
+        Navigator.of(context).pop(); // Закрываем индикатор печати
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Напечатано наклеек: $totalPrinted'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop(); // Закрываем индикатор, если открыт
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка печати: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 }
 

@@ -6,6 +6,7 @@ import 'package:dio/dio.dart';
 import 'package:autohub_b2b/services/api/api_client.dart';
 import 'package:autohub_b2b/screens/warehouse/item_edit_screen.dart';
 import 'package:autohub_b2b/screens/warehouse/incoming_list_screen.dart';
+import 'package:autohub_b2b/screens/warehouse/printer_settings_screen.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:autohub_b2b/blocs/auth/auth_bloc.dart';
 import 'package:autohub_b2b/blocs/auth/auth_state.dart';
@@ -33,6 +34,8 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
   }
 
   Future<void> _loadItems() async {
+    if (!mounted) return;
+    
     setState(() {
       isLoading = true;
       error = null;
@@ -42,12 +45,16 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
       final response = await dio.get('/api/items');
       final List<dynamic> data = response.data;
 
+      if (!mounted) return;
+      
       setState(() {
         items = data.map((json) => ItemModel.fromJson(json)).toList();
         filteredItems = items;
         isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
+      
       setState(() {
         error = e.toString();
         isLoading = false;
@@ -211,10 +218,26 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                         ),
                       ],
                     ),
-                    FilledButton.icon(
-                      onPressed: () => _showItemDialog(context),
-                      icon: const Icon(Icons.add),
-                      label: const Text('Добавить товар'),
+                    Row(
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.print),
+                          onPressed: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (context) => const PrinterSettingsScreen(),
+                              ),
+                            );
+                          },
+                          tooltip: 'Настройки принтера',
+                        ),
+                        const SizedBox(width: 8),
+                        FilledButton.icon(
+                          onPressed: () => _showItemDialog(context),
+                          icon: const Icon(Icons.add),
+                          label: const Text('Добавить товар'),
+                        ),
+                      ],
                     ),
                   ],
                 ),

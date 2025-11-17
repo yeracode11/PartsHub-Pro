@@ -4,6 +4,8 @@ import 'package:autohub_b2b/models/incoming_doc_model.dart';
 import 'package:autohub_b2b/models/item_model.dart';
 import 'package:autohub_b2b/services/api/api_client.dart';
 import 'package:autohub_b2b/services/api/incoming_api_service.dart';
+import 'package:autohub_b2b/services/hardware/barcode_scanner_service.dart';
+import 'package:autohub_b2b/services/hardware/thermal_printer_service.dart';
 
 class IncomingAddItemScreen extends StatefulWidget {
   final String docId;
@@ -22,6 +24,8 @@ class IncomingAddItemScreen extends StatefulWidget {
 class _IncomingAddItemScreenState extends State<IncomingAddItemScreen> {
   final IncomingApiService _apiService = IncomingApiService(ApiClient());
   final ApiClient _apiClient = ApiClient();
+  final BarcodeScannerService _barcodeScanner = BarcodeScannerService();
+  final ThermalPrinterService _printer = ThermalPrinterService();
 
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
@@ -39,6 +43,8 @@ class _IncomingAddItemScreenState extends State<IncomingAddItemScreen> {
   String _selectedCondition = 'new';
   bool _isLoading = false;
   bool _isSearchingItems = false;
+  bool _isSearchingByBarcode = false;
+  final FocusNode _skuFocusNode = FocusNode();
 
   @override
   void initState() {
@@ -46,6 +52,14 @@ class _IncomingAddItemScreenState extends State<IncomingAddItemScreen> {
     if (widget.docType == IncomingDocType.newParts) {
       _loadItems();
     }
+    
+    // Настройка обработчика сканера штрих-кодов
+    _barcodeScanner.onBarcodeScanned = _onBarcodeScanned;
+    
+    // Автофокус на поле SKU для удобства сканирования
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _skuFocusNode.requestFocus();
+    });
   }
 
   @override
@@ -59,6 +73,8 @@ class _IncomingAddItemScreenState extends State<IncomingAddItemScreen> {
     _priceController.dispose();
     _warehouseCellController.dispose();
     _skuController.dispose();
+    _skuFocusNode.dispose();
+    _barcodeScanner.dispose();
     super.dispose();
   }
 
@@ -91,8 +107,71 @@ class _IncomingAddItemScreenState extends State<IncomingAddItemScreen> {
         _categoryController.text = item.category ?? '';
         _skuController.text = item.sku ?? '';
         _selectedCondition = item.condition;
+        _priceController.text = item.price.toStringAsFixed(2);
       }
     });
+  }
+
+  /// Обработка отсканированного штрих-кода
+  Future<void> _onBarcodeScanned(String barcode) async {
+    if (widget.docType != IncomingDocType.newParts) return;
+    
+    setState(() {
+      _isSearchingByBarcode = true;
+    });
+
+    try {
+      // Ищем товар по SKU/штрих-коду
+      final foundItem = _items.firstWhere(
+        (item) => item.sku?.toLowerCase() == barcode.toLowerCase(),
+        orElse: () => ItemModel(
+          name: '',
+          price: 0,
+          quantity: 0,
+          condition: 'new',
+        ),
+      );
+
+      if (foundItem.name.isNotEmpty) {
+        // Товар найден - заполняем форму
+        _onItemSelected(foundItem);
+        
+        // Воспроизводим звуковой сигнал (опционально)
+        await _barcodeScanner.playBeep();
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Товар найден: ${foundItem.name}'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      } else {
+        // Товар не найден - заполняем только SKU
+        _skuController.text = barcode;
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Товар с артикулом "$barcode" не найден. Заполните данные вручную.'),
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('Ошибка поиска товара по штрих-коду: $e');
+      _skuController.text = barcode;
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSearchingByBarcode = false;
+        });
+      }
+    }
   }
 
   Future<void> _saveItem() async {
@@ -128,6 +207,37 @@ class _IncomingAddItemScreenState extends State<IncomingAddItemScreen> {
       await _apiService.addItem(widget.docId, data);
 
       if (mounted) {
+        // Предлагаем напечатать наклейку
+        final printLabel = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Товар добавлен'),
+            content: const Text('Хотите напечатать наклейку для этого товара?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Пропустить'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Печать'),
+              ),
+            ],
+          ),
+        );
+
+        if (printLabel == true) {
+          await _printLabel(
+            itemName: _nameController.text.trim(),
+            sku: _skuController.text.trim().isEmpty ? null : _skuController.text.trim(),
+            price: double.parse(_priceController.text),
+            warehouseCell: _warehouseCellController.text.trim().isEmpty 
+                ? null 
+                : _warehouseCellController.text.trim(),
+            quantity: int.parse(_quantityController.text),
+          );
+        }
+
         Navigator.of(context).pop(true);
       }
     } catch (e) {
@@ -285,15 +395,39 @@ class _IncomingAddItemScreenState extends State<IncomingAddItemScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Артикул (для новых запчастей)
+            // Артикул (для новых запчастей) с поддержкой сканера
             if (!isUsedParts)
-              TextFormField(
-                controller: _skuController,
-                decoration: const InputDecoration(
-                  labelText: 'Артикул (SKU)',
-                  prefixIcon: Icon(Icons.qr_code),
-                  border: OutlineInputBorder(),
-                ),
+              Stack(
+                children: [
+                  TextFormField(
+                    controller: _skuController,
+                    focusNode: _skuFocusNode,
+                    decoration: InputDecoration(
+                      labelText: 'Артикул (SKU)',
+                      prefixIcon: const Icon(Icons.qr_code),
+                      suffixIcon: _isSearchingByBarcode
+                          ? const Padding(
+                              padding: EdgeInsets.all(12.0),
+                              child: SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                            )
+                          : null,
+                      border: const OutlineInputBorder(),
+                      hintText: 'Отсканируйте штрих-код или введите вручную',
+                    ),
+                    onChanged: (value) {
+                      // Обработка ввода для сканера
+                      _barcodeScanner.handleInput(value);
+                    },
+                    onTap: () {
+                      // При клике на поле - очищаем буфер сканера
+                      _barcodeScanner.clearBuffer();
+                    },
+                  ),
+                ],
               ),
             if (!isUsedParts) const SizedBox(height: 16),
 
@@ -470,6 +604,129 @@ class _IncomingAddItemScreenState extends State<IncomingAddItemScreen> {
         ),
       ),
     );
+  }
+
+  /// Печать наклейки для товара
+  Future<void> _printLabel({
+    required String itemName,
+    required String? sku,
+    required double price,
+    String? warehouseCell,
+    required int quantity,
+  }) async {
+    try {
+      // Показываем диалог подключения принтера
+      if (!_printer.isConnected) {
+        final shouldConnect = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Подключение принтера'),
+            content: const Text(
+              'Принтер не подключен. Хотите подключиться к USB принтеру?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Отмена'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Подключить'),
+              ),
+            ],
+          ),
+        );
+
+        if (shouldConnect != true) return;
+
+        // Показываем индикатор загрузки
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const Center(
+            child: CircularProgressIndicator(),
+          ),
+        );
+
+        final connected = await _printer.connectUSB();
+        
+        if (mounted) {
+          Navigator.of(context).pop(); // Закрываем индикатор загрузки
+        }
+
+        if (!connected) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Не удалось подключиться к принтеру. Проверьте подключение.'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+          return;
+        }
+      }
+
+      // Показываем индикатор печати
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('Печать наклеек...'),
+              ],
+            ),
+          ),
+        );
+      }
+
+      final success = await _printer.printLabel(
+        itemName: itemName,
+        sku: sku,
+        price: price,
+        warehouseCell: warehouseCell,
+        quantity: quantity,
+      );
+
+      if (mounted) {
+        Navigator.of(context).pop(); // Закрываем индикатор печати
+      }
+
+      if (success) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Напечатано наклеек: $quantity'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Ошибка печати. Проверьте подключение принтера.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop(); // Закрываем индикатор, если открыт
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка печати: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 }
 
