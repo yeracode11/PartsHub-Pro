@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -7,13 +7,11 @@ import { AuthController } from './auth.controller';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { User } from '../users/entities/user.entity';
-import { UsersModule } from '../users/users.module';
 import { OrganizationsModule } from '../organizations/organizations.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([User]),
-    UsersModule,
     OrganizationsModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.register({
