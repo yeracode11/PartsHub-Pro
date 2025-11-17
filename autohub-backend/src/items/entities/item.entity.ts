@@ -26,10 +26,10 @@ export class Item {
   name: string;
 
   @Column({ type: 'varchar', length: 100, nullable: true })
-  sku: string; // Артикул
+  sku: string | null; // Артикул
 
   @Column({ type: 'varchar', length: 100, nullable: true })
-  category: string;
+  category: string | null;
 
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   price: number;
@@ -38,10 +38,10 @@ export class Item {
   quantity: number;
 
   @Column({ type: 'varchar', length: 50, nullable: true })
-  condition: string; // new, used, refurbished
+  condition: string | null; // new, used, refurbished
 
   @Column({ type: 'text', nullable: true })
-  description: string;
+  description: string | null;
 
   @Column({ type: 'varchar', length: 500, nullable: true })
   imageUrl: string; // Основное изображение (для обратной совместимости)
