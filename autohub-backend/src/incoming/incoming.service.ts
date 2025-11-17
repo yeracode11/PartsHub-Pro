@@ -245,24 +245,23 @@ export class IncomingService {
           }
         } else {
           // Создаем новый товар для авторазбора
-          const newItem = queryRunner.manager.create(Item, {
-            organizationId,
-            name: incomingItem.name,
-            sku: incomingItem.sku || null,
-            category: incomingItem.category || 'Общее',
-            price: incomingItem.purchasePrice,
-            quantity: incomingItem.quantity,
-            condition: incomingItem.condition || 'used',
-            description: incomingItem.vin
-              ? `VIN: ${incomingItem.vin}${incomingItem.carBrand ? `, ${incomingItem.carBrand} ${incomingItem.carModel || ''}` : ''}`
-              : incomingItem.carBrand
-                ? `${incomingItem.carBrand} ${incomingItem.carModel || ''}`
-                : null,
-            images: incomingItem.photos || [],
-            syncedToB2C: true, // Автоматически синхронизируем в B2C
-          });
+          const newItem = new Item();
+          newItem.organizationId = organizationId;
+          newItem.name = incomingItem.name;
+          newItem.sku = incomingItem.sku || null;
+          newItem.category = incomingItem.category || 'Общее';
+          newItem.price = incomingItem.purchasePrice;
+          newItem.quantity = incomingItem.quantity;
+          newItem.condition = incomingItem.condition || 'used';
+          newItem.description = incomingItem.vin
+            ? `VIN: ${incomingItem.vin}${incomingItem.carBrand ? `, ${incomingItem.carBrand} ${incomingItem.carModel || ''}` : ''}`
+            : incomingItem.carBrand
+              ? `${incomingItem.carBrand} ${incomingItem.carModel || ''}`
+              : null;
+          newItem.images = incomingItem.photos || [];
+          newItem.syncedToB2C = true; // Автоматически синхронизируем в B2C
 
-          await queryRunner.manager.save(newItem);
+          await queryRunner.manager.save(Item, newItem);
         }
       }
 
