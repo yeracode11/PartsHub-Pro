@@ -16,6 +16,7 @@ import { OrderItemsModule } from './order-items/order-items.module';
 import { WhatsAppModule } from './whatsapp/whatsapp.module';
 import { VehiclesModule } from './vehicles/vehicles.module';
 import { B2CModule } from './b2c/b2c.module';
+import { IncomingModule } from './incoming/incoming.module';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { B2CModule } from './b2c/b2c.module';
     WhatsAppModule,
     VehiclesModule,
     B2CModule,
+    IncomingModule,
   ],
   controllers: [AppController],
   providers: [AppService],

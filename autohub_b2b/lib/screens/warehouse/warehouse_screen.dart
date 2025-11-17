@@ -5,6 +5,11 @@ import 'package:intl/intl.dart';
 import 'package:dio/dio.dart';
 import 'package:autohub_b2b/services/api/api_client.dart';
 import 'package:autohub_b2b/screens/warehouse/item_edit_screen.dart';
+import 'package:autohub_b2b/screens/warehouse/incoming_list_screen.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:autohub_b2b/blocs/auth/auth_bloc.dart';
+import 'package:autohub_b2b/blocs/auth/auth_state.dart';
+import 'package:autohub_b2b/models/user_model.dart';
 
 class WarehouseScreen extends StatefulWidget {
   const WarehouseScreen({super.key});
@@ -157,9 +162,44 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'Склад',
-                          style: Theme.of(context).textTheme.displayMedium,
+                        Row(
+                          children: [
+                            Text(
+                              'Склад',
+                              style: Theme.of(context).textTheme.displayMedium,
+                            ),
+                            BlocBuilder<AuthBloc, AuthState>(
+                              builder: (context, state) {
+                                if (state is AuthAuthenticated) {
+                                  final user = state.user;
+                                  // Оприходование доступно для: Автосервис, Авторазбор, Магазин (но не для Автомойка)
+                                  final canAccessIncoming = user.businessType != BusinessType.carwash;
+                                  
+                                  if (canAccessIncoming) {
+                                    return Padding(
+                                      padding: const EdgeInsets.only(left: 16),
+                                      child: ElevatedButton.icon(
+                                        onPressed: () {
+                                          Navigator.of(context).push(
+                                            MaterialPageRoute(
+                                              builder: (context) => const IncomingListScreen(),
+                                            ),
+                                          );
+                                        },
+                                        icon: const Icon(Icons.receipt_long),
+                                        label: const Text('Приход'),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: AppTheme.primaryColor,
+                                          foregroundColor: Colors.white,
+                                        ),
+                                      ),
+                                    );
+                                  }
+                                }
+                                return const SizedBox.shrink();
+                              },
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 4),
                         Text(
