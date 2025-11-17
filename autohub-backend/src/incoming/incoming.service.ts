@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException, HttpException, HttpStatus } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
-import { IncomingDoc, IncomingDocStatus } from './entities/incoming-doc.entity';
+import { IncomingDoc, IncomingDocStatus, IncomingDocType } from './entities/incoming-doc.entity';
 import { IncomingItem } from './entities/incoming-item.entity';
 import { Item } from '../items/entities/item.entity';
 import { CreateIncomingDocDto } from './dto/create-incoming-doc.dto';
