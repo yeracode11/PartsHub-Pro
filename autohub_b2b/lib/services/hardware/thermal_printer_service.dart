@@ -1,44 +1,52 @@
-import 'dart:typed_data';
-import 'package:esc_pos_utils/esc_pos_utils.dart';
-import 'package:flutter/services.dart';
+import 'package:printing/printing.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
 
-/// Сервис для работы с термопринтером (ESC/POS)
+/// Сервис для работы с термопринтером
 /// 
-/// ВАЖНО: Для Windows требуется реализация через платформенные каналы (Platform Channels)
-/// или использование нативного кода для работы с USB принтерами.
-/// 
-/// Текущая реализация - заглушка для разработки.
-/// Для production необходимо:
-/// 1. Создать платформенный канал для Windows
-/// 2. Использовать WinUSB API или libusb для работы с USB принтерами
-/// 3. Или использовать готовые библиотеки для работы с ESC/POS принтерами
+/// Использует библиотеку `printing` для реальной печати на Windows
 class ThermalPrinterService {
   static final ThermalPrinterService _instance = ThermalPrinterService._internal();
   factory ThermalPrinterService() => _instance;
   ThermalPrinterService._internal();
 
+  Printer? _selectedPrinter;
   bool _isConnected = false;
   String? _printerName;
 
-  /// Подключение к USB принтеру
+  /// Подключение к принтеру
   /// 
-  /// TODO: Реализовать через платформенный канал для Windows
-  Future<bool> connectUSB() async {
+  /// Если [printerName] не указан, будет показан диалог выбора принтера
+  Future<bool> connectUSB({String? printerName}) async {
     try {
-      // TODO: Реализовать получение списка USB принтеров через платформенный канал
-      // Для Windows можно использовать WinUSB API или libusb
+      // Получаем список доступных принтеров
+      final printers = await Printing.listPrinters();
       
-      // Временная заглушка
-      await Future.delayed(const Duration(milliseconds: 500));
-      
+      if (printers.isEmpty) {
+        print('⚠️ Принтеры не найдены в системе');
+        return false;
+      }
+
+      // Если указано имя принтера, ищем его
+      if (printerName != null) {
+        _selectedPrinter = printers.firstWhere(
+          (p) => p.name == printerName,
+          orElse: () => printers.first,
+        );
+      } else {
+        // Используем первый доступный принтер
+        _selectedPrinter = printers.first;
+      }
+
       _isConnected = true;
-      _printerName = 'USB Printer (Mock)';
+      _printerName = _selectedPrinter!.name;
       
-      print('⚠️ ThermalPrinterService: Используется заглушка. Для production требуется реализация через платформенные каналы.');
-      
+      print('✅ Подключено к принтеру: $_printerName');
       return true;
     } catch (e) {
-      print('Ошибка подключения к USB принтеру: $e');
+      print('❌ Ошибка подключения к принтеру: $e');
+      _isConnected = false;
+      _printerName = null;
       return false;
     }
   }
@@ -47,6 +55,7 @@ class ThermalPrinterService {
   Future<void> disconnect() async {
     _isConnected = false;
     _printerName = null;
+    _selectedPrinter = null;
   }
 
   /// Проверка подключения
@@ -67,163 +76,192 @@ class ThermalPrinterService {
     String? warehouseCell,
     int quantity = 1,
   }) async {
-    if (!_isConnected) {
-      // Попытка автоматического подключения
-      final connected = await connectUSB();
-      if (!connected) {
-        throw Exception('Принтер не подключен');
-      }
-    }
-
     try {
-      // Создаем профиль принтера (58mm ширина)
-      final profile = await CapabilityProfile.load();
-      final generator = Generator(PaperSize.mm58, profile);
+      // Создаем PDF документ с наклейками
+      final pdf = pw.Document();
 
-      // Генерируем команды для печати
-      List<int> bytes = [];
+      // Размер наклейки: 58mm x 40mm (стандартный размер для термопринтеров)
+      const labelWidth = 58.0 * PdfPoint.mm;
+      const labelHeight = 40.0 * PdfPoint.mm;
 
-      // Печатаем несколько наклеек
       for (int i = 0; i < quantity; i++) {
-        bytes += generator.reset();
-        bytes += generator.text(
-          itemName,
-          styles: const PosStyles(
-            align: PosAlign.center,
-            bold: true,
-            height: PosTextSize.size2,
-            width: PosTextSize.size2,
+        pdf.addPage(
+          pw.Page(
+            pageFormat: PdfPageFormat(labelWidth, labelHeight, marginAll: 2 * PdfPoint.mm),
+            build: (pw.Context context) {
+              return pw.Column(
+                mainAxisAlignment: pw.MainAxisAlignment.center,
+                crossAxisAlignment: pw.CrossAxisAlignment.center,
+                children: [
+                  // Название товара
+                  pw.Text(
+                    itemName,
+                    style: pw.TextStyle(
+                      fontSize: 14,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                    textAlign: pw.TextAlign.center,
+                    maxLines: 2,
+                    overflow: pw.TextOverflow.ellipsis,
+                  ),
+                  pw.SizedBox(height: 4),
+                  
+                  // Артикул
+                  if (sku != null && sku.isNotEmpty) ...[
+                    pw.Text(
+                      'Артикул: $sku',
+                      style: const pw.TextStyle(fontSize: 10),
+                      textAlign: pw.TextAlign.center,
+                    ),
+                    pw.SizedBox(height: 4),
+                    
+                    // Штрих-код
+                    pw.BarcodeWidget(
+                      barcode: pw.Barcode.code128(),
+                      data: sku,
+                      width: labelWidth - 8 * PdfPoint.mm,
+                      height: 30,
+                    ),
+                    pw.SizedBox(height: 4),
+                  ],
+                  
+                  // Ячейка хранения
+                  if (warehouseCell != null && warehouseCell.isNotEmpty) ...[
+                    pw.Text(
+                      'Ячейка: $warehouseCell',
+                      style: const pw.TextStyle(fontSize: 10),
+                      textAlign: pw.TextAlign.center,
+                    ),
+                    pw.SizedBox(height: 4),
+                  ],
+                  
+                  // Цена
+                  pw.Text(
+                    'Цена: ${price.toStringAsFixed(2)} ₸',
+                    style: pw.TextStyle(
+                      fontSize: 12,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                    textAlign: pw.TextAlign.center,
+                  ),
+                ],
+              );
+            },
           ),
         );
-        bytes += generator.feed(1);
-
-        if (sku != null && sku.isNotEmpty) {
-          bytes += generator.text(
-            'Артикул: $sku',
-            styles: const PosStyles(align: PosAlign.center),
-          );
-          bytes += generator.feed(1);
-
-          // Печать штрих-кода (Code128)
-          bytes += generator.barcode(
-            Barcode.code128(sku.codeUnits),
-            width: 2,
-            height: 50,
-            font: BarcodeFont.fontA,
-          );
-          bytes += generator.feed(1);
-        }
-
-        if (warehouseCell != null && warehouseCell.isNotEmpty) {
-          bytes += generator.text(
-            'Ячейка: $warehouseCell',
-            styles: const PosStyles(align: PosAlign.center),
-          );
-          bytes += generator.feed(1);
-        }
-
-        bytes += generator.text(
-          'Цена: ${price.toStringAsFixed(2)} ₸',
-          styles: const PosStyles(
-            align: PosAlign.center,
-            bold: true,
-          ),
-        );
-        bytes += generator.feed(2);
-        bytes += generator.cut();
       }
 
-      // TODO: Отправка на принтер через платформенный канал
-      // Для Windows нужно использовать MethodChannel для вызова нативного кода
-      // который будет отправлять ESC/POS команды на USB принтер
-      
-      print('⚠️ ThermalPrinterService: Печать наклейки (заглушка)');
+      // Печатаем PDF
+      if (_selectedPrinter != null) {
+        // Прямая печать на выбранный принтер
+        await Printing.directPrintPdf(
+          printer: _selectedPrinter!,
+          onLayout: (PdfPageFormat format) async => pdf.save(),
+        );
+      } else {
+        // Показываем диалог выбора принтера
+        await Printing.layoutPdf(
+          onLayout: (PdfPageFormat format) async => pdf.save(),
+        );
+      }
+
+      print('✅ Наклейка отправлена на печать');
       print('   Товар: $itemName');
       print('   Артикул: $sku');
       print('   Цена: $price ₸');
-      print('   Ячейка: $warehouseCell');
       print('   Количество: $quantity');
-      print('   Размер данных: ${bytes.length} байт');
-      
-      // Временная заглушка - симулируем успешную печать
-      await Future.delayed(const Duration(milliseconds: 1000));
       
       return true;
     } catch (e) {
-      print('Ошибка печати: $e');
+      print('❌ Ошибка печати наклейки: $e');
       return false;
     }
   }
 
   /// Печать тестовой страницы
   Future<bool> printTestPage() async {
-    if (!_isConnected) {
-      final connected = await connectUSB();
-      if (!connected) {
-        throw Exception('Принтер не подключен');
-      }
-    }
-
     try {
-      final profile = await CapabilityProfile.load();
-      final generator = Generator(PaperSize.mm58, profile);
+      final pdf = pw.Document();
 
-      List<int> bytes = [];
-      bytes += generator.reset();
-      bytes += generator.text(
-        'ТЕСТ ПРИНТЕРА',
-        styles: const PosStyles(
-          align: PosAlign.center,
-          bold: true,
-          height: PosTextSize.size2,
-          width: PosTextSize.size2,
+      const labelWidth = 58.0 * PdfPoint.mm;
+      const labelHeight = 40.0 * PdfPoint.mm;
+
+      pdf.addPage(
+        pw.Page(
+          pageFormat: PdfPageFormat(labelWidth, labelHeight, marginAll: 2 * PdfPoint.mm),
+          build: (pw.Context context) {
+            return pw.Column(
+              mainAxisAlignment: pw.MainAxisAlignment.center,
+              crossAxisAlignment: pw.CrossAxisAlignment.center,
+              children: [
+                pw.Text(
+                  'ТЕСТ ПРИНТЕРА',
+                  style: pw.TextStyle(
+                    fontSize: 16,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                  textAlign: pw.TextAlign.center,
+                ),
+                pw.SizedBox(height: 8),
+                pw.Text(
+                  'Если вы видите этот текст,',
+                  style: const pw.TextStyle(fontSize: 10),
+                  textAlign: pw.TextAlign.center,
+                ),
+                pw.SizedBox(height: 2),
+                pw.Text(
+                  'принтер работает корректно.',
+                  style: const pw.TextStyle(fontSize: 10),
+                  textAlign: pw.TextAlign.center,
+                ),
+                pw.SizedBox(height: 8),
+                pw.BarcodeWidget(
+                  barcode: pw.Barcode.code128(),
+                  data: 'TEST123456',
+                  width: labelWidth - 8 * PdfPoint.mm,
+                  height: 30,
+                ),
+              ],
+            );
+          },
         ),
       );
-      bytes += generator.feed(2);
-      bytes += generator.text('Если вы видите этот текст,');
-      bytes += generator.feed(1);
-      bytes += generator.text('принтер работает корректно.');
-      bytes += generator.feed(2);
-      bytes += generator.barcode(
-        Barcode.code128('TEST123456'.codeUnits),
-        width: 2,
-        height: 50,
-        font: BarcodeFont.fontA,
-      );
-      bytes += generator.feed(2);
-      bytes += generator.cut();
 
-      // TODO: Отправка на принтер через платформенный канал
-      print('⚠️ ThermalPrinterService: Печать тестовой страницы (заглушка)');
-      print('   Размер данных: ${bytes.length} байт');
-      
-      await Future.delayed(const Duration(milliseconds: 1000));
-      
+      if (_selectedPrinter != null) {
+        await Printing.directPrintPdf(
+          printer: _selectedPrinter!,
+          onLayout: (PdfPageFormat format) async => pdf.save(),
+        );
+      } else {
+        await Printing.layoutPdf(
+          onLayout: (PdfPageFormat format) async => pdf.save(),
+        );
+      }
+
+      print('✅ Тестовая страница отправлена на печать');
       return true;
     } catch (e) {
-      print('Ошибка печати тестовой страницы: $e');
+      print('❌ Ошибка печати тестовой страницы: $e');
       return false;
     }
   }
 
-  /// Получить список доступных USB принтеров
-  /// 
-  /// TODO: Реализовать через платформенный канал
+  /// Получить список доступных принтеров
   Future<List<Map<String, dynamic>>> getAvailableUSBPrinters() async {
     try {
-      // TODO: Реализовать получение списка принтеров через платформенный канал
-      // Для Windows можно использовать SetupAPI или WMI
+      final printers = await Printing.listPrinters();
       
-      // Временная заглушка
-      return [
-        {
-          'name': 'USB Printer (Mock)',
-          'vendorId': 0x04e8,
-          'productId': 0x0202,
-        }
-      ];
+      return printers.map((printer) {
+        return {
+          'name': printer.name,
+          'url': printer.url,
+          'model': printer.model,
+          'location': printer.location,
+          'comment': printer.comment,
+        };
+      }).toList();
     } catch (e) {
-      print('Ошибка получения списка принтеров: $e');
+      print('❌ Ошибка получения списка принтеров: $e');
       return [];
     }
   }

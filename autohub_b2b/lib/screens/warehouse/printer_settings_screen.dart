@@ -60,7 +60,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
       }
 
       // Подключаемся к выбранному принтеру
-      final connected = await _printer.connectUSB();
+      final connected = await _printer.connectUSB(printerName: printer['name'] as String);
 
       if (mounted) {
         setState(() {
@@ -288,8 +288,11 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                                 ),
                                 title: Text(printer['name'] as String),
                                 subtitle: Text(
-                                  'VID: ${(printer['vendorId'] as int).toRadixString(16).toUpperCase()}, '
-                                  'PID: ${(printer['productId'] as int).toRadixString(16).toUpperCase()}',
+                                  printer['model'] != null 
+                                    ? 'Модель: ${printer['model']}'
+                                    : printer['location'] != null
+                                      ? 'Расположение: ${printer['location']}'
+                                      : 'Принтер',
                                 ),
                                 trailing: isCurrentPrinter
                                     ? const Chip(
