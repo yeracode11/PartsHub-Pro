@@ -81,13 +81,16 @@ class ThermalPrinterService {
       final pdf = pw.Document();
 
       // Размер наклейки: 58mm x 40mm (стандартный размер для термопринтеров)
-      const labelWidth = 58.0 * PdfPoint.mm;
-      const labelHeight = 40.0 * PdfPoint.mm;
+      // Конвертируем мм в точки: 1 мм = 2.83465 точек (72 точки на дюйм / 25.4 мм на дюйм)
+      const mmToPoint = 2.83465;
+      const labelWidth = 58.0 * mmToPoint;
+      const labelHeight = 40.0 * mmToPoint;
+      const margin = 2.0 * mmToPoint;
 
       for (int i = 0; i < quantity; i++) {
         pdf.addPage(
           pw.Page(
-            pageFormat: PdfPageFormat(labelWidth, labelHeight, marginAll: 2 * PdfPoint.mm),
+            pageFormat: PdfPageFormat(labelWidth, labelHeight, marginAll: margin),
             build: (pw.Context context) {
               return pw.Column(
                 mainAxisAlignment: pw.MainAxisAlignment.center,
@@ -102,7 +105,6 @@ class ThermalPrinterService {
                     ),
                     textAlign: pw.TextAlign.center,
                     maxLines: 2,
-                    overflow: pw.TextOverflow.ellipsis,
                   ),
                   pw.SizedBox(height: 4),
                   
@@ -119,7 +121,7 @@ class ThermalPrinterService {
                     pw.BarcodeWidget(
                       barcode: pw.Barcode.code128(),
                       data: sku,
-                      width: labelWidth - 8 * PdfPoint.mm,
+                      width: labelWidth - 8 * mmToPoint,
                       height: 30,
                     ),
                     pw.SizedBox(height: 4),
@@ -183,12 +185,15 @@ class ThermalPrinterService {
     try {
       final pdf = pw.Document();
 
-      const labelWidth = 58.0 * PdfPoint.mm;
-      const labelHeight = 40.0 * PdfPoint.mm;
+      // Конвертируем мм в точки
+      const mmToPoint = 2.83465;
+      const labelWidth = 58.0 * mmToPoint;
+      const labelHeight = 40.0 * mmToPoint;
+      const margin = 2.0 * mmToPoint;
 
       pdf.addPage(
         pw.Page(
-          pageFormat: PdfPageFormat(labelWidth, labelHeight, marginAll: 2 * PdfPoint.mm),
+          pageFormat: PdfPageFormat(labelWidth, labelHeight, marginAll: margin),
           build: (pw.Context context) {
             return pw.Column(
               mainAxisAlignment: pw.MainAxisAlignment.center,
@@ -218,7 +223,7 @@ class ThermalPrinterService {
                 pw.BarcodeWidget(
                   barcode: pw.Barcode.code128(),
                   data: 'TEST123456',
-                  width: labelWidth - 8 * PdfPoint.mm,
+                  width: labelWidth - 8 * mmToPoint,
                   height: 30,
                 ),
               ],
