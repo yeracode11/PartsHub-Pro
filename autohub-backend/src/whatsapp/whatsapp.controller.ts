@@ -122,6 +122,15 @@ export class WhatsAppController {
       );
     }
 
+    // Проверяем статус WhatsApp перед рассылкой
+    const isReady = this.whatsappService.isClientReady();
+    if (!isReady) {
+      throw new HttpException(
+        'WhatsApp клиент не готов. Проверьте подключение и отсканируйте QR код при необходимости.',
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
+    }
+
     try {
       const results = await this.whatsappService.sendBulk(
         recipients,
@@ -140,6 +149,14 @@ export class WhatsAppController {
         total: recipients.length,
       };
     } catch (error) {
+      // Детальное логирование ошибки
+      console.error('❌ Ошибка массовой рассылки:', {
+        message: error.message,
+        stack: error.stack,
+        recipientsCount: recipients.length,
+        organizationId: user.organizationId,
+      });
+
       throw new HttpException(
         error.message || 'Ошибка массовой рассылки',
         HttpStatus.INTERNAL_SERVER_ERROR,

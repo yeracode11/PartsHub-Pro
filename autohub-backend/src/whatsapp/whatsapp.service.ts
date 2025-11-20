@@ -175,18 +175,38 @@ export class WhatsAppService implements OnModuleInit {
     message: string,
     retries: number = 3,
   ): Promise<void> {
+    // Детальная проверка состояния клиента
+    if (!this.client) {
+      this.logger.error('❌ WhatsApp клиент не инициализирован');
+      throw new Error('WhatsApp клиент не инициализирован. Попробуйте переподключиться.');
+    }
+
     if (!this.isReady) {
+      this.logger.error('❌ WhatsApp клиент не готов. isReady = false');
       throw new Error('WhatsApp клиент не готов. Отсканируйте QR код.');
     }
 
-    // Проверяем, что клиент все еще активен
-    if (!this.client || !this.isReady) {
-      throw new Error('WhatsApp клиент недоступен. Попробуйте переподключиться.');
+    // Проверяем состояние клиента через API
+    try {
+      const state = await this.client.getState();
+      this.logger.log(`📊 Состояние WhatsApp клиента: ${state}`);
+      
+      if (state !== 'CONNECTED') {
+        this.logger.warn(`⚠️ WhatsApp клиент не подключен. Состояние: ${state}`);
+        this.isReady = false;
+        throw new Error(`WhatsApp клиент не подключен. Состояние: ${state}. Требуется переподключение.`);
+      }
+    } catch (stateError) {
+      this.logger.error(`❌ Ошибка проверки состояния клиента: ${stateError.message}`);
+      // Продолжаем, если не можем проверить состояние
     }
 
     // Форматируем номер телефона
     const formattedPhone = this.formatPhoneNumber(phone);
     const chatId = `${formattedPhone}@c.us`;
+
+    this.logger.log(`📱 Отправка на номер: ${phone} -> ${formattedPhone} (chatId: ${chatId})`);
+    this.logger.log(`📝 Длина сообщения: ${message.length} символов`);
 
     let lastError: Error | null = null;
 
@@ -196,6 +216,11 @@ export class WhatsAppService implements OnModuleInit {
         this.logger.log(
           `📤 Отправка сообщения на ${formattedPhone} (попытка ${attempt}/${retries})`,
         );
+
+        // Проверяем состояние перед каждой попыткой
+        if (!this.isReady || !this.client) {
+          throw new Error('WhatsApp клиент стал недоступен');
+        }
 
         // Увеличиваем таймаут до 90 секунд для WhatsApp Web.js
         const sendPromise = this.client.sendMessage(chatId, message);
@@ -211,25 +236,45 @@ export class WhatsAppService implements OnModuleInit {
           ),
         );
 
-        await Promise.race([sendPromise, timeoutPromise]);
-
-        this.logger.log(`✅ Сообщение отправлено на ${formattedPhone}`);
+        const result = await Promise.race([sendPromise, timeoutPromise]);
+        
+        // Логируем результат отправки
+        if (result) {
+          this.logger.log(`✅ Сообщение отправлено на ${formattedPhone}. ID: ${result.id || 'N/A'}`);
+        } else {
+          this.logger.log(`✅ Сообщение отправлено на ${formattedPhone}`);
+        }
+        
         return; // Успешно отправлено, выходим из цикла
       } catch (error) {
         lastError = error as Error;
         const errorMessage = error.message || 'Неизвестная ошибка';
+        const errorStack = error.stack || '';
 
-        this.logger.warn(
-          `⚠️ Попытка ${attempt}/${retries} не удалась для ${formattedPhone}: ${errorMessage}`,
+        // Детальное логирование ошибки
+        this.logger.error(
+          `❌ Попытка ${attempt}/${retries} не удалась для ${formattedPhone}`,
         );
+        this.logger.error(`   Ошибка: ${errorMessage}`);
+        this.logger.error(`   Тип ошибки: ${error.constructor?.name || 'Unknown'}`);
+        if (errorStack) {
+          this.logger.error(`   Stack: ${errorStack.substring(0, 500)}`);
+        }
 
-        // Если ошибка связана с сессией, не пытаемся повторно
+        // Проверяем различные типы ошибок
+        const errorLower = errorMessage.toLowerCase();
+
+        // Ошибки, связанные с сессией - не повторяем
         if (
-          errorMessage.includes('Session closed') ||
-          errorMessage.includes('Protocol error') ||
-          errorMessage.includes('Target closed') ||
-          errorMessage.includes('не готов') ||
-          errorMessage.includes('недоступен')
+          errorLower.includes('session closed') ||
+          errorLower.includes('protocol error') ||
+          errorLower.includes('target closed') ||
+          errorLower.includes('не готов') ||
+          errorLower.includes('недоступен') ||
+          errorLower.includes('not connected') ||
+          errorLower.includes('disconnected') ||
+          errorLower.includes('authentication') ||
+          errorLower.includes('auth_failure')
         ) {
           this.isReady = false;
           this.logger.warn(
@@ -240,9 +285,33 @@ export class WhatsAppService implements OnModuleInit {
           );
         }
 
+        // Ошибки с номером телефона - не повторяем
+        if (
+          errorLower.includes('invalid number') ||
+          errorLower.includes('неверный номер') ||
+          errorLower.includes('number not registered') ||
+          errorLower.includes('номер не зарегистрирован')
+        ) {
+          throw new Error(
+            `Неверный номер телефона: ${errorMessage}`,
+          );
+        }
+
+        // Ошибки блокировки - не повторяем
+        if (
+          errorLower.includes('blocked') ||
+          errorLower.includes('заблокирован') ||
+          errorLower.includes('rate limit') ||
+          errorLower.includes('too many requests')
+        ) {
+          throw new Error(
+            `Сообщение не может быть отправлено: ${errorMessage}. Возможно, номер заблокирован или превышен лимит запросов.`,
+          );
+        }
+
         // Если это не последняя попытка, ждем перед повтором
         if (attempt < retries) {
-          const delayMs = attempt * 2000; // 2, 4, 6 секунд задержка
+          const delayMs = attempt * 3000; // 3, 6, 9 секунд задержка (увеличено)
           this.logger.log(
             `⏳ Ожидание ${delayMs}мс перед повторной попыткой...`,
           );
@@ -254,14 +323,29 @@ export class WhatsAppService implements OnModuleInit {
               'WhatsApp клиент стал недоступен во время повторных попыток',
             );
           }
+
+          // Проверяем состояние клиента
+          try {
+            const state = await this.client.getState();
+            if (state !== 'CONNECTED') {
+              this.logger.warn(`⚠️ Состояние клиента изменилось: ${state}`);
+              this.isReady = false;
+              throw new Error(`WhatsApp клиент отключен. Состояние: ${state}`);
+            }
+          } catch (stateError) {
+            this.logger.warn(`⚠️ Не удалось проверить состояние: ${stateError.message}`);
+          }
         }
       }
     }
 
     // Все попытки исчерпаны
     this.logger.error(
-      `❌ Не удалось отправить сообщение на ${formattedPhone} после ${retries} попыток: ${lastError?.message}`,
+      `❌ Не удалось отправить сообщение на ${formattedPhone} после ${retries} попыток`,
     );
+    this.logger.error(`   Последняя ошибка: ${lastError?.message}`);
+    this.logger.error(`   Stack: ${lastError?.stack || 'N/A'}`);
+    
     throw new Error(
       `Не удалось отправить сообщение после ${retries} попыток: ${lastError?.message}`,
     );
@@ -443,17 +527,39 @@ export class WhatsAppService implements OnModuleInit {
    * +77771234567 -> 77771234567
    */
   private formatPhoneNumber(phone: string): string {
+    if (!phone || typeof phone !== 'string') {
+      throw new Error('Номер телефона не указан или имеет неверный формат');
+    }
+
     // Удаляем все символы кроме цифр
     let cleaned = phone.replace(/\D/g, '');
 
-    // Если начинается с 8, заменяем на 7
-    if (cleaned.startsWith('8')) {
+    if (!cleaned || cleaned.length === 0) {
+      throw new Error('Номер телефона не содержит цифр');
+    }
+
+    // Если начинается с 8, заменяем на 7 (для России/Казахстана)
+    if (cleaned.startsWith('8') && cleaned.length === 11) {
       cleaned = '7' + cleaned.substring(1);
     }
 
-    // Убираем начальный + если есть
+    // Убираем начальный + если есть (после очистки его уже не должно быть, но на всякий случай)
     if (cleaned.startsWith('+')) {
       cleaned = cleaned.substring(1);
+    }
+
+    // Валидация длины номера (должно быть 10-15 цифр для международного формата)
+    if (cleaned.length < 10 || cleaned.length > 15) {
+      throw new Error(
+        `Номер телефона имеет неверную длину: ${cleaned.length} цифр. Ожидается 10-15 цифр.`,
+      );
+    }
+
+    // Для российских номеров проверяем, что начинается с 7
+    if (cleaned.length === 11 && !cleaned.startsWith('7')) {
+      this.logger.warn(
+        `⚠️ Номер телефона ${cleaned} не начинается с 7, но имеет 11 цифр. Возможно, требуется форматирование.`,
+      );
     }
 
     return cleaned;
