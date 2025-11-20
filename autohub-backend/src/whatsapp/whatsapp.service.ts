@@ -385,36 +385,65 @@ export class WhatsAppService implements OnModuleInit {
       try {
         // Получаем автомобиль клиента для замены {carModel} или {CarModel}
         let carModelText = 'автомобиль';
+        
+        this.logger.log(
+          `🔍 Проверка данных для получения автомобиля:`,
+        );
+        this.logger.log(`   recipient.customerId: ${recipient.customerId} (тип: ${typeof recipient.customerId})`);
+        this.logger.log(`   options?.organizationId: ${options?.organizationId}`);
+        this.logger.log(`   recipient.name: ${recipient.name}`);
+        
         if (recipient.customerId && options?.organizationId) {
           try {
-            this.logger.log(
-              `🔍 Поиск автомобилей для клиента ID: ${recipient.customerId}, организация: ${options.organizationId}`,
-            );
+            // Убеждаемся, что customerId - это число
+            const customerId = typeof recipient.customerId === 'number' 
+              ? recipient.customerId 
+              : parseInt(String(recipient.customerId), 10);
             
-            const vehicles = await this.vehiclesService.findByCustomer(
-              options.organizationId,
-              recipient.customerId,
-            );
-            
-            this.logger.log(
-              `📋 Найдено автомобилей для клиента ${recipient.customerId}: ${vehicles?.length || 0}`,
-            );
-            
-            if (vehicles && vehicles.length > 0) {
-              // Берем первый автомобиль клиента
-              const vehicle = vehicles[0];
-              // Формируем строку: "Toyota Camry 2020" или "Toyota Camry" если нет года
-              carModelText = vehicle.year
-                ? `${vehicle.brand} ${vehicle.model} ${vehicle.year}`
-                : `${vehicle.brand} ${vehicle.model}`;
-              
-              this.logger.log(
-                `🚗 Автомобиль клиента ${recipient.customerId}: ${carModelText}`,
+            if (isNaN(customerId)) {
+              this.logger.error(
+                `❌ customerId не является числом: ${recipient.customerId}`,
               );
             } else {
-              this.logger.warn(
-                `⚠️ У клиента ${recipient.customerId} не найдено автомобилей. Будет использовано: "${carModelText}"`,
+              this.logger.log(
+                `🔍 Поиск автомобилей для клиента ID: ${customerId}, организация: ${options.organizationId}`,
               );
+              
+              const vehicles = await this.vehiclesService.findByCustomer(
+                options.organizationId,
+                customerId,
+              );
+              
+              this.logger.log(
+                `📋 Найдено автомобилей для клиента ${customerId}: ${vehicles?.length || 0}`,
+              );
+              
+              if (vehicles && vehicles.length > 0) {
+                // Логируем все найденные автомобили
+                vehicles.forEach((v, index) => {
+                  this.logger.log(
+                    `   Автомобиль ${index + 1}: ${v.brand} ${v.model} ${v.year || ''} (ID: ${v.id}, isActive: ${v.isActive})`,
+                  );
+                });
+                
+                // Берем первый активный автомобиль клиента
+                const vehicle = vehicles[0];
+                // Формируем строку: "Toyota Camry 2020" или "Toyota Camry" если нет года
+                carModelText = vehicle.year
+                  ? `${vehicle.brand} ${vehicle.model} ${vehicle.year}`
+                  : `${vehicle.brand} ${vehicle.model}`;
+                
+                this.logger.log(
+                  `🚗 Автомобиль клиента ${customerId}: ${carModelText}`,
+                );
+              } else {
+                this.logger.warn(
+                  `⚠️ У клиента ${customerId} не найдено автомобилей. Будет использовано: "${carModelText}"`,
+                );
+                this.logger.warn(
+                  `   Проверьте, что у клиента есть автомобили в модуле "Автомобили" и они активны (isActive: true)`,
+                );
+              }
             }
           } catch (e) {
             this.logger.error(
@@ -447,6 +476,10 @@ export class WhatsAppService implements OnModuleInit {
         
         this.logger.log(`   Переменные для замены: ${JSON.stringify(variables)}`);
         
+        // Проверяем, есть ли переменная {carModel} в шаблоне
+        const hasCarModel = /\{carModel\}/gi.test(template);
+        this.logger.log(`   Переменная {carModel} найдена в шаблоне: ${hasCarModel}`);
+        
         // Используем TemplatesService для замены переменных (регистронезависимо)
         const personalizedMessage = this.templatesService.fillTemplate(
           template,
@@ -456,6 +489,17 @@ export class WhatsAppService implements OnModuleInit {
         this.logger.log(
           `📝 Финальное сообщение: ${personalizedMessage}`,
         );
+        
+        // Проверяем, осталась ли переменная {carModel} после замены
+        const stillHasCarModel = /\{carModel\}/gi.test(personalizedMessage);
+        if (stillHasCarModel) {
+          this.logger.error(
+            `❌ КРИТИЧЕСКАЯ ОШИБКА: Переменная {carModel} НЕ была заменена!`,
+          );
+          this.logger.error(`   Исходный шаблон: ${template}`);
+          this.logger.error(`   Финальное сообщение: ${personalizedMessage}`);
+          this.logger.error(`   carModelText: "${carModelText}"`);
+        }
         
         // Проверяем, остались ли не замененные переменные
         const remainingVars = personalizedMessage.match(/\{[^}]+\}/g);
