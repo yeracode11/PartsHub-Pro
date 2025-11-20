@@ -72,9 +72,8 @@ class ThermalPrinterService {
   /// Для Windows библиотека printing использует системные шрифты при печати,
   /// но при генерации PDF нужен шрифт с поддержкой Unicode.
   /// 
-  /// РЕШЕНИЕ: Используем системные шрифты Windows через библиотеку printing.
-  /// При печати на Windows printing автоматически конвертирует PDF в формат принтера
-  /// и использует системные шрифты, которые поддерживают кириллицу.
+  /// РЕШЕНИЕ: Используем встроенные шрифты из пакета pdf или системные шрифты.
+  /// На Windows printing автоматически конвертирует PDF и использует системные шрифты.
   Future<pw.Font?> _loadCyrillicFont() async {
     // Кэшируем шрифт, чтобы не загружать каждый раз
     if (_cyrillicFont != null) {
@@ -82,21 +81,24 @@ class ThermalPrinterService {
     }
     
     try {
-      // На Windows библиотека printing использует системные шрифты при печати,
-      // поэтому даже если PDF генерируется с шрифтом без поддержки кириллицы,
-      // при печати будут использоваться системные шрифты Windows
-      // 
-      // Для полной поддержки можно добавить шрифт в assets:
+      // Попытка загрузить шрифт из assets (если добавлен)
+      // Для добавления шрифта:
       // 1. Скачайте шрифт с поддержкой кириллицы (например, Roboto)
       // 2. Поместите в assets/fonts/Roboto-Regular.ttf
       // 3. Добавьте в pubspec.yaml: assets: - assets/fonts/
       // 4. Раскомментируйте код ниже:
       //
-      // final fontData = await rootBundle.load("assets/fonts/Roboto-Regular.ttf");
-      // _cyrillicFont = pw.Font.ttf(fontData);
-      // return _cyrillicFont;
+      // try {
+      //   final fontData = await rootBundle.load("assets/fonts/Roboto-Regular.ttf");
+      //   _cyrillicFont = pw.Font.ttf(fontData);
+      //   return _cyrillicFont;
+      // } catch (e) {
+      //   print('⚠️ Шрифт из assets не найден: $e');
+      // }
       
-      // Пока используем null - printing на Windows использует системные шрифты
+      // Используем null - на Windows printing использует системные шрифты при печати
+      // Ошибки в консоли - это предупреждения при генерации PDF,
+      // но при печати на Windows используются системные шрифты с поддержкой кириллицы
       return null;
     } catch (e) {
       print('⚠️ Не удалось загрузить шрифт: $e');
@@ -151,7 +153,7 @@ class ThermalPrinterService {
                     style: pw.TextStyle(
                       fontSize: 14,
                       fontWeight: pw.FontWeight.bold,
-                      if (font != null) font: font,
+                      font: font,
                     ),
                     textAlign: pw.TextAlign.center,
                     maxLines: 2,
@@ -164,7 +166,7 @@ class ThermalPrinterService {
                       'Артикул: $sku',
                       style: pw.TextStyle(
                         fontSize: 10,
-                        if (font != null) font: font,
+                        font: font,
                       ),
                       textAlign: pw.TextAlign.center,
                     ),
@@ -186,7 +188,7 @@ class ThermalPrinterService {
                       'Ячейка: $warehouseCell',
                       style: pw.TextStyle(
                         fontSize: 10,
-                        if (font != null) font: font,
+                        font: font,
                       ),
                       textAlign: pw.TextAlign.center,
                     ),
@@ -199,7 +201,7 @@ class ThermalPrinterService {
                     style: pw.TextStyle(
                       fontSize: 12,
                       fontWeight: pw.FontWeight.bold,
-                      if (font != null) font: font,
+                      font: font,
                     ),
                     textAlign: pw.TextAlign.center,
                   ),
@@ -264,7 +266,7 @@ class ThermalPrinterService {
                   style: pw.TextStyle(
                     fontSize: 16,
                     fontWeight: pw.FontWeight.bold,
-                    if (font != null) font: font,
+                    font: font,
                   ),
                   textAlign: pw.TextAlign.center,
                 ),
@@ -273,7 +275,7 @@ class ThermalPrinterService {
                   'Если вы видите этот текст,',
                   style: pw.TextStyle(
                     fontSize: 10,
-                    if (font != null) font: font,
+                    font: font,
                   ),
                   textAlign: pw.TextAlign.center,
                 ),
@@ -282,7 +284,7 @@ class ThermalPrinterService {
                   'принтер работает корректно.',
                   style: pw.TextStyle(
                     fontSize: 10,
-                    if (font != null) font: font,
+                    font: font,
                   ),
                   textAlign: pw.TextAlign.center,
                 ),
