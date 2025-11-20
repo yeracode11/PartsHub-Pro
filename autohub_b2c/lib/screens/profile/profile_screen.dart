@@ -2,9 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme.dart';
-import '../../blocs/theme/theme_bloc.dart';
-import '../../blocs/theme/theme_event.dart';
-import '../../blocs/theme/theme_state.dart';
 import '../../blocs/auth/auth_bloc.dart';
 import '../../blocs/auth/auth_event.dart';
 import '../../blocs/auth/auth_state.dart';
@@ -22,23 +19,6 @@ class ProfileScreen extends StatelessWidget {
           onPressed: () => Navigator.of(context).pop(),
         ),
         actions: [
-          BlocBuilder<ThemeBloc, ThemeState>(
-            builder: (context, themeState) {
-              return IconButton(
-                icon: Icon(
-                  themeState.themeMode == ThemeMode.dark
-                      ? Icons.light_mode
-                      : Icons.dark_mode,
-                ),
-                tooltip: themeState.themeMode == ThemeMode.dark
-                    ? 'Включить светлую тему'
-                    : 'Включить темную тему',
-                onPressed: () {
-                  context.read<ThemeBloc>().toggleTheme();
-                },
-              );
-            },
-          ),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () {
@@ -171,7 +151,7 @@ class ProfileScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'MyAuto B2C v1.0.0',
+                            'Auto+ B2C v1.0.0',
                             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                                   color: AppTheme.textSecondary,
                                 ),

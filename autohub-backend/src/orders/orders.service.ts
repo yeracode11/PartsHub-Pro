@@ -34,24 +34,33 @@ export class OrdersService {
 
   // CRUD методы для управления заказами
   async findAll(organizationId: string) {
-    // TODO: В production включить фильтрацию по organizationId для безопасности
-    // Временно показываем все заказы для демонстрации
-    if (process.env.NODE_ENV === 'production') {
-      return await this.orderRepository.find({
-        where: { organizationId },
-        relations: ['customer', 'items', 'items.item'],
-        order: { createdAt: 'DESC' },
-      });
+    console.log('📦 OrdersService.findAll called');
+    console.log('   organizationId:', organizationId);
+    console.log('   organizationId type:', typeof organizationId);
+    
+    // Проверяем, есть ли вообще заказы в базе
+    const allOrders = await this.orderRepository.find({
+      relations: ['customer', 'items', 'items.item'],
+      take: 10,
+    });
+    console.log(`   Total orders in DB: ${allOrders.length}`);
+    if (allOrders.length > 0) {
+      console.log('   Sample order organizationIds:', allOrders.map(o => o.organizationId));
     }
     
-    // Development mode - show all orders for testing
-    console.log('📦 Loading orders for org:', organizationId);
     const orders = await this.orderRepository.find({
+      where: { organizationId },
       relations: ['customer', 'items', 'items.item'],
       order: { createdAt: 'DESC' },
-      take: 50,
     });
-    console.log('📦 Found', orders.length, 'total orders');
+    console.log(`   ✅ Found ${orders.length} orders for organization ${organizationId}`);
+    
+    if (orders.length > 0) {
+      console.log('   Order IDs:', orders.map(o => o.id));
+      console.log('   Order numbers:', orders.map(o => o.orderNumber));
+      console.log('   IsB2C flags:', orders.map(o => o.isB2C));
+    }
+    
     return orders;
   }
 
@@ -71,6 +80,11 @@ export class OrdersService {
     data: Partial<Order> & { items?: Array<{ itemId: number; quantity: number }> },
     options?: { skipQuantityCheck?: boolean },
   ) {
+    console.log('📦 OrdersService.create called');
+    console.log('   organizationId:', organizationId);
+    console.log('   isB2C:', (data as any).isB2C);
+    console.log('   items count:', data.items?.length || 0);
+    
     // Генерируем номер заказа если не указан
     if (!data.orderNumber) {
       const year = new Date().getFullYear();
@@ -107,7 +121,28 @@ export class OrdersService {
       totalAmount: 0, // Пока 0, посчитаем после добавления товаров
     });
     
+    console.log('   Creating order with data:', JSON.stringify({
+      orderNumber: order.orderNumber,
+      organizationId: order.organizationId,
+      organizationIdType: typeof order.organizationId,
+      isB2C: order.isB2C,
+      status: order.status,
+    }, null, 2));
+    
     const savedOrder = await this.orderRepository.save(order);
+    console.log(`   ✅ Order saved with ID: ${savedOrder.id}`);
+    console.log(`   ✅ Saved order organizationId: ${savedOrder.organizationId} (type: ${typeof savedOrder.organizationId})`);
+    
+    // Проверяем, что заказ действительно сохранился с правильным organizationId
+    const verifyOrder = await this.orderRepository.findOne({
+      where: { id: savedOrder.id },
+    });
+    if (verifyOrder) {
+      console.log(`   ✅ Verified order organizationId: ${verifyOrder.organizationId}`);
+      if (verifyOrder.organizationId !== organizationId) {
+        console.error(`   ❌ MISMATCH! Expected: ${organizationId}, Got: ${verifyOrder.organizationId}`);
+      }
+    }
 
     // Если есть товары - добавляем их
     if (data.items && data.items.length > 0) {
@@ -162,6 +197,15 @@ export class OrdersService {
     await this.findOne(id, organizationId); // Проверка существования
     await this.orderRepository.delete({ id, organizationId });
     return { success: true };
+  }
+
+  // Метод для отладки - получить все заказы
+  async findAllForDebug() {
+    return await this.orderRepository.find({
+      relations: ['customer', 'items', 'items.item', 'organization'],
+      order: { createdAt: 'DESC' },
+      take: 50,
+    });
   }
 }
 

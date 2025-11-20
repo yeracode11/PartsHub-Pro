@@ -266,6 +266,9 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   Future<void> _showCheckoutDialog(BuildContext context, Cart cart) async {
+    // Сохраняем контекст для использования после закрытия диалога
+    final navigator = Navigator.of(context);
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
     // Формируем OrderItem из корзины
     final orderItems = cart.items.map((cartItem) {
       return OrderItem(
@@ -281,10 +284,12 @@ class _CartScreenState extends State<CartScreen> {
       );
     }).toList();
 
+    bool isCreatingOrder = false;
+
     showDialog(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
+        builder: (dialogBuildContext, dialogSetState) => AlertDialog(
           title: const Text('Оформление заказа'),
           content: SingleChildScrollView(
             child: Column(
@@ -312,7 +317,7 @@ class _CartScreenState extends State<CartScreen> {
                     prefixIcon: Icon(Icons.location_on),
                   ),
                   maxLines: 2,
-                  enabled: !_isCreatingOrder,
+                  enabled: !isCreatingOrder,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
@@ -324,9 +329,9 @@ class _CartScreenState extends State<CartScreen> {
                     prefixIcon: Icon(Icons.note),
                   ),
                   maxLines: 2,
-                  enabled: !_isCreatingOrder,
+                  enabled: !isCreatingOrder,
                 ),
-                if (_isCreatingOrder) ...[
+                if (isCreatingOrder) ...[
                   const SizedBox(height: 16),
                   const Center(child: CircularProgressIndicator()),
                 ],
@@ -335,13 +340,13 @@ class _CartScreenState extends State<CartScreen> {
           ),
           actions: [
             TextButton(
-              onPressed: _isCreatingOrder 
+              onPressed: isCreatingOrder 
                   ? null 
                   : () => Navigator.of(dialogContext).pop(),
               child: const Text('Отмена'),
             ),
             ElevatedButton(
-              onPressed: _isCreatingOrder ? null : () async {
+              onPressed: isCreatingOrder ? null : () async {
                 if (_addressController.text.trim().isEmpty) {
                   ScaffoldMessenger.of(dialogContext).showSnackBar(
                     const SnackBar(
@@ -352,8 +357,9 @@ class _CartScreenState extends State<CartScreen> {
                   return;
                 }
 
-                setState(() {
-                  _isCreatingOrder = true;
+                // Обновляем локальное состояние диалога
+                dialogSetState(() {
+                  isCreatingOrder = true;
                 });
 
                 try {
@@ -364,57 +370,78 @@ class _CartScreenState extends State<CartScreen> {
                     notes: _notesController.text.trim().isEmpty 
                         ? null 
                         : _notesController.text.trim(),
+                    // organizationId не передаем - заказы будут создаваться для организации каждого продавца
                   );
 
-                  if (!mounted) return;
-
                   // Очищаем корзину после создания заказа
-                  context.read<CartBloc>().add(CartCleared());
+                  if (mounted) {
+                    context.read<CartBloc>().add(CartCleared());
+                  }
                   
                   // Закрываем диалог
-                  Navigator.of(dialogContext).pop();
+                  if (Navigator.of(dialogContext).canPop()) {
+                    Navigator.of(dialogContext).pop();
+                  }
                   
                   // Добавляем задержку для предотвращения ошибки навигации
                   await Future.delayed(const Duration(milliseconds: 300));
                   
-                  if (!mounted) return;
-                  
-                  // Закрываем корзину
-                  Navigator.of(context).pop();
+                  // Закрываем корзину, если виджет еще активен
+                  if (mounted && navigator.canPop()) {
+                    navigator.pop();
+                  }
 
-                  // Показываем успешное сообщение
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Заказ ${order.orderNumber} успешно оформлен!'),
-                        backgroundColor: Colors.green,
-                        duration: const Duration(seconds: 3),
-                        action: SnackBarAction(
-                          label: 'Посмотреть',
-                          textColor: Colors.white,
-                          onPressed: () {
+                  // Показываем успешное сообщение после небольшой задержки
+                  await Future.delayed(const Duration(milliseconds: 200));
+                  
+                  // Используем сохраненный scaffoldMessenger
+                  scaffoldMessenger.showSnackBar(
+                    SnackBar(
+                      content: Text('Заказ ${order.orderNumber} успешно оформлен!'),
+                      backgroundColor: Colors.green,
+                      duration: const Duration(seconds: 3),
+                      action: SnackBarAction(
+                        label: 'Посмотреть',
+                        textColor: Colors.white,
+                        onPressed: () {
+                          if (mounted) {
                             context.go('/orders');
-                          },
-                        ),
+                          }
+                        },
+                      ),
+                    ),
+                  );
+                } catch (e) {
+                  // Сбрасываем локальное состояние диалога только если он еще открыт
+                  if (Navigator.of(dialogContext).canPop()) {
+                    dialogSetState(() {
+                      isCreatingOrder = false;
+                    });
+                    
+                    ScaffoldMessenger.of(dialogContext).showSnackBar(
+                      SnackBar(
+                        content: Text('Ошибка создания заказа: $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  } else {
+                    // Если диалог закрыт, показываем в основном контексте
+                    scaffoldMessenger.showSnackBar(
+                      SnackBar(
+                        content: Text('Ошибка создания заказа: $e'),
+                        backgroundColor: Colors.red,
                       ),
                     );
                   }
-                } catch (e) {
-                  if (!mounted) return;
-                  
-                  ScaffoldMessenger.of(dialogContext).showSnackBar(
-                    SnackBar(
-                      content: Text('Ошибка создания заказа: $e'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                  
-                  setState(() {
-                    _isCreatingOrder = false;
-                  });
                 }
               },
-              child: const Text('Оформить заказ'),
+              child: isCreatingOrder
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Оформить заказ'),
             ),
           ],
         ),

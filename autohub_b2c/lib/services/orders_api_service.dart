@@ -68,9 +68,13 @@ class OrdersApiService {
     required List<OrderItem> items,
     required String shippingAddress,
     String? notes,
+    String? organizationId, // Опциональный organizationId для создания заказа в конкретной организации
   }) async {
     try {
       print('📝 Creating B2C order with ${items.length} items...');
+      if (organizationId != null) {
+        print('📝 Using organizationId: $organizationId');
+      }
       
       final orderData = {
         'items': items.map((item) => ({
@@ -78,6 +82,7 @@ class OrdersApiService {
           'quantity': item.quantity,
         })).toList(),
         'notes': notes,
+        if (organizationId != null) 'organizationId': organizationId,
       };
 
       print('📝 B2C Order data: $orderData');
@@ -85,8 +90,18 @@ class OrdersApiService {
       final response = await _apiClient.post('/b2c/orders', data: orderData);
       print('✅ B2C Order created: ${response.statusCode}');
       
-      // B2C API возвращает объект с data
-      return Order.fromJson(response.data['data']);
+      // B2C API может вернуть один заказ или массив заказов (если товары от разных продавцов)
+      final responseData = response.data['data'];
+      
+      // Если это массив заказов, берем первый (или можно обработать все)
+      if (responseData is List && responseData.isNotEmpty) {
+        print('📦 Multiple orders created (${responseData.length}) for different sellers');
+        // Возвращаем первый заказ, но можно обработать все
+        return Order.fromJson(responseData[0]);
+      }
+      
+      // Один заказ
+      return Order.fromJson(responseData);
     } catch (e) {
       print('❌ Error creating B2C order: $e');
       throw Exception('Не удалось создать заказ: $e');

@@ -137,6 +137,18 @@ export class ItemsService {
       .getOne();
   }
 
+  // Получить товары по списку ID (для группировки по продавцам)
+  async findItemsByIds(itemIds: number[]) {
+    if (itemIds.length === 0) {
+      return [];
+    }
+    return await this.itemRepository
+      .createQueryBuilder('item')
+      .leftJoinAndSelect('item.organization', 'organization')
+      .where('item.id IN (:...itemIds)', { itemIds })
+      .getMany();
+  }
+
   // Методы для работы с изображениями
   async addImages(id: number, organizationId: string, imageUrls: string[]) {
     const item = await this.findOne(id, organizationId);

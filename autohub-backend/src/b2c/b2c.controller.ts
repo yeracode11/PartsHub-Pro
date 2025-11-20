@@ -220,25 +220,12 @@ export class B2CController {
   @Get('orders')
   async getOrders() {
     try {
-      // Получаем первую доступную организацию
-      const organizations = await this.organizationsService.findAll();
-      const firstOrg = organizations.find(org => 
-        (org.businessType === 'parts' || org.businessType === 'service') && org.isActive
-      );
-      
-      if (!firstOrg) {
-        console.log('⚠️ No active organization found for B2C orders');
-        return {
-          data: [],
-          total: 0,
-        };
-      }
-
-      // Получаем все заказы для этой организации с items
-      console.log('📦 Fetching B2C orders for org:', firstOrg.id);
+      // Получаем все заказы из B2C (isB2C = true) из всех организаций
+      // В будущем можно добавить фильтрацию по customerId, когда будет авторизация
+      console.log('📦 Fetching all B2C orders');
       const orders = await this.orderRepository.find({
-        where: { organizationId: firstOrg.id },
-        relations: ['customer', 'items', 'items.item'],
+        where: { isB2C: true },
+        relations: ['customer', 'items', 'items.item', 'organization'],
         order: { createdAt: 'DESC' },
       });
       
@@ -249,6 +236,7 @@ export class B2CController {
         id: order.id,
         orderNumber: order.orderNumber,
         organizationId: order.organizationId,
+        sellerName: order.organization?.name || 'Unknown Seller',
         customerId: order.customerId,
         items: (order.items || []).map(item => ({
           id: item.id,
@@ -288,45 +276,138 @@ export class B2CController {
   @Post('orders')
   async createOrder(@Body() data: any) {
     try {
-      console.log('📦 Creating B2C order:', JSON.stringify(data, null, 2));
+      console.log('📦 ========== Creating B2C order ==========');
+      console.log('📦 Request data:', JSON.stringify(data, null, 2));
       
-      // Используем первую доступную организацию (можно улучшить логику)
-      const organizations = await this.organizationsService.findAll();
-      // Ищем активную организацию с типом 'parts' (авторазбор) или 'service' (сервис)
-      const firstOrg = organizations.find(org => 
-        (org.businessType === 'parts' || org.businessType === 'service') && org.isActive
-      );
-      
-      if (!firstOrg) {
-        console.error('❌ No active organization found');
-        throw new Error('No active organization found for B2C orders');
+      const items = data.items || [];
+      if (items.length === 0) {
+        throw new Error('Order must contain at least one item');
       }
 
-      // Формируем данные для создания заказа
-      const orderData = {
-        items: data.items || [],
-        customerId: data.customerId || null,
-        notes: data.notes || null,
-        status: 'pending',
-        paymentStatus: 'pending',
-        isB2C: true, // Помечаем что это заказ из B2C магазина
-      };
+      // Если указан organizationId в запросе, используем его (для авторизованных пользователей)
+      // Иначе группируем по организациям продавцов товаров
+      const targetOrganizationId = data.organizationId;
+      console.log('📦 Target organizationId from request:', targetOrganizationId || 'NOT PROVIDED (will group by sellers)');
+      
+      if (targetOrganizationId) {
+        console.log(`📦 Using provided organizationId: ${targetOrganizationId}`);
+        
+        // Проверяем, что организация существует
+        const org = await this.organizationsService.findOne(targetOrganizationId);
+        if (!org) {
+          throw new Error(`Organization ${targetOrganizationId} not found`);
+        }
+        
+        // Создаем один заказ для указанной организации
+        const orderData = {
+          items: items.map((item: any) => ({
+            itemId: item.itemId,
+            quantity: item.quantity,
+          })),
+          customerId: data.customerId || null,
+          notes: data.notes ? `${data.notes} (Заказ из B2C)` : 'Заказ из B2C маркетплейса',
+          status: 'pending',
+          paymentStatus: 'pending',
+          isB2C: true,
+        } as Partial<Order> & { items?: Array<{ itemId: number; quantity: number }> };
 
-      console.log('📦 Creating order with org:', firstOrg.id);
-      console.log('📦 Order data:', JSON.stringify(orderData, null, 2));
-      
-      // Создаем заказ без проверки количества для B2C
-      const order = await this.ordersService.create(firstOrg.id, orderData, { skipQuantityCheck: true });
-      
-      if (!order) {
-        console.error('❌ Failed to create order');
-        throw new Error('Failed to create order');
+        console.log(`📦 Creating order for organization: ${targetOrganizationId}`);
+        const order = await this.ordersService.create(targetOrganizationId, orderData, { skipQuantityCheck: true });
+        
+        if (!order) {
+          throw new Error(`Failed to create order for organization ${targetOrganizationId}`);
+        }
+        
+        console.log(`✅ Order created for organization ${targetOrganizationId}:`, order.id);
+        return {
+          data: order,
+        };
       }
+
+      // Если organizationId не указан, группируем по организациям продавцов
+      console.log('📦 No organizationId provided, grouping by seller organizations');
       
-      console.log('✅ Order created:', order.id);
-      return {
-        data: order,
-      };
+      // Получаем информацию о товарах и их организациях-продавцах
+      const itemIds = items.map((item: any) => item.itemId);
+      console.log(`📦 Fetching items with IDs:`, itemIds);
+      
+      const itemsWithOrgs = await this.itemsService.findItemsByIds(itemIds);
+      console.log(`📦 Found ${itemsWithOrgs.length} items with organization info`);
+      
+      // Логируем organizationId каждого товара
+      itemsWithOrgs.forEach(item => {
+        console.log(`   Item ${item.id} (${item.name}): organizationId = ${item.organizationId}`);
+      });
+      
+      if (itemsWithOrgs.length !== itemIds.length) {
+        throw new Error('Some items not found');
+      }
+
+      // Группируем товары по organizationId (продавцам)
+      const itemsBySeller = new Map<string, Array<{ itemId: number; quantity: number }>>();
+      
+      for (const orderItem of items) {
+        const item = itemsWithOrgs.find(i => i.id === orderItem.itemId);
+        if (!item) {
+          throw new Error(`Item with ID ${orderItem.itemId} not found`);
+        }
+        
+        const orgId = item.organizationId;
+        console.log(`   Item ${orderItem.itemId} belongs to organization: ${orgId}`);
+        
+        if (!itemsBySeller.has(orgId)) {
+          itemsBySeller.set(orgId, []);
+        }
+        itemsBySeller.get(orgId)!.push({
+          itemId: orderItem.itemId,
+          quantity: orderItem.quantity,
+        });
+      }
+
+      console.log(`📦 Grouped items into ${itemsBySeller.size} seller(s)`);
+      itemsBySeller.forEach((sellerItems, orgId) => {
+        console.log(`   Seller ${orgId}: ${sellerItems.length} items`);
+      });
+
+      // Создаем отдельный заказ для каждой организации-продавца
+      const createdOrders: Order[] = [];
+      
+      for (const [organizationId, sellerItems] of itemsBySeller.entries()) {
+        const orderData = {
+          items: sellerItems as Array<{ itemId: number; quantity: number }>,
+          customerId: data.customerId || null,
+          notes: data.notes ? `${data.notes} (Заказ из B2C)` : 'Заказ из B2C маркетплейса',
+          status: 'pending',
+          paymentStatus: 'pending',
+          isB2C: true, // Помечаем что это заказ из B2C магазина
+        } as Partial<Order> & { items?: Array<{ itemId: number; quantity: number }> };
+
+        console.log(`📦 Creating order for seller org: ${organizationId}`);
+        console.log(`📦 Order items:`, JSON.stringify(sellerItems, null, 2));
+        
+        // Создаем заказ без проверки количества для B2C
+        const order = await this.ordersService.create(organizationId, orderData, { skipQuantityCheck: true });
+        
+        if (!order) {
+          console.error(`❌ Failed to create order for org: ${organizationId}`);
+          throw new Error(`Failed to create order for seller ${organizationId}`);
+        }
+        
+        console.log(`✅ Order created for seller ${organizationId}:`, order.id);
+        createdOrders.push(order);
+      }
+
+      // Если заказ один - возвращаем его напрямую, иначе возвращаем массив
+      if (createdOrders.length === 1) {
+        return {
+          data: createdOrders[0],
+        };
+      } else {
+        return {
+          data: createdOrders,
+          message: `Created ${createdOrders.length} orders for different sellers`,
+        };
+      }
     } catch (error) {
       console.error('❌ Error creating B2C order:', error);
       throw error;

@@ -38,18 +38,11 @@ class _LoginScreenState extends State<LoginScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 // Логотип
-                Container(
-                  width: 120,
-                  height: 120,
-                  decoration: BoxDecoration(
-                    gradient: AppTheme.primaryGradient,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: const Icon(
-                    Icons.car_repair,
-                    color: Colors.white,
-                    size: 60,
-                  ),
+                Image.asset(
+                  'assets/icons/auto-plus-logo.png',
+                  width: 180,
+                  height: 180,
+                  fit: BoxFit.contain,
                 ),
                 
                 const SizedBox(height: 32),
@@ -64,7 +57,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 8),
                 
                 Text(
-                  'Войдите в свой аккаунт MyAuto',
+                  'Войдите в свой аккаунт Auto+',
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                         color: AppTheme.textSecondary,
                       ),

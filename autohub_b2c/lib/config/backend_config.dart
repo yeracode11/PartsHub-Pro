@@ -122,4 +122,10 @@ class BackendConfig {
   // Настройки retry
   static const int maxRetries = 3;
   static const Duration retryDelay = Duration(seconds: 1);
+  
+  // OrganizationId для создания заказов B2C
+  // Если указан, все заказы будут создаваться для этой организации
+  // Если null, заказы будут группироваться по организациям продавцов товаров
+  // Укажите ваш organizationId здесь: 'd5b08ea8-4ad0-42c3-9006-8e5882c18975'
+  static const String? defaultOrganizationId = 'd5b08ea8-4ad0-42c3-9006-8e5882c18975';
 }
