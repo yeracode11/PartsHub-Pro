@@ -150,7 +150,7 @@ export class TemplatesService {
   }
 
   /**
-   * Заполнить переменные в шаблоне
+   * Заполнить переменные в шаблоне (регистронезависимая замена)
    */
   fillTemplate(
     template: string,
@@ -159,7 +159,8 @@ export class TemplatesService {
     let result = template;
 
     for (const [key, value] of Object.entries(variables)) {
-      const regex = new RegExp(`\\{${key}\\}`, 'g');
+      // Регистронезависимая замена: {name}, {Name}, {NAME} и т.д.
+      const regex = new RegExp(`\\{${key}\\}`, 'gi');
       result = result.replace(regex, value);
     }
 

@@ -4,6 +4,7 @@ import * as qrcode from 'qrcode-terminal';
 import { MessageHistoryService } from './message-history.service';
 import { MessageStatus } from './entities/message-history.entity';
 import { VehiclesService } from '../vehicles/vehicles.service';
+import { TemplatesService } from './templates.service';
 
 @Injectable()
 export class WhatsAppService implements OnModuleInit {
@@ -18,6 +19,7 @@ export class WhatsAppService implements OnModuleInit {
     @Inject(MessageHistoryService)
     private readonly historyService: MessageHistoryService,
     private readonly vehiclesService: VehiclesService,
+    private readonly templatesService: TemplatesService,
   ) {}
 
   async onModuleInit() {
@@ -426,50 +428,30 @@ export class WhatsAppService implements OnModuleInit {
           );
         }
 
-        // Подставляем переменные в шаблон (регистронезависимая замена)
-        let personalizedMessage = template;
-        
+        // Подставляем переменные в шаблон используя TemplatesService
         this.logger.log(
           `🔄 Начало замены переменных для клиента ${recipient.name} (ID: ${recipient.customerId})`,
         );
         this.logger.log(`   Исходный шаблон: ${template}`);
         this.logger.log(`   carModelText: "${carModelText}"`);
         
-        // Заменяем {name} или {Name}
-        const nameValue = recipient.name || 'Уважаемый клиент';
-        personalizedMessage = personalizedMessage.replace(
-          /\{name\}/gi,
-          nameValue,
-        );
-        this.logger.log(`   Заменено {name} на: "${nameValue}"`);
+        // Подготавливаем переменные для замены
+        const variables: Record<string, string> = {
+          name: recipient.name || 'Уважаемый клиент',
+          carModel: carModelText,
+        };
         
-        // Заменяем {carModel} или {CarModel} (регистронезависимо)
-        // Всегда выполняем замену, даже если переменной нет в шаблоне
-        const beforeReplace = personalizedMessage;
-        personalizedMessage = personalizedMessage.replace(
-          /\{carModel\}/gi,
-          carModelText,
-        );
-        
-        if (beforeReplace !== personalizedMessage) {
-          this.logger.log(`   ✅ Заменено {carModel} на: "${carModelText}"`);
-        } else {
-          this.logger.warn(`   ⚠️ Переменная {carModel} не найдена в шаблоне для замены!`);
-          this.logger.warn(`   Шаблон содержит: ${template}`);
-          // Попробуем найти все переменные в шаблоне
-          const allVars = template.match(/\{[^}]+\}/g);
-          if (allVars) {
-            this.logger.warn(`   Найденные переменные в шаблоне: ${allVars.join(', ')}`);
-          }
-        }
-        
-        // Заменяем {organizationName} или {OrganizationName}
         if (options?.organizationId) {
-          personalizedMessage = personalizedMessage.replace(
-            /\{organizationName\}/gi,
-            'наш сервис',
-          );
+          variables.organizationName = 'наш сервис';
         }
+        
+        this.logger.log(`   Переменные для замены: ${JSON.stringify(variables)}`);
+        
+        // Используем TemplatesService для замены переменных (регистронезависимо)
+        const personalizedMessage = this.templatesService.fillTemplate(
+          template,
+          variables,
+        );
         
         this.logger.log(
           `📝 Финальное сообщение: ${personalizedMessage}`,
@@ -518,16 +500,19 @@ export class WhatsAppService implements OnModuleInit {
             }
           }
 
-          // Регистронезависимая замена для истории
-          let historyMessage = template;
-          historyMessage = historyMessage.replace(
-            /\{name\}/gi,
-            recipient.name || 'Уважаемый клиент',
-          );
-          historyMessage = historyMessage.replace(/\{carModel\}/gi, carModelText);
-          historyMessage = historyMessage.replace(
-            /\{organizationName\}/gi,
-            'наш сервис',
+          // Используем TemplatesService для замены переменных в истории
+          const historyVariables: Record<string, string> = {
+            name: recipient.name || 'Уважаемый клиент',
+            carModel: carModelText,
+          };
+          
+          if (options?.organizationId) {
+            historyVariables.organizationName = 'наш сервис';
+          }
+          
+          const historyMessage = this.templatesService.fillTemplate(
+            template,
+            historyVariables,
           );
 
           await this.historyService.create({
