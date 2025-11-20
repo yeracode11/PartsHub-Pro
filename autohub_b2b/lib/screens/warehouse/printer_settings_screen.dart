@@ -287,12 +287,27 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                                       : AppTheme.primaryColor,
                                 ),
                                 title: Text(printer['name'] as String),
-                                subtitle: Text(
-                                  printer['model'] != null 
-                                    ? 'Модель: ${printer['model']}'
-                                    : printer['location'] != null
-                                      ? 'Расположение: ${printer['location']}'
-                                      : 'Принтер',
+                                subtitle: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (printer['connectionType'] != null)
+                                      Text(
+                                        'Тип: ${printer['connectionType']}',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: printer['connectionType'] == 'Bluetooth'
+                                              ? Colors.blue
+                                              : printer['connectionType'] == 'USB'
+                                                  ? Colors.green
+                                                  : Colors.grey,
+                                        ),
+                                      ),
+                                    if (printer['model'] != null)
+                                      Text('Модель: ${printer['model']}'),
+                                    if (printer['location'] != null && printer['location'].toString().isNotEmpty)
+                                      Text('Расположение: ${printer['location']}'),
+                                  ],
                                 ),
                                 trailing: isCurrentPrinter
                                     ? const Chip(
