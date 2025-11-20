@@ -90,7 +90,7 @@ export class WhatsAppService implements OnModuleInit {
           '--disable-backgrounding-occluded-windows',
           '--disable-renderer-backgrounding',
         ],
-        timeout: 60000, // 60 секунд таймаут
+        timeout: 120000, // 120 секунд таймаут для инициализации
       },
       webVersionCache: {
         type: 'remote',
@@ -168,46 +168,103 @@ export class WhatsAppService implements OnModuleInit {
   }
 
   /**
-   * Отправить сообщение одному контакту
+   * Отправить сообщение одному контакту с retry логикой
    */
-  async sendMessage(phone: string, message: string): Promise<void> {
+  async sendMessage(
+    phone: string,
+    message: string,
+    retries: number = 3,
+  ): Promise<void> {
     if (!this.isReady) {
       throw new Error('WhatsApp клиент не готов. Отсканируйте QR код.');
     }
 
-    try {
-      // Проверяем, что клиент все еще активен
-      if (!this.client || !this.isReady) {
-        throw new Error('WhatsApp клиент недоступен. Попробуйте переподключиться.');
-      }
-
-      // Форматируем номер телефона
-      const formattedPhone = this.formatPhoneNumber(phone);
-      const chatId = `${formattedPhone}@c.us`;
-
-      this.logger.log(`📤 Отправка сообщения на ${formattedPhone}`);
-      
-      // Добавляем таймаут для отправки сообщения
-      const sendPromise = this.client.sendMessage(chatId, message);
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Таймаут отправки сообщения (30 сек)')), 30000)
-      );
-      
-      await Promise.race([sendPromise, timeoutPromise]);
-      this.logger.log(`✅ Сообщение отправлено на ${formattedPhone}`);
-    } catch (error) {
-      this.logger.error(`❌ Ошибка отправки на ${phone}:`, error.message);
-      
-      // Если ошибка связана с сессией, помечаем клиент как неготовый
-      if (error.message.includes('Session closed') || 
-          error.message.includes('Protocol error') ||
-          error.message.includes('Target closed')) {
-        this.isReady = false;
-        this.logger.warn('🔄 Сессия WhatsApp закрыта, требуется переподключение');
-      }
-      
-      throw new Error(`Не удалось отправить сообщение: ${error.message}`);
+    // Проверяем, что клиент все еще активен
+    if (!this.client || !this.isReady) {
+      throw new Error('WhatsApp клиент недоступен. Попробуйте переподключиться.');
     }
+
+    // Форматируем номер телефона
+    const formattedPhone = this.formatPhoneNumber(phone);
+    const chatId = `${formattedPhone}@c.us`;
+
+    let lastError: Error | null = null;
+
+    // Retry логика
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        this.logger.log(
+          `📤 Отправка сообщения на ${formattedPhone} (попытка ${attempt}/${retries})`,
+        );
+
+        // Увеличиваем таймаут до 90 секунд для WhatsApp Web.js
+        const sendPromise = this.client.sendMessage(chatId, message);
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(
+            () =>
+              reject(
+                new Error(
+                  `Таймаут отправки сообщения (90 сек, попытка ${attempt}/${retries})`,
+                ),
+              ),
+            90000, // 90 секунд
+          ),
+        );
+
+        await Promise.race([sendPromise, timeoutPromise]);
+
+        this.logger.log(`✅ Сообщение отправлено на ${formattedPhone}`);
+        return; // Успешно отправлено, выходим из цикла
+      } catch (error) {
+        lastError = error as Error;
+        const errorMessage = error.message || 'Неизвестная ошибка';
+
+        this.logger.warn(
+          `⚠️ Попытка ${attempt}/${retries} не удалась для ${formattedPhone}: ${errorMessage}`,
+        );
+
+        // Если ошибка связана с сессией, не пытаемся повторно
+        if (
+          errorMessage.includes('Session closed') ||
+          errorMessage.includes('Protocol error') ||
+          errorMessage.includes('Target closed') ||
+          errorMessage.includes('не готов') ||
+          errorMessage.includes('недоступен')
+        ) {
+          this.isReady = false;
+          this.logger.warn(
+            '🔄 Сессия WhatsApp закрыта, требуется переподключение',
+          );
+          throw new Error(
+            `Не удалось отправить сообщение: ${errorMessage}. Требуется переподключение WhatsApp.`,
+          );
+        }
+
+        // Если это не последняя попытка, ждем перед повтором
+        if (attempt < retries) {
+          const delayMs = attempt * 2000; // 2, 4, 6 секунд задержка
+          this.logger.log(
+            `⏳ Ожидание ${delayMs}мс перед повторной попыткой...`,
+          );
+          await this.delay(delayMs);
+
+          // Проверяем, что клиент все еще готов перед следующей попыткой
+          if (!this.isReady || !this.client) {
+            throw new Error(
+              'WhatsApp клиент стал недоступен во время повторных попыток',
+            );
+          }
+        }
+      }
+    }
+
+    // Все попытки исчерпаны
+    this.logger.error(
+      `❌ Не удалось отправить сообщение на ${formattedPhone} после ${retries} попыток: ${lastError?.message}`,
+    );
+    throw new Error(
+      `Не удалось отправить сообщение после ${retries} попыток: ${lastError?.message}`,
+    );
   }
 
   /**
