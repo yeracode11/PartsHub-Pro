@@ -67,7 +67,7 @@ export class OrdersService {
   async findOne(id: number, organizationId: string) {
     const order = await this.orderRepository.findOne({
       where: { id, organizationId },
-      relations: ['customer'],
+      relations: ['customer', 'items', 'items.item'], // Загружаем товары с полной информацией
     });
     if (!order) {
       throw new Error(`Order with ID ${id} not found`);
@@ -117,6 +117,7 @@ export class OrdersService {
       status: data.status || 'pending',
       paymentStatus: data.paymentStatus || 'pending',
       notes: data.notes,
+      shippingAddress: (data as any).shippingAddress || null, // Адрес доставки для B2C
       isB2C: (data as any).isB2C || false, // Помечаем заказ из B2C
       totalAmount: 0, // Пока 0, посчитаем после добавления товаров
     });

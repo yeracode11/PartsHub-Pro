@@ -82,6 +82,7 @@ class OrdersApiService {
           'quantity': item.quantity,
         })).toList(),
         'notes': notes,
+        'shippingAddress': shippingAddress,
         if (organizationId != null) 'organizationId': organizationId,
       };
 

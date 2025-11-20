@@ -70,7 +70,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       
                       // Заголовок
                       Text(
-                        'AutoHub B2B',
+                        'Auto+ Pro',
                         textAlign: TextAlign.center,
                         style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                               fontWeight: FontWeight.bold,

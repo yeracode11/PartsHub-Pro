@@ -48,7 +48,7 @@ class AutoHubApp extends StatelessWidget {
         ),
       ],
       child: MaterialApp(
-        title: 'AutoHub B2B',
+        title: 'Auto+ Pro',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
         builder: (context, child) {

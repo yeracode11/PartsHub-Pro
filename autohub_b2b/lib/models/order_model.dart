@@ -1,5 +1,55 @@
 import 'package:equatable/equatable.dart';
 
+class OrderItemModel {
+  final int id;
+  final int itemId;
+  final int quantity;
+  final double priceAtTime;
+  final double subtotal;
+  final Map<String, dynamic>? item; // Информация о товаре (name, images, etc.)
+
+  OrderItemModel({
+    required this.id,
+    required this.itemId,
+    required this.quantity,
+    required this.priceAtTime,
+    required this.subtotal,
+    this.item,
+  });
+
+  factory OrderItemModel.fromJson(Map<String, dynamic> json) {
+    final priceAtTimeValue = json['priceAtTime'] ?? json['price_at_time'];
+    final subtotalValue = json['subtotal'] ?? 0;
+    
+    final double priceAtTime;
+    if (priceAtTimeValue is String) {
+      priceAtTime = double.parse(priceAtTimeValue);
+    } else if (priceAtTimeValue is num) {
+      priceAtTime = priceAtTimeValue.toDouble();
+    } else {
+      priceAtTime = 0.0;
+    }
+
+    final double subtotal;
+    if (subtotalValue is String) {
+      subtotal = double.parse(subtotalValue);
+    } else if (subtotalValue is num) {
+      subtotal = subtotalValue.toDouble();
+    } else {
+      subtotal = 0.0;
+    }
+
+    return OrderItemModel(
+      id: json['id'] as int,
+      itemId: json['itemId'] as int? ?? json['item_id'] as int,
+      quantity: json['quantity'] as int,
+      priceAtTime: priceAtTime,
+      subtotal: subtotal,
+      item: json['item'] as Map<String, dynamic>?,
+    );
+  }
+}
+
 class OrderModel extends Equatable {
   final int? id;
   final String? orderNumber;
@@ -8,7 +58,11 @@ class OrderModel extends Equatable {
   final String status;
   final String paymentStatus;
   final String? notes;
+  final String? shippingAddress;
   final bool synced;
+  final bool isB2C;
+  final List<OrderItemModel>? items;
+  final Map<String, dynamic>? customer;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -20,7 +74,11 @@ class OrderModel extends Equatable {
     required this.status,
     required this.paymentStatus,
     this.notes,
+    this.shippingAddress,
     this.synced = false,
+    this.isB2C = false,
+    this.items,
+    this.customer,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -33,7 +91,11 @@ class OrderModel extends Equatable {
     String? status,
     String? paymentStatus,
     String? notes,
+    String? shippingAddress,
     bool? synced,
+    bool? isB2C,
+    List<OrderItemModel>? items,
+    Map<String, dynamic>? customer,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -45,7 +107,11 @@ class OrderModel extends Equatable {
       status: status ?? this.status,
       paymentStatus: paymentStatus ?? this.paymentStatus,
       notes: notes ?? this.notes,
+      shippingAddress: shippingAddress ?? this.shippingAddress,
       synced: synced ?? this.synced,
+      isB2C: isB2C ?? this.isB2C,
+      items: items ?? this.items,
+      customer: customer ?? this.customer,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -60,7 +126,18 @@ class OrderModel extends Equatable {
       'status': status,
       'paymentStatus': paymentStatus,
       'notes': notes,
+      'shippingAddress': shippingAddress,
       'synced': synced,
+      'isB2C': isB2C,
+      'items': items?.map((item) => {
+        'id': item.id,
+        'itemId': item.itemId,
+        'quantity': item.quantity,
+        'priceAtTime': item.priceAtTime,
+        'subtotal': item.subtotal,
+        'item': item.item,
+      }).toList(),
+      'customer': customer,
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
     };
@@ -78,6 +155,14 @@ class OrderModel extends Equatable {
       total = 0.0;
     }
 
+    // Парсим items
+    List<OrderItemModel>? items;
+    if (json['items'] != null) {
+      items = (json['items'] as List)
+          .map((item) => OrderItemModel.fromJson(item as Map<String, dynamic>))
+          .toList();
+    }
+
     return OrderModel(
       id: json['id'] as int?,
       orderNumber: json['orderNumber'] as String?,
@@ -86,7 +171,11 @@ class OrderModel extends Equatable {
       status: json['status'] as String,
       paymentStatus: json['paymentStatus'] as String? ?? 'pending',
       notes: json['notes'] as String?,
+      shippingAddress: json['shippingAddress'] as String?,
       synced: json['synced'] as bool? ?? false,
+      isB2C: json['isB2C'] as bool? ?? false,
+      items: items,
+      customer: json['customer'] as Map<String, dynamic>?,
       createdAt: DateTime.parse(json['createdAt'] as String),
       updatedAt: DateTime.parse(json['updatedAt'] as String),
     );
@@ -101,7 +190,11 @@ class OrderModel extends Equatable {
         status,
         paymentStatus,
         notes,
+        shippingAddress,
         synced,
+        isB2C,
+        items,
+        customer,
         createdAt,
         updatedAt,
       ];

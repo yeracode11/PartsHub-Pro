@@ -66,6 +66,9 @@ export class Order {
   @Column({ type: 'text', nullable: true })
   notes: string;
 
+  @Column({ type: 'text', nullable: true })
+  shippingAddress: string; // Адрес доставки для B2C заказов
+
   @Column({ type: 'boolean', default: false })
   synced: boolean;
 

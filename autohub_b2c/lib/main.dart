@@ -77,7 +77,7 @@ class AutoHubB2CApp extends StatelessWidget {
       child: BlocBuilder<ThemeBloc, ThemeState>(
         builder: (context, themeState) {
           return MaterialApp.router(
-            title: 'AutoHub B2C',
+            title: 'Auto+R',
             debugShowCheckedModeBanner: false,
             theme: themeState.themeData,
             routerConfig: AppRouter.createRouter(initialRoute),

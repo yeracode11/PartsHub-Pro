@@ -95,7 +95,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: const Text('Auto+Rа Маркетплейс'),
+        title: const Text('Auto+ Маркетплейс'),
         backgroundColor: AppTheme.primaryColor.withOpacity(0.9),
         elevation: 0,
         flexibleSpace: Container(

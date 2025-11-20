@@ -306,10 +306,11 @@ export class B2CController {
           })),
           customerId: data.customerId || null,
           notes: data.notes ? `${data.notes} (Заказ из B2C)` : 'Заказ из B2C маркетплейса',
+          shippingAddress: data.shippingAddress || null, // Адрес доставки
           status: 'pending',
           paymentStatus: 'pending',
           isB2C: true,
-        } as Partial<Order> & { items?: Array<{ itemId: number; quantity: number }> };
+        } as Partial<Order> & { items?: Array<{ itemId: number; quantity: number }>; shippingAddress?: string };
 
         console.log(`📦 Creating order for organization: ${targetOrganizationId}`);
         const order = await this.ordersService.create(targetOrganizationId, orderData, { skipQuantityCheck: true });
@@ -377,10 +378,11 @@ export class B2CController {
           items: sellerItems as Array<{ itemId: number; quantity: number }>,
           customerId: data.customerId || null,
           notes: data.notes ? `${data.notes} (Заказ из B2C)` : 'Заказ из B2C маркетплейса',
+          shippingAddress: data.shippingAddress || null, // Адрес доставки
           status: 'pending',
           paymentStatus: 'pending',
           isB2C: true, // Помечаем что это заказ из B2C магазина
-        } as Partial<Order> & { items?: Array<{ itemId: number; quantity: number }> };
+        } as Partial<Order> & { items?: Array<{ itemId: number; quantity: number }>; shippingAddress?: string };
 
         console.log(`📦 Creating order for seller org: ${organizationId}`);
         console.log(`📦 Order items:`, JSON.stringify(sellerItems, null, 2));

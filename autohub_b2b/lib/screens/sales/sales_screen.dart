@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/services/database/database.dart';
 import 'package:autohub_b2b/models/order_model.dart';
+import 'package:autohub_b2b/screens/sales/order_detail_screen.dart';
 import 'package:intl/intl.dart';
 import 'package:dio/dio.dart';
 import 'package:autohub_b2b/services/api/api_client.dart';
@@ -402,34 +403,94 @@ class _SalesScreenState extends State<SalesScreen> {
   }
 
   void _showOrderDialog(BuildContext context, {OrderModel? order}) async {
-    final isEdit = order != null;
-    
-    // Загружаем список товаров
-    List<Map<String, dynamic>> availableItems = [];
-    try {
-      final response = await dio.get('/api/items');
-      availableItems = List<Map<String, dynamic>>.from(response.data);
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка загрузки товаров: $e')),
-        );
+    if (order == null) {
+      // Создание нового заказа
+      final isEdit = false;
+      
+      // Загружаем список товаров
+      List<Map<String, dynamic>> availableItems = [];
+      try {
+        final response = await dio.get('/api/items');
+        availableItems = List<Map<String, dynamic>>.from(response.data);
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Ошибка загрузки товаров: $e')),
+          );
+        }
+        return;
       }
-      return;
-    }
 
-    if (!context.mounted) return;
-    
-    showDialog(
-      context: context,
-      builder: (dialogContext) => _OrderDialog(
-        isEdit: isEdit,
-        order: order,
-        availableItems: availableItems,
-        dio: dio,
-        onSuccess: _loadOrders,
-      ),
-    );
+      if (!context.mounted) return;
+      
+      showDialog(
+        context: context,
+        builder: (dialogContext) => _OrderDialog(
+          isEdit: isEdit,
+          order: order,
+          availableItems: availableItems,
+          dio: dio,
+          onSuccess: _loadOrders,
+        ),
+      );
+    } else {
+      // Просмотр/редактирование существующего заказа
+      // Загружаем полную информацию о заказе с товарами
+      try {
+        final response = await dio.get('/api/orders/${order.id}');
+        final orderData = response.data;
+        final fullOrder = OrderModel.fromJson(orderData);
+        
+        if (!context.mounted) return;
+        
+        // Если это B2C заказ, показываем детальный просмотр
+        if (fullOrder.isB2C) {
+          final result = await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => OrderDetailScreen(order: fullOrder, dio: dio),
+            ),
+          );
+          // Если заказ был обновлен, перезагружаем список
+          if (result == true) {
+            _loadOrders();
+          }
+        } else {
+          // Для обычных заказов показываем диалог редактирования
+          List<Map<String, dynamic>> availableItems = [];
+          try {
+            final itemsResponse = await dio.get('/api/items');
+            availableItems = List<Map<String, dynamic>>.from(itemsResponse.data);
+          } catch (e) {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Ошибка загрузки товаров: $e')),
+              );
+            }
+            return;
+          }
+          
+          if (!context.mounted) return;
+          
+          showDialog(
+            context: context,
+            builder: (dialogContext) => _OrderDialog(
+              isEdit: true,
+              order: fullOrder,
+              availableItems: availableItems,
+              dio: dio,
+              onSuccess: _loadOrders,
+            ),
+          );
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Ошибка загрузки заказа: $e')),
+          );
+        }
+      }
+    }
   }
 
   void _showDeleteDialog(BuildContext context, OrderModel order) {
