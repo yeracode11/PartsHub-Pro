@@ -381,13 +381,21 @@ export class WhatsAppService implements OnModuleInit {
       let errorMessage = null;
 
       try {
-        // Получаем автомобиль клиента для замены {carModel}
+        // Получаем автомобиль клиента для замены {carModel} или {CarModel}
         let carModelText = 'автомобиль';
         if (recipient.customerId && options?.organizationId) {
           try {
+            this.logger.log(
+              `🔍 Поиск автомобилей для клиента ID: ${recipient.customerId}, организация: ${options.organizationId}`,
+            );
+            
             const vehicles = await this.vehiclesService.findByCustomer(
               options.organizationId,
               recipient.customerId,
+            );
+            
+            this.logger.log(
+              `📋 Найдено автомобилей для клиента ${recipient.customerId}: ${vehicles?.length || 0}`,
             );
             
             if (vehicles && vehicles.length > 0) {
@@ -397,28 +405,81 @@ export class WhatsAppService implements OnModuleInit {
               carModelText = vehicle.year
                 ? `${vehicle.brand} ${vehicle.model} ${vehicle.year}`
                 : `${vehicle.brand} ${vehicle.model}`;
+              
+              this.logger.log(
+                `🚗 Автомобиль клиента ${recipient.customerId}: ${carModelText}`,
+              );
+            } else {
+              this.logger.warn(
+                `⚠️ У клиента ${recipient.customerId} не найдено автомобилей. Будет использовано: "${carModelText}"`,
+              );
             }
           } catch (e) {
-            this.logger.warn(`Не удалось получить автомобиль для клиента ${recipient.customerId}: ${e.message}`);
+            this.logger.error(
+              `❌ Ошибка получения автомобиля для клиента ${recipient.customerId}: ${e.message}`,
+            );
+            this.logger.error(`   Stack: ${e.stack || 'N/A'}`);
           }
+        } else {
+          this.logger.warn(
+            `⚠️ Не указан customerId (${recipient.customerId}) или organizationId (${options?.organizationId}). Будет использовано: "${carModelText}"`,
+          );
         }
 
-        // Подставляем переменные в шаблон
-        let personalizedMessage = template.replace(
-          '{name}',
-          recipient.name || 'Уважаемый клиент',
+        // Подставляем переменные в шаблон (регистронезависимая замена)
+        let personalizedMessage = template;
+        
+        this.logger.log(
+          `🔄 Начало замены переменных для клиента ${recipient.name} (ID: ${recipient.customerId})`,
         );
+        this.logger.log(`   Исходный шаблон: ${template}`);
+        this.logger.log(`   carModelText: "${carModelText}"`);
+        
+        // Заменяем {name} или {Name}
+        const nameValue = recipient.name || 'Уважаемый клиент';
         personalizedMessage = personalizedMessage.replace(
-          '{carModel}',
+          /\{name\}/gi,
+          nameValue,
+        );
+        this.logger.log(`   Заменено {name} на: "${nameValue}"`);
+        
+        // Заменяем {carModel} или {CarModel} (регистронезависимо)
+        // Всегда выполняем замену, даже если переменной нет в шаблоне
+        const beforeReplace = personalizedMessage;
+        personalizedMessage = personalizedMessage.replace(
+          /\{carModel\}/gi,
           carModelText,
         );
         
-        // Заменяем {organizationName} если есть
+        if (beforeReplace !== personalizedMessage) {
+          this.logger.log(`   ✅ Заменено {carModel} на: "${carModelText}"`);
+        } else {
+          this.logger.warn(`   ⚠️ Переменная {carModel} не найдена в шаблоне для замены!`);
+          this.logger.warn(`   Шаблон содержит: ${template}`);
+          // Попробуем найти все переменные в шаблоне
+          const allVars = template.match(/\{[^}]+\}/g);
+          if (allVars) {
+            this.logger.warn(`   Найденные переменные в шаблоне: ${allVars.join(', ')}`);
+          }
+        }
+        
+        // Заменяем {organizationName} или {OrganizationName}
         if (options?.organizationId) {
-          // Можно добавить получение названия организации, если нужно
           personalizedMessage = personalizedMessage.replace(
-            '{organizationName}',
+            /\{organizationName\}/gi,
             'наш сервис',
+          );
+        }
+        
+        this.logger.log(
+          `📝 Финальное сообщение: ${personalizedMessage}`,
+        );
+        
+        // Проверяем, остались ли не замененные переменные
+        const remainingVars = personalizedMessage.match(/\{[^}]+\}/g);
+        if (remainingVars && remainingVars.length > 0) {
+          this.logger.warn(
+            `⚠️ В сообщении остались не замененные переменные: ${remainingVars.join(', ')}`,
           );
         }
 
@@ -436,7 +497,7 @@ export class WhatsAppService implements OnModuleInit {
         try {
           // Получаем автомобиль для истории тоже
           let carModelText = 'автомобиль';
-          if (recipient.customerId) {
+          if (recipient.customerId && options?.organizationId) {
             try {
               const vehicles = await this.vehiclesService.findByCustomer(
                 options.organizationId,
@@ -451,15 +512,23 @@ export class WhatsAppService implements OnModuleInit {
               }
             } catch (e) {
               // Игнорируем ошибку при сохранении истории
+              this.logger.warn(
+                `⚠️ Ошибка получения автомобиля для истории: ${e.message}`,
+              );
             }
           }
 
-          let historyMessage = template.replace(
-            '{name}',
+          // Регистронезависимая замена для истории
+          let historyMessage = template;
+          historyMessage = historyMessage.replace(
+            /\{name\}/gi,
             recipient.name || 'Уважаемый клиент',
           );
-          historyMessage = historyMessage.replace('{carModel}', carModelText);
-          historyMessage = historyMessage.replace('{organizationName}', 'наш сервис');
+          historyMessage = historyMessage.replace(/\{carModel\}/gi, carModelText);
+          historyMessage = historyMessage.replace(
+            /\{organizationName\}/gi,
+            'наш сервис',
+          );
 
           await this.historyService.create({
             organizationId: options.organizationId,
