@@ -8,9 +8,13 @@ import { MessageHistoryController } from './message-history.controller';
 import { MessageHistoryService } from './message-history.service';
 import { MessageTemplate } from './entities/message-template.entity';
 import { MessageHistory } from './entities/message-history.entity';
+import { VehiclesModule } from '../vehicles/vehicles.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([MessageTemplate, MessageHistory])],
+  imports: [
+    TypeOrmModule.forFeature([MessageTemplate, MessageHistory]),
+    VehiclesModule,
+  ],
   controllers: [
     WhatsAppController,
     TemplatesController,

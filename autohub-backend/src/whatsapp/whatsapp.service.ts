@@ -3,6 +3,7 @@ import { Client, LocalAuth, Message } from 'whatsapp-web.js';
 import * as qrcode from 'qrcode-terminal';
 import { MessageHistoryService } from './message-history.service';
 import { MessageStatus } from './entities/message-history.entity';
+import { VehiclesService } from '../vehicles/vehicles.service';
 
 @Injectable()
 export class WhatsAppService implements OnModuleInit {
@@ -16,6 +17,7 @@ export class WhatsAppService implements OnModuleInit {
   constructor(
     @Inject(MessageHistoryService)
     private readonly historyService: MessageHistoryService,
+    private readonly vehiclesService: VehiclesService,
   ) {}
 
   async onModuleInit() {
@@ -238,11 +240,46 @@ export class WhatsAppService implements OnModuleInit {
       let errorMessage = null;
 
       try {
-        // Подставляем имя в шаблон
-        const personalizedMessage = template.replace(
+        // Получаем автомобиль клиента для замены {carModel}
+        let carModelText = 'автомобиль';
+        if (recipient.customerId && options?.organizationId) {
+          try {
+            const vehicles = await this.vehiclesService.findByCustomer(
+              options.organizationId,
+              recipient.customerId,
+            );
+            
+            if (vehicles && vehicles.length > 0) {
+              // Берем первый автомобиль клиента
+              const vehicle = vehicles[0];
+              // Формируем строку: "Toyota Camry 2020" или "Toyota Camry" если нет года
+              carModelText = vehicle.year
+                ? `${vehicle.brand} ${vehicle.model} ${vehicle.year}`
+                : `${vehicle.brand} ${vehicle.model}`;
+            }
+          } catch (e) {
+            this.logger.warn(`Не удалось получить автомобиль для клиента ${recipient.customerId}: ${e.message}`);
+          }
+        }
+
+        // Подставляем переменные в шаблон
+        let personalizedMessage = template.replace(
           '{name}',
           recipient.name || 'Уважаемый клиент',
         );
+        personalizedMessage = personalizedMessage.replace(
+          '{carModel}',
+          carModelText,
+        );
+        
+        // Заменяем {organizationName} если есть
+        if (options?.organizationId) {
+          // Можно добавить получение названия организации, если нужно
+          personalizedMessage = personalizedMessage.replace(
+            '{organizationName}',
+            'наш сервис',
+          );
+        }
 
         await this.sendMessage(recipient.phone, personalizedMessage);
         results.sent++;
@@ -256,15 +293,39 @@ export class WhatsAppService implements OnModuleInit {
       // Сохраняем в историю
       if (options) {
         try {
+          // Получаем автомобиль для истории тоже
+          let carModelText = 'автомобиль';
+          if (recipient.customerId) {
+            try {
+              const vehicles = await this.vehiclesService.findByCustomer(
+                options.organizationId,
+                recipient.customerId,
+              );
+              
+              if (vehicles && vehicles.length > 0) {
+                const vehicle = vehicles[0];
+                carModelText = vehicle.year
+                  ? `${vehicle.brand} ${vehicle.model} ${vehicle.year}`
+                  : `${vehicle.brand} ${vehicle.model}`;
+              }
+            } catch (e) {
+              // Игнорируем ошибку при сохранении истории
+            }
+          }
+
+          let historyMessage = template.replace(
+            '{name}',
+            recipient.name || 'Уважаемый клиент',
+          );
+          historyMessage = historyMessage.replace('{carModel}', carModelText);
+          historyMessage = historyMessage.replace('{organizationName}', 'наш сервис');
+
           await this.historyService.create({
             organizationId: options.organizationId,
             sentBy: options.sentBy,
             customerId: recipient.customerId,
             phone: recipient.phone,
-            message: template.replace(
-              '{name}',
-              recipient.name || 'Уважаемый клиент',
-            ),
+            message: historyMessage,
             status,
             errorMessage,
             isBulk: true,
