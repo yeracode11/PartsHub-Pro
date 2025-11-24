@@ -142,24 +142,18 @@ class _MainScreenState extends State<MainScreen> {
                   padding: const EdgeInsets.all(24),
                   child: Row(
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          gradient: AppTheme.primaryGradient,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(
-                          Icons.car_repair,
-                          color: Colors.white,
-                          size: 24,
-                        ),
+                      Image.asset(
+                        'assets/icons/auto-plus-logo.png',
+                        width: 66,
+                        height: 66,
+                        fit: BoxFit.contain,
                       ),
                       const SizedBox(width: 12),
                       const Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'AutoHub',
+                            'Auto+',
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
@@ -167,7 +161,7 @@ class _MainScreenState extends State<MainScreen> {
                             ),
                           ),
                           Text(
-                            'B2B Platform',
+                            'B2B платформа',
                             style: TextStyle(
                               fontSize: 11,
                               color: AppTheme.textSecondary,

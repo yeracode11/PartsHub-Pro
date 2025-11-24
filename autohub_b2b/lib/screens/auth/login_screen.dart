@@ -61,13 +61,13 @@ class _LoginScreenState extends State<LoginScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       // Логотип
-                      Icon(
-                        Icons.car_repair,
-                        size: 80,
-                        color: Theme.of(context).primaryColor,
-                      ),
-                      const SizedBox(height: 16),
                       
+                      Image.asset(
+                        'assets/icons/auto-plus-logo.png',
+                        width: 85,
+                        height: 85,
+                        fit: BoxFit.contain,
+                      ),
                       // Заголовок
                       Text(
                         'Auto+ Pro',

@@ -1,7 +1,7 @@
 /// App-wide constants
 class AppConstants {
   // App info
-  static const String appName = 'AutoHub B2B';
+  static const String appName = 'Auto+ Pro';
   static const String appVersion = '1.0.0';
   static const String appDescription = 'Platform for auto dismantlers, car services and car washes';
 

@@ -99,7 +99,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Добро пожаловать в AutoHub B2B',
+                    'Добро пожаловать в Auto+ Pro',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: AppTheme.textSecondary,
                         ),

@@ -23,9 +23,10 @@ export class WhatsAppController {
    * Проверка статуса WhatsApp клиента
    */
   @Get('status')
-  getStatus() {
-    const isReady = this.whatsappService.isClientReady();
-    const qrCode = this.whatsappService.getQRCode();
+  getStatus(@CurrentUser() user: any) {
+    const userId = user.userId || user.id;
+    const isReady = this.whatsappService.isClientReady(userId);
+    const qrCode = this.whatsappService.getQRCode(userId);
 
     return {
       ready: isReady,
@@ -42,8 +43,15 @@ export class WhatsAppController {
    * Получить QR код для авторизации
    */
   @Get('qr')
-  getQRCode() {
-    const qrCode = this.whatsappService.getQRCode();
+  getQRCode(@CurrentUser() user: any) {
+    const userId = user.userId || user.id;
+    
+    // Инициализируем сессию, если её еще нет
+    this.whatsappService.initializeUserSession(userId).catch(err => {
+      console.error('Ошибка инициализации сессии:', err);
+    });
+    
+    const qrCode = this.whatsappService.getQRCode(userId);
 
     if (!qrCode) {
       return {
@@ -64,9 +72,11 @@ export class WhatsAppController {
   @Post('send')
   @Roles(UserRole.OWNER, UserRole.MANAGER)
   async sendMessage(
+    @CurrentUser() user: any,
     @Body() body: { phone: string; message: string },
   ) {
     const { phone, message } = body;
+    const userId = user.userId || user.id;
 
     if (!phone || !message) {
       throw new HttpException(
@@ -76,7 +86,7 @@ export class WhatsAppController {
     }
 
     try {
-      await this.whatsappService.sendMessage(phone, message);
+      await this.whatsappService.sendMessage(userId, phone, message);
 
       return {
         success: true,
@@ -122,8 +132,10 @@ export class WhatsAppController {
       );
     }
 
+    const userId = user.userId || user.id;
+    
     // Проверяем статус WhatsApp перед рассылкой
-    const isReady = this.whatsappService.isClientReady();
+    const isReady = this.whatsappService.isClientReady(userId);
     if (!isReady) {
       throw new HttpException(
         'WhatsApp клиент не готов. Проверьте подключение и отсканируйте QR код при необходимости.',
@@ -133,12 +145,13 @@ export class WhatsAppController {
 
     try {
       const results = await this.whatsappService.sendBulk(
+        userId,
         recipients,
         template,
         delayMs,
         {
           organizationId: user.organizationId,
-          sentBy: user.userId,
+          sentBy: userId,
           campaignName,
         },
       );
@@ -169,9 +182,11 @@ export class WhatsAppController {
    */
   @Post('reconnect')
   @Roles(UserRole.OWNER, UserRole.MANAGER)
-  async reconnect() {
+  async reconnect(@CurrentUser() user: any) {
+    const userId = user.userId || user.id;
+    
     try {
-      await this.whatsappService.reconnect();
+      await this.whatsappService.reconnect(userId);
       
       return {
         success: true,
@@ -186,11 +201,35 @@ export class WhatsAppController {
   }
 
   /**
+   * Выйти из WhatsApp аккаунта
+   */
+  @Post('logout')
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  async logout(@CurrentUser() user: any) {
+    const userId = user.userId || user.id;
+    
+    try {
+      await this.whatsappService.logout(userId);
+      
+      return {
+        success: true,
+        message: 'Вы успешно вышли из WhatsApp',
+      };
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Ошибка выхода из аккаунта',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  /**
    * Отправить сообщение с медиа
    */
   @Post('send-media')
   @Roles(UserRole.OWNER, UserRole.MANAGER)
   async sendMedia(
+    @CurrentUser() user: any,
     @Body()
     body: {
       phone: string;
@@ -199,6 +238,7 @@ export class WhatsAppController {
     },
   ) {
     const { phone, mediaUrl, caption } = body;
+    const userId = user.userId || user.id;
 
     if (!phone || !mediaUrl) {
       throw new HttpException(
@@ -208,7 +248,7 @@ export class WhatsAppController {
     }
 
     try {
-      await this.whatsappService.sendMediaMessage(phone, mediaUrl, caption);
+      await this.whatsappService.sendMediaMessage(userId, phone, mediaUrl, caption);
 
       return {
         success: true,

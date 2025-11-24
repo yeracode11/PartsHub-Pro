@@ -147,6 +147,93 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
     } catch (e) {
       if (mounted) {
         Navigator.pop(context); // Закрываем диалог прогресса
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка переподключения: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _logoutWhatsApp() async {
+    // Подтверждение выхода
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Выход из WhatsApp'),
+        content: const Text(
+          'Вы уверены, что хотите выйти из WhatsApp? Вам потребуется снова отсканировать QR код для авторизации.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Выйти'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      // Показываем диалог прогресса
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const AlertDialog(
+          content: Row(
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 20),
+              Text('Выход из WhatsApp...'),
+            ],
+          ),
+        ),
+      );
+
+      await dio.post('/api/whatsapp/logout');
+      
+      if (mounted) {
+        Navigator.pop(context); // Закрываем диалог прогресса
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Вы успешно вышли из WhatsApp'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        
+        // Сбрасываем состояние
+        setState(() {
+          isWhatsAppReady = false;
+          qrCode = null;
+          statusMessage = 'Требуется авторизация';
+        });
+        
+        // Обновляем статус (это создаст новую сессию и покажет QR код)
+        await _checkWhatsAppStatus();
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // Закрываем диалог прогресса
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка выхода: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Ошибка переподключения: $e'),
@@ -395,6 +482,16 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
                   label: const Text('Переподключить'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.orange,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              if (isWhatsAppReady)
+                ElevatedButton.icon(
+                  onPressed: _logoutWhatsApp,
+                  icon: const Icon(Icons.logout),
+                  label: const Text('Выйти'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
                     foregroundColor: Colors.white,
                   ),
                 ),
