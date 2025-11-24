@@ -234,15 +234,6 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
       }
     }
   }
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Ошибка переподключения: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
 
   Future<void> _refreshQr() async {
     try {

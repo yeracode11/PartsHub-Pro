@@ -26,13 +26,43 @@ import { IncomingModule } from './incoming/incoming.module';
     }),
 
     TypeOrmModule.forRootAsync({
-      useFactory: () => ({
-        type: 'postgres',
-        url: process.env.DATABASE_URL, // 👈 используем именно это
-        autoLoadEntities: true,
-        synchronize: true, // ⚠️ Временно включено для синхронизации схемы
-        ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : undefined,
-      }),
+      useFactory: () => {
+        // Используем отдельные переменные окружения для большей надежности
+        const config: any = {
+          type: 'postgres',
+          host: process.env.DB_HOST || 'localhost',
+          port: parseInt(process.env.DB_PORT || '5432', 10),
+          username: process.env.DB_USER || 'postgres',
+          password: process.env.DB_PASSWORD || '', // Явно как строка
+          database: process.env.DB_NAME || 'autohubdb',
+          autoLoadEntities: true,
+          synchronize: process.env.NODE_ENV !== 'production', // Отключено в production
+        };
+
+        // Если есть DATABASE_URL, используем его (приоритет)
+        if (process.env.DATABASE_URL) {
+          config.url = process.env.DATABASE_URL;
+        }
+
+        // SSL только в production
+        if (process.env.NODE_ENV === 'production') {
+          config.ssl = { rejectUnauthorized: false };
+        }
+
+        // Логирование для отладки (только если пароль не пустой)
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('🔌 Database config:', {
+            host: config.host,
+            port: config.port,
+            username: config.username,
+            database: config.database,
+            passwordSet: !!config.password,
+            hasUrl: !!config.url,
+          });
+        }
+
+        return config;
+      },
     }),
 
     AuthModule,

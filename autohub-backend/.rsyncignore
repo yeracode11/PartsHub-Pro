@@ -1,0 +1,50 @@
+# Игнорируемые файлы при деплое через rsync
+
+# Node modules (устанавливаются на сервере)
+node_modules/
+
+# Git
+.git/
+.gitignore
+
+# Логи
+*.log
+logs/
+
+# Временные файлы
+.tmp/
+tmp/
+*.tmp
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Тесты
+coverage/
+.nyc_output/
+test/
+
+# WhatsApp сессии (создаются на сервере)
+.wwebjs_auth/
+
+# Environment файлы (не должны попадать на сервер)
+.env
+.env.local
+.env.*.local
+
+# Build артефакты (собираются локально)
+dist/
+build/
+
+# OS файлы
+.DS_Store
+Thumbs.db
+
+# Flutter проекты (не нужны на сервере)
+../autohub_b2b/
+../autohub_b2c/
+
