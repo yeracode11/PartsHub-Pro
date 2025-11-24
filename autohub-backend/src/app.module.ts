@@ -27,21 +27,38 @@ import { IncomingModule } from './incoming/incoming.module';
 
     TypeOrmModule.forRootAsync({
       useFactory: () => {
+        // Явно преобразуем пароль в строку (критично для PostgreSQL)
+        const dbPassword = process.env.DB_PASSWORD 
+          ? String(process.env.DB_PASSWORD).trim() 
+          : '';
+
         // Используем отдельные переменные окружения для большей надежности
         const config: any = {
           type: 'postgres',
           host: process.env.DB_HOST || 'localhost',
           port: parseInt(process.env.DB_PORT || '5432', 10),
           username: process.env.DB_USER || 'postgres',
-          password: process.env.DB_PASSWORD || '', // Явно как строка
+          password: dbPassword, // Явно как строка
           database: process.env.DB_NAME || 'autohubdb',
           autoLoadEntities: true,
           synchronize: process.env.NODE_ENV !== 'production', // Отключено в production
         };
 
-        // Если есть DATABASE_URL, используем его (приоритет)
+        // Если есть DATABASE_URL, парсим его и используем отдельные параметры
+        // Это более надежно, чем передавать URL напрямую
         if (process.env.DATABASE_URL) {
-          config.url = process.env.DATABASE_URL;
+          try {
+            const url = new URL(process.env.DATABASE_URL);
+            config.host = url.hostname;
+            config.port = parseInt(url.port || '5432', 10);
+            config.username = decodeURIComponent(url.username);
+            // Пароль из URL - явно как строка
+            config.password = url.password ? String(decodeURIComponent(url.password)) : '';
+            config.database = url.pathname.slice(1); // Убираем первый /
+          } catch (error) {
+            console.error('❌ Error parsing DATABASE_URL:', error);
+            // Продолжаем с отдельными переменными
+          }
         }
 
         // SSL только в production
@@ -49,16 +66,22 @@ import { IncomingModule } from './incoming/incoming.module';
           config.ssl = { rejectUnauthorized: false };
         }
 
-        // Логирование для отладки (только если пароль не пустой)
-        if (process.env.NODE_ENV !== 'production') {
-          console.log('🔌 Database config:', {
-            host: config.host,
-            port: config.port,
-            username: config.username,
-            database: config.database,
-            passwordSet: !!config.password,
-            hasUrl: !!config.url,
-          });
+        // Логирование для диагностики
+        console.log('🔌 Database config:', {
+          host: config.host,
+          port: config.port,
+          username: config.username,
+          database: config.database,
+          passwordType: typeof config.password,
+          passwordLength: config.password ? config.password.length : 0,
+          passwordSet: !!config.password,
+          hasDatabaseUrl: !!process.env.DATABASE_URL,
+        });
+
+        // Критическая проверка: пароль должен быть строкой
+        if (typeof config.password !== 'string') {
+          console.error('❌ CRITICAL: password is not a string!', typeof config.password);
+          config.password = String(config.password || '');
         }
 
         return config;
