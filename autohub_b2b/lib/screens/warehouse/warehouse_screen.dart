@@ -5,12 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:dio/dio.dart';
 import 'package:autohub_b2b/services/api/api_client.dart';
 import 'package:autohub_b2b/screens/warehouse/item_edit_screen.dart';
-import 'package:autohub_b2b/screens/warehouse/incoming_list_screen.dart';
 import 'package:autohub_b2b/screens/warehouse/printer_settings_screen.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:autohub_b2b/blocs/auth/auth_bloc.dart';
-import 'package:autohub_b2b/blocs/auth/auth_state.dart';
-import 'package:autohub_b2b/models/user_model.dart';
 
 class WarehouseScreen extends StatefulWidget {
   const WarehouseScreen({super.key});
@@ -169,44 +164,9 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          children: [
-                            Text(
-                              'Склад',
-                              style: Theme.of(context).textTheme.displayMedium,
-                            ),
-                            BlocBuilder<AuthBloc, AuthState>(
-                              builder: (context, state) {
-                                if (state is AuthAuthenticated) {
-                                  final user = state.user;
-                                  // Оприходование доступно для: Автосервис, Авторазбор, Магазин (но не для Автомойка)
-                                  final canAccessIncoming = user.businessType != BusinessType.carwash;
-                                  
-                                  if (canAccessIncoming) {
-                                    return Padding(
-                                      padding: const EdgeInsets.only(left: 16),
-                                      child: ElevatedButton.icon(
-                                        onPressed: () {
-                                          Navigator.of(context).push(
-                                            MaterialPageRoute(
-                                              builder: (context) => const IncomingListScreen(),
-                                            ),
-                                          );
-                                        },
-                                        icon: const Icon(Icons.receipt_long),
-                                        label: const Text('Приход'),
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: AppTheme.primaryColor,
-                                          foregroundColor: Colors.white,
-                                        ),
-                                      ),
-                                    );
-                                  }
-                                }
-                                return const SizedBox.shrink();
-                              },
-                            ),
-                          ],
+                        Text(
+                          'Товары',
+                          style: Theme.of(context).textTheme.displayMedium,
                         ),
                         const SizedBox(height: 4),
                         Text(
@@ -459,7 +419,6 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
     final isEdit = item != null;
     final nameController = TextEditingController(text: item?.name ?? '');
     final skuController = TextEditingController(text: item?.sku ?? '');
-    final categoryController = TextEditingController(text: item?.category ?? '');
     final priceController =
         TextEditingController(text: item?.price.toString() ?? '');
     final quantityController =
@@ -467,86 +426,115 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
     final descriptionController =
         TextEditingController(text: item?.description ?? '');
 
+    // Категории товаров (как в B2C, но без "Все")
+    final List<String> categories = [
+      'Двигатель',
+      'Трансмиссия',
+      'Тормозная система',
+      'Подвеска',
+      'Электрика',
+      'Кузов',
+      'Салон',
+      'Оптика',
+      'Фильтры',
+      'Расходники',
+    ];
+    
+    String? selectedCategory = item?.category;
+
     showDialog(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(isEdit ? 'Редактировать товар' : 'Добавить товар'),
-        content: SizedBox(
-          width: 500,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Название *',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: skuController,
-                  decoration: const InputDecoration(
-                    labelText: 'Артикул',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: categoryController,
-                  decoration: const InputDecoration(
-                    labelText: 'Категория',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: priceController,
-                        decoration: const InputDecoration(
-                          labelText: 'Цена *',
-                          border: OutlineInputBorder(),
-                          suffixText: '₸',
-                        ),
-                        keyboardType: TextInputType.number,
-                      ),
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(isEdit ? 'Редактировать товар' : 'Добавить товар'),
+          content: SizedBox(
+            width: 500,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Название *',
+                      border: OutlineInputBorder(),
                     ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: TextField(
-                        controller: quantityController,
-                        decoration: const InputDecoration(
-                          labelText: 'Количество *',
-                          border: OutlineInputBorder(),
-                        ),
-                        keyboardType: TextInputType.number,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: descriptionController,
-                  decoration: const InputDecoration(
-                    labelText: 'Описание',
-                    border: OutlineInputBorder(),
                   ),
-                  maxLines: 3,
-                ),
-              ],
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: skuController,
+                    decoration: const InputDecoration(
+                      labelText: 'Артикул',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    value: selectedCategory,
+                    decoration: const InputDecoration(
+                      labelText: 'Категория',
+                      border: OutlineInputBorder(),
+                    ),
+                    hint: const Text('Выберите категорию'),
+                    items: categories.map((category) {
+                      return DropdownMenuItem(
+                        value: category,
+                        child: Text(category),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      setDialogState(() {
+                        selectedCategory = value;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: priceController,
+                          decoration: const InputDecoration(
+                            labelText: 'Цена *',
+                            border: OutlineInputBorder(),
+                            suffixText: '₸',
+                          ),
+                          keyboardType: TextInputType.number,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: TextField(
+                          controller: quantityController,
+                          decoration: const InputDecoration(
+                            labelText: 'Количество *',
+                            border: OutlineInputBorder(),
+                          ),
+                          keyboardType: TextInputType.number,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: descriptionController,
+                    decoration: const InputDecoration(
+                      labelText: 'Описание',
+                      border: OutlineInputBorder(),
+                    ),
+                    maxLines: 3,
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: () async {
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Отмена'),
+            ),
+            FilledButton(
+              onPressed: () async {
               if (nameController.text.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Укажите название товара')),
@@ -557,9 +545,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
               final data = {
                 'name': nameController.text,
                 'sku': skuController.text.isEmpty ? null : skuController.text,
-                'category': categoryController.text.isEmpty
-                    ? 'Общее'
-                    : categoryController.text,
+                'category': selectedCategory,
                 'price': double.tryParse(priceController.text) ?? 0,
                 'quantity': int.tryParse(quantityController.text) ?? 0,
                 'description': descriptionController.text.isEmpty
@@ -597,6 +583,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
           ),
         ],
       ),
+    ),
     );
   }
 

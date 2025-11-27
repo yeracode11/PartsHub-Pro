@@ -9,6 +9,8 @@ import 'package:autohub_b2b/services/database/database.dart';
 import 'package:autohub_b2b/screens/auth/login_screen.dart';
 import 'package:autohub_b2b/screens/dashboard/dashboard_screen.dart';
 import 'package:autohub_b2b/screens/warehouse/warehouse_screen.dart';
+import 'package:autohub_b2b/screens/warehouse/incoming_list_screen.dart';
+import 'package:autohub_b2b/screens/warehouse/warehouse_location_screen.dart';
 import 'package:autohub_b2b/screens/sales/sales_screen.dart';
 import 'package:autohub_b2b/screens/crm/crm_screen.dart';
 import 'package:autohub_b2b/screens/analytics/analytics_screen.dart';
@@ -108,6 +110,8 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
+  bool _warehouseMenuExpanded = false;
+  int? _warehouseSubMenuIndex; // null = закрыто, 0 = Товары, 1 = Оприходование, 2 = Расположение
 
   final List<Widget> _screens = [
     const DashboardScreen(),
@@ -119,6 +123,23 @@ class _MainScreenState extends State<MainScreen> {
     const WhatsAppScreen(),
     const PlaceholderScreen(title: 'Настройки'),
   ];
+
+  // Экраны для подменю Склад
+  Widget _getWarehouseScreen() {
+    if (_warehouseSubMenuIndex == null) {
+      return const WarehouseScreen(); // По умолчанию показываем Товары
+    }
+    switch (_warehouseSubMenuIndex) {
+      case 0:
+        return const WarehouseScreen(); // Товары
+      case 1:
+        return const IncomingListScreen(); // Оприходование
+      case 2:
+        return const WarehouseLocationScreen(); // Расположение
+      default:
+        return const WarehouseScreen();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -185,12 +206,7 @@ class _MainScreenState extends State<MainScreen> {
                         label: 'Дашборд',
                         index: 0,
                       ),
-                      _buildNavItem(
-                        icon: Icons.inventory_2_outlined,
-                        selectedIcon: Icons.inventory_2,
-                        label: 'Склад',
-                        index: 1,
-                      ),
+                      _buildWarehouseMenu(),
                       _buildNavItem(
                         icon: Icons.shopping_bag_outlined,
                         selectedIcon: Icons.shopping_bag,
@@ -344,9 +360,175 @@ class _MainScreenState extends State<MainScreen> {
           
           // Основной контент
           Expanded(
-            child: _screens[_selectedIndex],
+            child: _selectedIndex == 1 
+                ? _getWarehouseScreen() 
+                : _screens[_selectedIndex],
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildWarehouseMenu() {
+    final isSelected = _selectedIndex == 1;
+    
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () {
+                setState(() {
+                  if (_selectedIndex == 1) {
+                    // Если уже выбран Склад, просто открываем/закрываем подменю
+                    _warehouseMenuExpanded = !_warehouseMenuExpanded;
+                    if (!_warehouseMenuExpanded) {
+                      _warehouseSubMenuIndex = null;
+                    } else if (_warehouseSubMenuIndex == null) {
+                      _warehouseSubMenuIndex = 0; // По умолчанию Товары
+                    }
+                  } else {
+                    // Если Склад не выбран, открываем его и подменю
+                    _selectedIndex = 1;
+                    _warehouseMenuExpanded = true;
+                    _warehouseSubMenuIndex = 0; // По умолчанию Товары
+                  }
+                });
+              },
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? AppTheme.primaryColor.withOpacity(0.1)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      isSelected ? Icons.inventory_2 : Icons.inventory_2_outlined,
+                      color: isSelected
+                          ? AppTheme.primaryColor
+                          : AppTheme.textSecondary,
+                      size: 22,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Склад',
+                        style: TextStyle(
+                          color: isSelected
+                              ? AppTheme.primaryColor
+                              : AppTheme.textPrimary,
+                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                    Icon(
+                      _warehouseMenuExpanded
+                          ? Icons.expand_less
+                          : Icons.expand_more,
+                      color: isSelected
+                          ? AppTheme.primaryColor
+                          : AppTheme.textSecondary,
+                      size: 20,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        // Подменю
+        if (_warehouseMenuExpanded && isSelected)
+          Padding(
+            padding: const EdgeInsets.only(left: 16, bottom: 4),
+            child: Column(
+              children: [
+                _buildSubMenuItem(
+                  icon: Icons.inventory_2_outlined,
+                  label: 'Товары',
+                  subIndex: 0,
+                ),
+                _buildSubMenuItem(
+                  icon: Icons.receipt_long_outlined,
+                  label: 'Оприходование',
+                  subIndex: 1,
+                ),
+                _buildSubMenuItem(
+                  icon: Icons.location_on_outlined,
+                  label: 'Расположение',
+                  subIndex: 2,
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildSubMenuItem({
+    required IconData icon,
+    required String label,
+    required int subIndex,
+  }) {
+    final isSelected = _selectedIndex == 1 && _warehouseSubMenuIndex == subIndex;
+    
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            setState(() {
+              _selectedIndex = 1;
+              _warehouseSubMenuIndex = subIndex;
+            });
+          },
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? AppTheme.primaryColor.withOpacity(0.15)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(8),
+              border: isSelected
+                  ? Border.all(
+                      color: AppTheme.primaryColor.withOpacity(0.3),
+                      width: 1,
+                    )
+                  : null,
+            ),
+            child: Row(
+              children: [
+                const SizedBox(width: 8),
+                Icon(
+                  icon,
+                  color: isSelected
+                      ? AppTheme.primaryColor
+                      : AppTheme.textSecondary,
+                  size: 18,
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: isSelected
+                        ? AppTheme.primaryColor
+                        : AppTheme.textPrimary,
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -367,6 +549,10 @@ class _MainScreenState extends State<MainScreen> {
           onTap: () {
             setState(() {
               _selectedIndex = index;
+              if (index != 1) {
+                _warehouseMenuExpanded = false;
+                _warehouseSubMenuIndex = null;
+              }
             });
           },
           borderRadius: BorderRadius.circular(12),

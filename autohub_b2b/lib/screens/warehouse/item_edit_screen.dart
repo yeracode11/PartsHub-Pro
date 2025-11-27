@@ -20,7 +20,6 @@ class ItemEditScreen extends StatefulWidget {
 class _ItemEditScreenState extends State<ItemEditScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
-  final _categoryController = TextEditingController();
   final _skuController = TextEditingController();
   final _priceController = TextEditingController();
   final _quantityController = TextEditingController();
@@ -29,11 +28,26 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
   late final ApiClient _apiClient;
   late final ImageUploadService _imageUploadService;
   
+  String? _selectedCategory;
   String _selectedCondition = 'new';
   bool _isLoading = false;
   List<String> _currentImages = [];
 
   final List<String> _conditions = ['new', 'used', 'refurbished'];
+  
+  // Категории товаров (как в B2C, но без "Все")
+  final List<String> _categories = [
+    'Двигатель',
+    'Трансмиссия',
+    'Тормозная система',
+    'Подвеска',
+    'Электрика',
+    'Кузов',
+    'Салон',
+    'Оптика',
+    'Фильтры',
+    'Расходники',
+  ];
 
   @override
   void initState() {
@@ -43,7 +57,11 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
     
     // Инициализируем поля формы
     _nameController.text = widget.item.name ?? '';
-    _categoryController.text = widget.item.category ?? '';
+    // Проверяем, что категория существует в списке, иначе устанавливаем null
+    final itemCategory = widget.item.category;
+    _selectedCategory = itemCategory != null && _categories.contains(itemCategory) 
+        ? itemCategory 
+        : null;
     _skuController.text = widget.item.sku ?? '';
     _priceController.text = widget.item.price.toString();
     _quantityController.text = widget.item.quantity.toString();
@@ -55,7 +73,6 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
   @override
   void dispose() {
     _nameController.dispose();
-    _categoryController.dispose();
     _skuController.dispose();
     _priceController.dispose();
     _quantityController.dispose();
@@ -111,12 +128,24 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
                     Row(
                       children: [
                         Expanded(
-                          child: TextFormField(
-                            controller: _categoryController,
+                          child: DropdownButtonFormField<String>(
+                            value: _selectedCategory,
                             decoration: const InputDecoration(
                               labelText: 'Категория',
                               border: OutlineInputBorder(),
                             ),
+                            hint: const Text('Выберите категорию'),
+                            items: _categories.map((category) {
+                              return DropdownMenuItem(
+                                value: category,
+                                child: Text(category),
+                              );
+                            }).toList(),
+                            onChanged: (value) {
+                              setState(() {
+                                _selectedCategory = value;
+                              });
+                            },
                           ),
                         ),
                         const SizedBox(width: 16),
@@ -298,7 +327,7 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
     try {
       final itemData = {
         'name': _nameController.text,
-        'category': _categoryController.text.isEmpty ? null : _categoryController.text,
+        'category': _selectedCategory,
         'sku': _skuController.text.isEmpty ? null : _skuController.text,
         'price': double.parse(_priceController.text),
         'quantity': int.parse(_quantityController.text),

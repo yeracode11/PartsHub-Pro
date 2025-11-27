@@ -34,6 +34,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
   final List<String> _categories = [
     'Все',
     'Двигатель',
+    'Трансмиссия',
     'Тормозная система',
     'Подвеска',
     'Электрика',
