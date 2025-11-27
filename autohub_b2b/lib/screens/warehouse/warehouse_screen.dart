@@ -425,6 +425,8 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
         TextEditingController(text: item?.quantity.toString() ?? '');
     final descriptionController =
         TextEditingController(text: item?.description ?? '');
+    final warehouseCellController =
+        TextEditingController(text: item?.warehouseCell ?? '');
 
     // Категории товаров (как в B2C, но без "Все")
     final List<String> categories = [
@@ -524,6 +526,16 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                     ),
                     maxLines: 3,
                   ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: warehouseCellController,
+                    decoration: const InputDecoration(
+                      labelText: 'Ячейка склада',
+                      hintText: 'Например: A-1-2',
+                      prefixIcon: Icon(Icons.location_on),
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -551,6 +563,9 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                 'description': descriptionController.text.isEmpty
                     ? null
                     : descriptionController.text,
+                'warehouseCell': warehouseCellController.text.isEmpty
+                    ? null
+                    : warehouseCellController.text.trim(),
                 'condition': 'new',
               };
 

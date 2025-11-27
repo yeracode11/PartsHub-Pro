@@ -11,6 +11,7 @@ class ItemModel extends Equatable {
   final String? description;
   final String? imageUrl;
   final List<String>? images;
+  final String? warehouseCell;
   final bool synced;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -26,6 +27,7 @@ class ItemModel extends Equatable {
     this.description,
     this.imageUrl,
     this.images,
+    this.warehouseCell,
     this.synced = false,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -43,6 +45,7 @@ class ItemModel extends Equatable {
     String? description,
     String? imageUrl,
     List<String>? images,
+    String? warehouseCell,
     bool? synced,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -58,6 +61,7 @@ class ItemModel extends Equatable {
       description: description ?? this.description,
       imageUrl: imageUrl ?? this.imageUrl,
       images: images ?? this.images,
+      warehouseCell: warehouseCell ?? this.warehouseCell,
       synced: synced ?? this.synced,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -76,6 +80,7 @@ class ItemModel extends Equatable {
       'description': description,
       'imageUrl': imageUrl,
       'images': images,
+      'warehouseCell': warehouseCell,
       'synced': synced,
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
@@ -107,6 +112,7 @@ class ItemModel extends Equatable {
       images: json['images'] != null 
           ? List<String>.from(json['images'] as List)
           : null,
+      warehouseCell: json['warehouseCell'] as String?,
       synced: json['synced'] as bool? ?? false,
       createdAt: json['createdAt'] != null 
           ? DateTime.parse(json['createdAt'] as String)
@@ -129,6 +135,7 @@ class ItemModel extends Equatable {
         description,
         imageUrl,
         images,
+        warehouseCell,
         synced,
         createdAt,
         updatedAt,

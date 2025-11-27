@@ -49,5 +49,47 @@ export class DashboardController {
     }
     return this.dashboardService.getCategoryStats(organizationId);
   }
+
+  @Get('advanced')
+  async getAdvancedAnalytics(@CurrentUser() user: any) {
+    const organizationId = await this.resolveOrganizationId(user);
+    if (!organizationId) {
+      return {} as any;
+    }
+    return this.dashboardService.getAdvancedAnalytics(organizationId);
+  }
+
+  @Get('top-selling-items')
+  async getTopSellingItems(
+    @Query('limit') limit: string = '10',
+    @CurrentUser() user: any,
+  ) {
+    const organizationId = await this.resolveOrganizationId(user);
+    if (!organizationId) {
+      return { items: [] } as any;
+    }
+    return this.dashboardService.getTopSellingItems(organizationId, parseInt(limit));
+  }
+
+  @Get('low-stock-items')
+  async getLowStockItems(
+    @Query('threshold') threshold: string = '5',
+    @CurrentUser() user: any,
+  ) {
+    const organizationId = await this.resolveOrganizationId(user);
+    if (!organizationId) {
+      return { items: [] } as any;
+    }
+    return this.dashboardService.getLowStockItems(organizationId, parseInt(threshold));
+  }
+
+  @Get('sales-by-category')
+  async getSalesByCategory(@CurrentUser() user: any) {
+    const organizationId = await this.resolveOrganizationId(user);
+    if (!organizationId) {
+      return { categories: [] } as any;
+    }
+    return this.dashboardService.getSalesByCategory(organizationId);
+  }
 }
 

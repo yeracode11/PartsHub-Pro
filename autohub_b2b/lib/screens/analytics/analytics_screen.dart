@@ -17,9 +17,14 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   bool isLoading = true;
   String? error;
 
-  List<Map<String, dynamic>> categoryStats = [];
-  List<Map<String, dynamic>> topItems = [];
-  List<Map<String, dynamic>> topCustomers = [];
+  // Данные для аналитики
+  Map<String, dynamic>? advancedAnalytics;
+  List<Map<String, dynamic>> topSellingItems = [];
+  List<Map<String, dynamic>> lowStockItems = [];
+  List<Map<String, dynamic>> salesByCategory = [];
+  Map<String, dynamic>? salesChart;
+
+  String selectedPeriod = '30d';
 
   @override
   void initState() {
@@ -34,23 +39,31 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     });
 
     try {
-      // Загружаем статистику по категориям
-      final categoryResponse = await dio.get('/api/dashboard/category-stats');
-      categoryStats = List<Map<String, dynamic>>.from(
-        categoryResponse.data['categories'],
+      // Загружаем расширенную аналитику
+      final analyticsResponse = await dio.get('/api/dashboard/advanced');
+      advancedAnalytics = analyticsResponse.data;
+
+      // Топ продаваемых товаров
+      final topItemsResponse = await dio.get('/api/dashboard/top-selling-items?limit=10');
+      topSellingItems = List<Map<String, dynamic>>.from(
+        topItemsResponse.data['items'] ?? [],
       );
 
-      // Загружаем популярные товары
-      final itemsResponse = await dio.get('/api/items/popular?limit=10');
-      topItems = List<Map<String, dynamic>>.from(
-        itemsResponse.data['items'],
+      // Товары с низким остатком
+      final lowStockResponse = await dio.get('/api/dashboard/low-stock-items?threshold=5');
+      lowStockItems = List<Map<String, dynamic>>.from(
+        lowStockResponse.data['items'] ?? [],
       );
 
-      // Загружаем топ клиентов
-      final customersResponse = await dio.get('/api/customers/top?limit=10');
-      topCustomers = List<Map<String, dynamic>>.from(
-        customersResponse.data['customers'],
+      // Продажи по категориям
+      final categorySalesResponse = await dio.get('/api/dashboard/sales-by-category');
+      salesByCategory = List<Map<String, dynamic>>.from(
+        categorySalesResponse.data['categories'] ?? [],
       );
+
+      // График продаж
+      final chartResponse = await dio.get('/api/dashboard/sales-chart?period=$selectedPeriod');
+      salesChart = chartResponse.data;
 
       setState(() {
         isLoading = false;
@@ -90,17 +103,37 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Детальная аналитика и отчеты',
+                      'Детальная аналитика продаж и товаров',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                             color: AppTheme.textSecondary,
                           ),
                     ),
                   ],
                 ),
-                IconButton(
-                  icon: const Icon(Icons.refresh),
-                  onPressed: _loadAnalytics,
-                  tooltip: 'Обновить',
+                Row(
+                  children: [
+                    // Выбор периода для графика
+                    SegmentedButton<String>(
+                      segments: const [
+                        ButtonSegment(value: '7d', label: Text('7 дней')),
+                        ButtonSegment(value: '30d', label: Text('30 дней')),
+                        ButtonSegment(value: '90d', label: Text('90 дней')),
+                      ],
+                      selected: {selectedPeriod},
+                      onSelectionChanged: (Set<String> newSelection) {
+                        setState(() {
+                          selectedPeriod = newSelection.first;
+                        });
+                        _loadAnalytics();
+                      },
+                    ),
+                    const SizedBox(width: 16),
+                    IconButton(
+                      icon: const Icon(Icons.refresh),
+                      onPressed: _loadAnalytics,
+                      tooltip: 'Обновить',
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -143,26 +176,265 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Статистика по категориям
-          _buildCategoryChart(),
+          // Ключевые метрики
+          if (advancedAnalytics != null) _buildKeyMetrics(),
           const SizedBox(height: 24),
 
-          // Топ товары и клиенты
+          // График продаж
+          if (salesChart != null) _buildSalesChart(),
+          const SizedBox(height: 24),
+
+          // Две колонки
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(child: _buildTopItems()),
+              // Топ продаваемых товаров
+              Expanded(child: _buildTopSellingItems()),
               const SizedBox(width: 24),
-              Expanded(child: _buildTopCustomers()),
+              // Товары с низким остатком
+              Expanded(child: _buildLowStockItems()),
             ],
           ),
+          const SizedBox(height: 24),
+
+          // Продажи по категориям
+          if (salesByCategory.isNotEmpty) _buildSalesByCategory(),
         ],
       ),
     );
   }
 
-  Widget _buildCategoryChart() {
-    if (categoryStats.isEmpty) {
+  Widget _buildKeyMetrics() {
+    final revenue = advancedAnalytics!['revenue'];
+    final orders = advancedAnalytics!['orders'];
+    final avgOrder = advancedAnalytics!['avgOrderValue'];
+    final profit = advancedAnalytics!['profit'];
+    final payments = advancedAnalytics!['payments'];
+
+    final currencyFormatter = NumberFormat.currency(
+      locale: 'ru_RU',
+      symbol: '₸',
+      decimalDigits: 0,
+    );
+
+    return Row(
+      children: [
+        Expanded(child: _buildMetricCard(
+          'Выручка',
+          currencyFormatter.format(revenue['current']),
+          revenue['change']?.toDouble() ?? 0.0,
+          Icons.attach_money,
+          AppTheme.primaryColor,
+        )),
+        const SizedBox(width: 16),
+        Expanded(child: _buildMetricCard(
+          'Заказы',
+          '${orders['current']}',
+          orders['change']?.toDouble() ?? 0.0,
+          Icons.shopping_bag,
+          Colors.orange,
+        )),
+        const SizedBox(width: 16),
+        Expanded(child: _buildMetricCard(
+          'Средний чек',
+          currencyFormatter.format(avgOrder['current']),
+          avgOrder['change']?.toDouble() ?? 0.0,
+          Icons.receipt,
+          Colors.green,
+        )),
+        const SizedBox(width: 16),
+        Expanded(child: _buildMetricCard(
+          'Прибыль',
+          currencyFormatter.format(profit['amount']),
+          profit['margin']?.toDouble() ?? 0.0,
+          Icons.trending_up,
+          Colors.purple,
+          isPercent: true,
+        )),
+      ],
+    );
+  }
+
+  Widget _buildMetricCard(
+    String title,
+    String value,
+    double change,
+    IconData icon,
+    Color color, {
+    bool isPercent = false,
+  }) {
+    final isPositive = change >= 0;
+    final changeText = isPercent
+        ? '${change.toStringAsFixed(1)}%'
+        : '${isPositive ? '+' : ''}${change.toStringAsFixed(1)}%';
+
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(icon, color: color, size: 24),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: (isPositive ? Colors.green : Colors.red).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        isPositive ? Icons.arrow_upward : Icons.arrow_downward,
+                        size: 14,
+                        color: isPositive ? Colors.green : Colors.red,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        changeText,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: isPositive ? Colors.green : Colors.red,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 14,
+                color: AppTheme.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: AppTheme.textPrimary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSalesChart() {
+    final data = salesChart!['data'] as List<dynamic>;
+    if (data.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final currencyFormatter = NumberFormat.currency(
+      locale: 'ru_RU',
+      symbol: '₸',
+      decimalDigits: 0,
+    );
+
+    final maxAmount = data.map((d) => d['amount'] as num).reduce((a, b) => a > b ? a : b).toDouble();
+
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Продажи по дням',
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              height: 250,
+              child: LineChart(
+                LineChartData(
+                  gridData: FlGridData(show: true, drawVerticalLine: false),
+                  titlesData: FlTitlesData(
+                    leftTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 50,
+                        getTitlesWidget: (value, meta) {
+                          return Text(
+                            currencyFormatter.format(value),
+                            style: const TextStyle(fontSize: 10),
+                          );
+                        },
+                      ),
+                    ),
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        getTitlesWidget: (value, meta) {
+                          final index = value.toInt();
+                          if (index >= 0 && index < data.length) {
+                            final dateStr = data[index]['date'] as String;
+                            final date = DateTime.parse(dateStr);
+                            return Text(
+                              '${date.day}/${date.month}',
+                              style: const TextStyle(fontSize: 10),
+                            );
+                          }
+                          return const Text('');
+                        },
+                      ),
+                    ),
+                    topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  ),
+                  borderData: FlBorderData(show: true),
+                  minY: 0,
+                  maxY: maxAmount * 1.2,
+                  lineBarsData: [
+                    LineChartBarData(
+                      spots: data.asMap().entries.map((entry) {
+                        return FlSpot(
+                          entry.key.toDouble(),
+                          (entry.value['amount'] as num).toDouble(),
+                        );
+                      }).toList(),
+                      isCurved: true,
+                      color: AppTheme.primaryColor,
+                      barWidth: 3,
+                      dotData: const FlDotData(show: false),
+                      belowBarData: BarAreaData(
+                        show: true,
+                        color: AppTheme.primaryColor.withOpacity(0.1),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTopSellingItems() {
+    if (topSellingItems.isEmpty) {
       return Card(
         elevation: 4,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -170,10 +442,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           padding: const EdgeInsets.all(24),
           child: Center(
             child: Text(
-              'Нет данных для отображения',
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: AppTheme.textSecondary,
-                  ),
+              'Нет данных о продажах',
+              style: TextStyle(color: AppTheme.textSecondary),
             ),
           ),
         ),
@@ -194,12 +464,203 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Row(
+              children: [
+                Icon(Icons.trending_up, color: AppTheme.primaryColor),
+                const SizedBox(width: 8),
+                Text(
+                  'Топ продаваемых товаров',
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: topSellingItems.length,
+              separatorBuilder: (context, index) => const Divider(),
+              itemBuilder: (context, index) {
+                final item = topSellingItems[index];
+                return ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: AppTheme.primaryColor.withOpacity(0.1),
+                    child: Text(
+                      '${index + 1}',
+                      style: const TextStyle(
+                        color: AppTheme.primaryColor,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  title: Text(item['name'] ?? 'Без названия'),
+                  subtitle: Text(
+                    'Продано: ${item['quantity']} шт.',
+                    style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                  ),
+                  trailing: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        currencyFormatter.format(item['revenue']),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                      Text(
+                        'Выручка',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: AppTheme.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLowStockItems() {
+    if (lowStockItems.isEmpty) {
+      return Card(
+        elevation: 4,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Center(
+            child: Column(
+              children: [
+                Icon(Icons.check_circle, size: 48, color: Colors.green),
+                const SizedBox(height: 8),
+                Text(
+                  'Все товары в наличии',
+                  style: TextStyle(
+                    color: AppTheme.textSecondary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    final currencyFormatter = NumberFormat.currency(
+      locale: 'ru_RU',
+      symbol: '₸',
+      decimalDigits: 0,
+    );
+
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.warning, color: Colors.orange),
+                const SizedBox(width: 8),
+                Text(
+                  'Товары с низким остатком',
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: lowStockItems.length,
+              separatorBuilder: (context, index) => const Divider(),
+              itemBuilder: (context, index) {
+                final item = lowStockItems[index];
+                final quantity = item['quantity'] as int;
+                final isCritical = quantity == 0;
+
+                return ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: (isCritical ? Colors.red : Colors.orange).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      isCritical ? Icons.error : Icons.warning,
+                      color: isCritical ? Colors.red : Colors.orange,
+                      size: 20,
+                    ),
+                  ),
+                  title: Text(item['name'] ?? 'Без названия'),
+                  subtitle: Text(
+                    item['category'] ?? 'Без категории',
+                    style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                  ),
+                  trailing: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        '$quantity шт.',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                          color: isCritical ? Colors.red : Colors.orange,
+                        ),
+                      ),
+                      Text(
+                        currencyFormatter.format(item['price']),
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: AppTheme.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSalesByCategory() {
+    final currencyFormatter = NumberFormat.currency(
+      locale: 'ru_RU',
+      symbol: '₸',
+      decimalDigits: 0,
+    );
+
+    final totalRevenue = salesByCategory.fold<double>(
+      0,
+      (sum, cat) => sum + (cat['revenue'] as num).toDouble(),
+    );
+
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
             Text(
-              'Товары по категориям',
+              'Продажи по категориям',
               style: Theme.of(context).textTheme.headlineSmall,
             ),
             const SizedBox(height: 24),
-
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -209,7 +670,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     aspectRatio: 1.5,
                     child: PieChart(
                       PieChartData(
-                        sections: categoryStats.asMap().entries.map((entry) {
+                        sections: salesByCategory.asMap().entries.map((entry) {
                           final index = entry.key;
                           final category = entry.value;
                           final colors = [
@@ -218,12 +679,16 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                             Colors.green.shade400,
                             Colors.purple.shade400,
                             Colors.blue.shade400,
+                            Colors.red.shade400,
                           ];
 
+                          final percentage = totalRevenue > 0
+                              ? ((category['revenue'] as num).toDouble() / totalRevenue) * 100
+                              : 0.0;
+
                           return PieChartSectionData(
-                            value: (category['totalValue'] as num).toDouble(),
-                            title:
-                                '${((category['totalValue'] / categoryStats.fold<double>(0, (sum, c) => sum + (c['totalValue'] as num).toDouble())) * 100).toStringAsFixed(1)}%',
+                            value: (category['revenue'] as num).toDouble(),
+                            title: '${percentage.toStringAsFixed(1)}%',
                             color: colors[index % colors.length],
                             radius: 100,
                             titleStyle: const TextStyle(
@@ -239,14 +704,12 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     ),
                   ),
                 ),
-
                 const SizedBox(width: 32),
-
                 // Легенда
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: categoryStats.asMap().entries.map((entry) {
+                    children: salesByCategory.asMap().entries.map((entry) {
                       final index = entry.key;
                       final category = entry.value;
                       final colors = [
@@ -255,6 +718,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                         Colors.green.shade400,
                         Colors.purple.shade400,
                         Colors.blue.shade400,
+                        Colors.red.shade400,
                       ];
 
                       return Padding(
@@ -275,13 +739,13 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    category['category'],
+                                    category['category'] ?? 'Без категории',
                                     style: const TextStyle(
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
                                   Text(
-                                    '${category['count']} шт · ${currencyFormatter.format(category['totalValue'])}',
+                                    '${category['quantity']} шт · ${currencyFormatter.format(category['revenue'])}',
                                     style: TextStyle(
                                       fontSize: 12,
                                       color: AppTheme.textSecondary,
@@ -303,166 +767,4 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       ),
     );
   }
-
-  Widget _buildTopItems() {
-    if (topItems.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    final currencyFormatter = NumberFormat.currency(
-      locale: 'ru_RU',
-      symbol: '₸',
-      decimalDigits: 0,
-    );
-
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Топ 10 товаров',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 16),
-
-            ListView.separated(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: topItems.length,
-              separatorBuilder: (context, index) => const Divider(),
-              itemBuilder: (context, index) {
-                final item = topItems[index];
-                return ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: AppTheme.primaryColor.withOpacity(0.1),
-                    child: Text(
-                      '${index + 1}',
-                      style: const TextStyle(
-                        color: AppTheme.primaryColor,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  title: Text(item['name']),
-                  subtitle: Text('На складе: ${item['soldCount']}'),
-                  trailing: Text(
-                    currencyFormatter.format(item['price']),
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                  ),
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTopCustomers() {
-    if (topCustomers.isEmpty) {
-      return Card(
-        elevation: 4,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Топ 10 клиентов',
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-              const SizedBox(height: 16),
-              Center(
-                child: Text(
-                  'Нет данных для отображения',
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: AppTheme.textSecondary,
-                      ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    final currencyFormatter = NumberFormat.currency(
-      locale: 'ru_RU',
-      symbol: '₸',
-      decimalDigits: 0,
-    );
-
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Топ 10 клиентов',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 16),
-
-            ListView.separated(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: topCustomers.length,
-              separatorBuilder: (context, index) => const Divider(),
-              itemBuilder: (context, index) {
-                final customer = topCustomers[index];
-                return ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: Colors.green.shade100,
-                    child: Text(
-                      '${index + 1}',
-                      style: TextStyle(
-                        color: Colors.green.shade700,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  title: Text(customer['name']),
-                  subtitle: Text(
-                    '${customer['ordersCount']} ${customer['ordersCount'] == 1 ? 'заказ' : 'заказов'}',
-                  ),
-                  trailing: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        currencyFormatter.format(customer['totalSpent']),
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                      Text(
-                        'потрачено',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: AppTheme.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
-

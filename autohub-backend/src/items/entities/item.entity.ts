@@ -49,6 +49,9 @@ export class Item {
   @Column({ type: 'jsonb', nullable: true })
   images: string[]; // Массив URL изображений
 
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  warehouseCell: string | null; // Ячейка хранения на складе
+
   @Column({ type: 'boolean', default: false })
   synced: boolean; // Для оффлайн синхронизации
 

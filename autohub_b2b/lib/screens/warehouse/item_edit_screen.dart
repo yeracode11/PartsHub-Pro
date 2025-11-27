@@ -24,6 +24,7 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
   final _priceController = TextEditingController();
   final _quantityController = TextEditingController();
   final _descriptionController = TextEditingController();
+  final _warehouseCellController = TextEditingController();
   
   late final ApiClient _apiClient;
   late final ImageUploadService _imageUploadService;
@@ -66,6 +67,7 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
     _priceController.text = widget.item.price.toString();
     _quantityController.text = widget.item.quantity.toString();
     _descriptionController.text = widget.item.description ?? '';
+    _warehouseCellController.text = widget.item.warehouseCell ?? '';
     _selectedCondition = widget.item.condition ?? 'new';
     _currentImages = widget.item.images ?? [];
   }
@@ -77,6 +79,7 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
     _priceController.dispose();
     _quantityController.dispose();
     _descriptionController.dispose();
+    _warehouseCellController.dispose();
     super.dispose();
   }
 
@@ -252,6 +255,18 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
                       ),
                       maxLines: 3,
                     ),
+                    const SizedBox(height: 16),
+                    
+                    // Ячейка склада
+                    TextFormField(
+                      controller: _warehouseCellController,
+                      decoration: const InputDecoration(
+                        labelText: 'Ячейка склада',
+                        hintText: 'Например: A-1-2',
+                        prefixIcon: Icon(Icons.location_on),
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
                     const SizedBox(height: 24),
                     
                     // Изображения
@@ -333,6 +348,7 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
         'quantity': int.parse(_quantityController.text),
         'condition': _selectedCondition,
         'description': _descriptionController.text.isEmpty ? null : _descriptionController.text,
+        'warehouseCell': _warehouseCellController.text.isEmpty ? null : _warehouseCellController.text.trim(),
         'images': _currentImages,
       };
 

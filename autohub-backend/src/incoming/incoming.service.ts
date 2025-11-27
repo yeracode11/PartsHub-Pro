@@ -461,6 +461,10 @@ export class IncomingService {
             if (Number(incomingItem.purchasePrice) > Number(item.price)) {
               item.price = incomingItem.purchasePrice;
             }
+            // Обновляем ячейку склада, если она указана
+            if (incomingItem.warehouseCell) {
+              item.warehouseCell = incomingItem.warehouseCell;
+            }
             await queryRunner.manager.save(item);
           }
         } else {
@@ -479,6 +483,7 @@ export class IncomingService {
               ? `${incomingItem.carBrand} ${incomingItem.carModel || ''}`
               : null;
           newItem.images = incomingItem.photos || [];
+          newItem.warehouseCell = incomingItem.warehouseCell || null;
           newItem.syncedToB2C = true; // Автоматически синхронизируем в B2C
 
           await queryRunner.manager.save(Item, newItem);

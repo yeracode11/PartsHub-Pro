@@ -1,8 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between } from 'typeorm';
+import { Repository, Between, LessThanOrEqual } from 'typeorm';
 import { Order } from '../orders/entities/order.entity';
 import { Item } from '../items/entities/item.entity';
+import { OrderItem } from '../order-items/entities/order-item.entity';
+import { IncomingDoc, IncomingDocStatus } from '../incoming/entities/incoming-doc.entity';
 
 @Injectable()
 export class DashboardService {
@@ -11,6 +13,10 @@ export class DashboardService {
     private readonly orderRepository: Repository<Order>,
     @InjectRepository(Item)
     private readonly itemRepository: Repository<Item>,
+    @InjectRepository(OrderItem)
+    private readonly orderItemRepository: Repository<OrderItem>,
+    @InjectRepository(IncomingDoc)
+    private readonly incomingDocRepository: Repository<IncomingDoc>,
   ) {}
 
   async getStats(organizationId: string) {
@@ -115,6 +121,222 @@ export class DashboardService {
       category: name,
       count: data.count,
       totalValue: data.totalValue,
+    }));
+
+    return { categories };
+  }
+
+  // Расширенная аналитика
+  async getAdvancedAnalytics(organizationId: string) {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+
+    // Заказы
+    const allOrders = await this.orderRepository.find({
+      where: { organizationId },
+      relations: ['items'],
+    });
+
+    const currentMonthOrders = allOrders.filter((o) => o.createdAt >= monthStart);
+    const lastMonthOrders = allOrders.filter(
+      (o) => o.createdAt >= lastMonthStart && o.createdAt < monthStart,
+    );
+
+    // Выручка
+    const currentMonthRevenue = currentMonthOrders.reduce(
+      (sum, o) => sum + Number(o.totalAmount),
+      0,
+    );
+    const lastMonthRevenue = lastMonthOrders.reduce(
+      (sum, o) => sum + Number(o.totalAmount),
+      0,
+    );
+    const revenueChange = lastMonthRevenue > 0
+      ? ((currentMonthRevenue - lastMonthRevenue) / lastMonthRevenue) * 100
+      : 0;
+
+    // Количество заказов
+    const currentMonthOrdersCount = currentMonthOrders.length;
+    const lastMonthOrdersCount = lastMonthOrders.length;
+    const ordersChange = lastMonthOrdersCount > 0
+      ? ((currentMonthOrdersCount - lastMonthOrdersCount) / lastMonthOrdersCount) * 100
+      : 0;
+
+    // Средний чек
+    const avgOrderValue = currentMonthOrdersCount > 0
+      ? currentMonthRevenue / currentMonthOrdersCount
+      : 0;
+    const lastMonthAvgOrderValue = lastMonthOrdersCount > 0
+      ? lastMonthRevenue / lastMonthOrdersCount
+      : 0;
+    const avgOrderChange = lastMonthAvgOrderValue > 0
+      ? ((avgOrderValue - lastMonthAvgOrderValue) / lastMonthAvgOrderValue) * 100
+      : 0;
+
+    // Оплаченные заказы
+    const paidOrders = currentMonthOrders.filter((o) => o.paymentStatus === 'paid');
+    const paidRevenue = paidOrders.reduce((sum, o) => sum + Number(o.totalAmount), 0);
+    const unpaidRevenue = currentMonthRevenue - paidRevenue;
+
+    // Приходные накладные
+    const incomingDocs = await this.incomingDocRepository.find({
+      where: { organizationId, status: IncomingDocStatus.DONE },
+    });
+
+    const currentMonthIncoming = incomingDocs.filter((d) => d.createdAt >= monthStart);
+    const incomingAmount = currentMonthIncoming.reduce(
+      (sum, d) => sum + Number(d.totalAmount),
+      0,
+    );
+
+    // Прибыль (выручка - закупки)
+    const profit = currentMonthRevenue - incomingAmount;
+    const profitMargin = currentMonthRevenue > 0 ? (profit / currentMonthRevenue) * 100 : 0;
+
+    return {
+      revenue: {
+        current: currentMonthRevenue,
+        last: lastMonthRevenue,
+        change: revenueChange,
+      },
+      orders: {
+        current: currentMonthOrdersCount,
+        last: lastMonthOrdersCount,
+        change: ordersChange,
+      },
+      avgOrderValue: {
+        current: avgOrderValue,
+        last: lastMonthAvgOrderValue,
+        change: avgOrderChange,
+      },
+      payments: {
+        paid: paidRevenue,
+        unpaid: unpaidRevenue,
+        paidCount: paidOrders.length,
+        unpaidCount: currentMonthOrdersCount - paidOrders.length,
+      },
+      incoming: {
+        amount: incomingAmount,
+        count: currentMonthIncoming.length,
+      },
+      profit: {
+        amount: profit,
+        margin: profitMargin,
+      },
+    };
+  }
+
+  // Топ продаваемых товаров (реально проданных)
+  async getTopSellingItems(organizationId: string, limit: number = 10) {
+    const monthStart = new Date();
+    monthStart.setDate(1);
+    monthStart.setHours(0, 0, 0, 0);
+
+    const orderItems = await this.orderItemRepository.find({
+      where: {
+        order: {
+          organizationId,
+          createdAt: Between(monthStart, new Date()),
+        },
+      },
+      relations: ['item', 'order'],
+    });
+
+    // Группируем по товарам
+    const itemMap = new Map<number, { item: Item; quantity: number; revenue: number }>();
+
+    for (const orderItem of orderItems) {
+      if (!orderItem.item) continue;
+
+      const itemId = orderItem.itemId;
+      const current = itemMap.get(itemId) || {
+        item: orderItem.item,
+        quantity: 0,
+        revenue: 0,
+      };
+
+      itemMap.set(itemId, {
+        item: orderItem.item,
+        quantity: current.quantity + orderItem.quantity,
+        revenue: current.revenue + Number(orderItem.subtotal),
+      });
+    }
+
+    // Сортируем по выручке
+    const topItems = Array.from(itemMap.values())
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, limit)
+      .map((data) => ({
+        id: data.item.id,
+        name: data.item.name,
+        category: data.item.category,
+        quantity: data.quantity,
+        revenue: data.revenue,
+        price: Number(data.item.price),
+      }));
+
+    return { items: topItems };
+  }
+
+  // Товары с низким остатком
+  async getLowStockItems(organizationId: string, threshold: number = 5) {
+    const items = await this.itemRepository.find({
+      where: {
+        organizationId,
+        quantity: LessThanOrEqual(threshold),
+      },
+      order: { quantity: 'ASC' },
+      take: 20,
+    });
+
+    return {
+      items: items.map((item) => ({
+        id: item.id,
+        name: item.name,
+        category: item.category,
+        quantity: item.quantity,
+        price: Number(item.price),
+        sku: item.sku,
+      })),
+    };
+  }
+
+  // Статистика продаж по категориям (реальные продажи)
+  async getSalesByCategory(organizationId: string) {
+    const monthStart = new Date();
+    monthStart.setDate(1);
+    monthStart.setHours(0, 0, 0, 0);
+
+    const orderItems = await this.orderItemRepository.find({
+      where: {
+        order: {
+          organizationId,
+          createdAt: Between(monthStart, new Date()),
+        },
+      },
+      relations: ['item', 'order'],
+    });
+
+    const categoryMap = new Map<string, { quantity: number; revenue: number }>();
+
+    for (const orderItem of orderItems) {
+      if (!orderItem.item) continue;
+
+      const category = orderItem.item.category || 'Без категории';
+      const current = categoryMap.get(category) || { quantity: 0, revenue: 0 };
+
+      categoryMap.set(category, {
+        quantity: current.quantity + orderItem.quantity,
+        revenue: current.revenue + Number(orderItem.subtotal),
+      });
+    }
+
+    const categories = Array.from(categoryMap.entries()).map(([name, data]) => ({
+      category: name,
+      quantity: data.quantity,
+      revenue: data.revenue,
     }));
 
     return { categories };
