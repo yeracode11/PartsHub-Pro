@@ -234,15 +234,14 @@ export class DashboardService {
     monthStart.setDate(1);
     monthStart.setHours(0, 0, 0, 0);
 
-    const orderItems = await this.orderItemRepository.find({
-      where: {
-        order: {
-          organizationId,
-          createdAt: Between(monthStart, new Date()),
-        },
-      },
-      relations: ['item', 'order'],
-    });
+    const orderItems = await this.orderItemRepository
+      .createQueryBuilder('orderItem')
+      .leftJoinAndSelect('orderItem.item', 'item')
+      .leftJoinAndSelect('orderItem.order', 'order')
+      .where('order.organizationId = :organizationId', { organizationId })
+      .andWhere('order.createdAt >= :monthStart', { monthStart })
+      .andWhere('order.createdAt <= :now', { now: new Date() })
+      .getMany();
 
     // Группируем по товарам
     const itemMap = new Map<number, { item: Item; quantity: number; revenue: number }>();
@@ -309,15 +308,14 @@ export class DashboardService {
     monthStart.setDate(1);
     monthStart.setHours(0, 0, 0, 0);
 
-    const orderItems = await this.orderItemRepository.find({
-      where: {
-        order: {
-          organizationId,
-          createdAt: Between(monthStart, new Date()),
-        },
-      },
-      relations: ['item', 'order'],
-    });
+    const orderItems = await this.orderItemRepository
+      .createQueryBuilder('orderItem')
+      .leftJoinAndSelect('orderItem.item', 'item')
+      .leftJoinAndSelect('orderItem.order', 'order')
+      .where('order.organizationId = :organizationId', { organizationId })
+      .andWhere('order.createdAt >= :monthStart', { monthStart })
+      .andWhere('order.createdAt <= :now', { now: new Date() })
+      .getMany();
 
     const categoryMap = new Map<string, { quantity: number; revenue: number }>();
 
