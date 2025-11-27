@@ -230,53 +230,62 @@ export class DashboardService {
 
   // Топ продаваемых товаров (реально проданных)
   async getTopSellingItems(organizationId: string, limit: number = 10) {
-    const monthStart = new Date();
-    monthStart.setDate(1);
-    monthStart.setHours(0, 0, 0, 0);
+    try {
+      const monthStart = new Date();
+      monthStart.setDate(1);
+      monthStart.setHours(0, 0, 0, 0);
 
-    const orderItems = await this.orderItemRepository
-      .createQueryBuilder('orderItem')
-      .leftJoinAndSelect('orderItem.item', 'item')
-      .leftJoinAndSelect('orderItem.order', 'order')
-      .where('order.organizationId = :organizationId', { organizationId })
-      .andWhere('order.createdAt >= :monthStart', { monthStart })
-      .andWhere('order.createdAt <= :now', { now: new Date() })
-      .getMany();
+      const orderItems = await this.orderItemRepository
+        .createQueryBuilder('orderItem')
+        .leftJoinAndSelect('orderItem.item', 'item')
+        .leftJoinAndSelect('orderItem.order', 'order')
+        .where('order.organizationId = :organizationId', { organizationId })
+        .andWhere('order.createdAt >= :monthStart', { monthStart })
+        .andWhere('order.createdAt <= :now', { now: new Date() })
+        .getMany();
 
-    // Группируем по товарам
-    const itemMap = new Map<number, { item: Item; quantity: number; revenue: number }>();
+      // Группируем по товарам
+      const itemMap = new Map<number, { item: Item; quantity: number; revenue: number }>();
 
-    for (const orderItem of orderItems) {
-      if (!orderItem.item) continue;
+      for (const orderItem of orderItems) {
+        if (!orderItem.item || !orderItem.itemId) continue;
 
-      const itemId = orderItem.itemId;
-      const current = itemMap.get(itemId) || {
-        item: orderItem.item,
-        quantity: 0,
-        revenue: 0,
-      };
+        const itemId = orderItem.itemId;
+        const subtotal = Number(orderItem.subtotal) || 0;
+        const quantity = orderItem.quantity || 0;
 
-      itemMap.set(itemId, {
-        item: orderItem.item,
-        quantity: current.quantity + orderItem.quantity,
-        revenue: current.revenue + Number(orderItem.subtotal),
-      });
+        const current = itemMap.get(itemId) || {
+          item: orderItem.item,
+          quantity: 0,
+          revenue: 0,
+        };
+
+        itemMap.set(itemId, {
+          item: orderItem.item,
+          quantity: current.quantity + quantity,
+          revenue: current.revenue + subtotal,
+        });
+      }
+
+      // Сортируем по выручке
+      const topItems = Array.from(itemMap.values())
+        .sort((a, b) => b.revenue - a.revenue)
+        .slice(0, limit)
+        .map((data) => ({
+          id: data.item.id,
+          name: data.item.name || 'Без названия',
+          category: data.item.category || null,
+          quantity: data.quantity,
+          revenue: data.revenue,
+          price: Number(data.item.price) || 0,
+        }));
+
+      return { items: topItems };
+    } catch (error) {
+      console.error('Error in getTopSellingItems:', error);
+      // Возвращаем пустой массив при ошибке
+      return { items: [] };
     }
-
-    // Сортируем по выручке
-    const topItems = Array.from(itemMap.values())
-      .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, limit)
-      .map((data) => ({
-        id: data.item.id,
-        name: data.item.name,
-        category: data.item.category,
-        quantity: data.quantity,
-        revenue: data.revenue,
-        price: Number(data.item.price),
-      }));
-
-    return { items: topItems };
   }
 
   // Товары с низким остатком
@@ -304,40 +313,47 @@ export class DashboardService {
 
   // Статистика продаж по категориям (реальные продажи)
   async getSalesByCategory(organizationId: string) {
-    const monthStart = new Date();
-    monthStart.setDate(1);
-    monthStart.setHours(0, 0, 0, 0);
+    try {
+      const monthStart = new Date();
+      monthStart.setDate(1);
+      monthStart.setHours(0, 0, 0, 0);
 
-    const orderItems = await this.orderItemRepository
-      .createQueryBuilder('orderItem')
-      .leftJoinAndSelect('orderItem.item', 'item')
-      .leftJoinAndSelect('orderItem.order', 'order')
-      .where('order.organizationId = :organizationId', { organizationId })
-      .andWhere('order.createdAt >= :monthStart', { monthStart })
-      .andWhere('order.createdAt <= :now', { now: new Date() })
-      .getMany();
+      const orderItems = await this.orderItemRepository
+        .createQueryBuilder('orderItem')
+        .leftJoinAndSelect('orderItem.item', 'item')
+        .leftJoinAndSelect('orderItem.order', 'order')
+        .where('order.organizationId = :organizationId', { organizationId })
+        .andWhere('order.createdAt >= :monthStart', { monthStart })
+        .andWhere('order.createdAt <= :now', { now: new Date() })
+        .getMany();
 
-    const categoryMap = new Map<string, { quantity: number; revenue: number }>();
+      const categoryMap = new Map<string, { quantity: number; revenue: number }>();
 
-    for (const orderItem of orderItems) {
-      if (!orderItem.item) continue;
+      for (const orderItem of orderItems) {
+        if (!orderItem.item) continue;
 
-      const category = orderItem.item.category || 'Без категории';
-      const current = categoryMap.get(category) || { quantity: 0, revenue: 0 };
+        const category = orderItem.item.category || 'Без категории';
+        const current = categoryMap.get(category) || { quantity: 0, revenue: 0 };
+        const subtotal = Number(orderItem.subtotal) || 0;
+        const quantity = orderItem.quantity || 0;
 
-      categoryMap.set(category, {
-        quantity: current.quantity + orderItem.quantity,
-        revenue: current.revenue + Number(orderItem.subtotal),
-      });
+        categoryMap.set(category, {
+          quantity: current.quantity + quantity,
+          revenue: current.revenue + subtotal,
+        });
+      }
+
+      const categories = Array.from(categoryMap.entries()).map(([name, data]) => ({
+        category: name,
+        quantity: data.quantity,
+        revenue: data.revenue,
+      }));
+
+      return { categories };
+    } catch (error) {
+      console.error('Error in getSalesByCategory:', error);
+      return { categories: [] };
     }
-
-    const categories = Array.from(categoryMap.entries()).map(([name, data]) => ({
-      category: name,
-      quantity: data.quantity,
-      revenue: data.revenue,
-    }));
-
-    return { categories };
   }
 }
 

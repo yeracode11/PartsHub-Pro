@@ -64,11 +64,16 @@ export class DashboardController {
     @Query('limit') limit: string = '10',
     @CurrentUser() user: any,
   ) {
-    const organizationId = await this.resolveOrganizationId(user);
-    if (!organizationId) {
+    try {
+      const organizationId = await this.resolveOrganizationId(user);
+      if (!organizationId) {
+        return { items: [] } as any;
+      }
+      return await this.dashboardService.getTopSellingItems(organizationId, parseInt(limit) || 10);
+    } catch (error) {
+      console.error('Error in getTopSellingItems controller:', error);
       return { items: [] } as any;
     }
-    return this.dashboardService.getTopSellingItems(organizationId, parseInt(limit));
   }
 
   @Get('low-stock-items')
@@ -85,11 +90,16 @@ export class DashboardController {
 
   @Get('sales-by-category')
   async getSalesByCategory(@CurrentUser() user: any) {
-    const organizationId = await this.resolveOrganizationId(user);
-    if (!organizationId) {
+    try {
+      const organizationId = await this.resolveOrganizationId(user);
+      if (!organizationId) {
+        return { categories: [] } as any;
+      }
+      return await this.dashboardService.getSalesByCategory(organizationId);
+    } catch (error) {
+      console.error('Error in getSalesByCategory controller:', error);
       return { categories: [] } as any;
     }
-    return this.dashboardService.getSalesByCategory(organizationId);
   }
 }
 
