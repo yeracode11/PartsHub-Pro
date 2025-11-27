@@ -35,38 +35,18 @@ export class ItemsService {
     try {
       console.log('🔍 findAll items called for organizationId:', organizationId);
       
-      // Используем QueryBuilder для более гибкого запроса
-      // Это поможет, если поле warehouseCell еще не добавлено в БД
-      const items = await this.itemRepository
-        .createQueryBuilder('item')
-        .where('item.organizationId = :organizationId', { organizationId })
-        .orderBy('item.createdAt', 'DESC')
-        .getMany();
+      // Простой запрос - поле warehouseCell временно закомментировано в entity
+      const items = await this.itemRepository.find({
+        where: { organizationId },
+        order: { createdAt: 'DESC' },
+      });
       
       console.log(`✅ Found ${items.length} items`);
       return items;
     } catch (error) {
       console.error('❌ Error in findAll items:', error);
       console.error('Error message:', error?.message);
-      console.error('Error stack:', error?.stack);
-      
-      // Если ошибка связана с отсутствующим полем, пробуем без него
-      if (error?.message?.includes('warehouseCell') || error?.message?.includes('column')) {
-        console.log('⚠️ Trying fallback query without warehouseCell field...');
-        try {
-          // Пробуем простой запрос через find
-          const items = await this.itemRepository.find({
-            where: { organizationId },
-            order: { createdAt: 'DESC' },
-          });
-          console.log(`✅ Fallback query found ${items.length} items`);
-          return items;
-        } catch (fallbackError) {
-          console.error('❌ Fallback query also failed:', fallbackError);
-        }
-      }
-      
-      // В последнем случае возвращаем пустой массив
+      // Возвращаем пустой массив при ошибке
       return [];
     }
   }
