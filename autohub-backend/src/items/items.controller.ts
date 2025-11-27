@@ -38,9 +38,16 @@ export class ItemsController {
   @Get()
   async findAll(@CurrentUser() user: any) {
     try {
+      if (!user || !user.organizationId) {
+        console.error('❌ No organizationId in user:', user);
+        return [];
+      }
       return await this.itemsService.findAll(user.organizationId);
     } catch (error) {
-      console.error('Error in findAll controller:', error);
+      console.error('❌ Error in findAll controller:', error);
+      console.error('Error stack:', error?.stack);
+      // Возвращаем пустой массив только если это не критическая ошибка
+      // Но логируем детали для отладки
       return [];
     }
   }

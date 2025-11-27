@@ -40,14 +40,41 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
       final response = await dio.get('/api/items');
       final List<dynamic> data = response.data;
 
+      print('📦 Loaded ${data.length} items from API');
+      if (data.isNotEmpty) {
+        print('📦 First item sample: ${data[0]}');
+      }
+
       if (!mounted) return;
       
-      setState(() {
-        items = data.map((json) => ItemModel.fromJson(json)).toList();
-        filteredItems = items;
-        isLoading = false;
-      });
+      try {
+        final parsedItems = data.map((json) {
+          try {
+            return ItemModel.fromJson(json);
+          } catch (e) {
+            print('❌ Error parsing item: $e');
+            print('❌ Item data: $json');
+            rethrow;
+          }
+        }).toList();
+
+        setState(() {
+          items = parsedItems;
+          filteredItems = items;
+          isLoading = false;
+        });
+        
+        print('✅ Successfully parsed ${items.length} items');
+      } catch (parseError) {
+        print('❌ Error parsing items: $parseError');
+        if (!mounted) return;
+        setState(() {
+          error = 'Ошибка обработки данных: $parseError';
+          isLoading = false;
+        });
+      }
     } catch (e) {
+      print('❌ Error loading items: $e');
       if (!mounted) return;
       
       setState(() {

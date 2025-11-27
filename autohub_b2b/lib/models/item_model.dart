@@ -88,39 +88,55 @@ class ItemModel extends Equatable {
   }
 
   factory ItemModel.fromJson(Map<String, dynamic> json) {
-    // Обработка price (может быть string из PostgreSQL decimal)
-    final priceValue = json['price'];
-    final double price;
-    if (priceValue is String) {
-      price = double.parse(priceValue);
-    } else if (priceValue is num) {
-      price = priceValue.toDouble();
-    } else {
-      price = 0.0;
-    }
+    try {
+      // Обработка price (может быть string из PostgreSQL decimal)
+      final priceValue = json['price'];
+      final double price;
+      if (priceValue is String) {
+        price = double.tryParse(priceValue) ?? 0.0;
+      } else if (priceValue is num) {
+        price = priceValue.toDouble();
+      } else {
+        price = 0.0;
+      }
 
-    return ItemModel(
-      id: json['id'] as int?,
-      name: json['name'] as String? ?? 'Без названия',
-      category: json['category'] as String?,
-      sku: json['sku'] as String?,
-      price: price,
-      quantity: json['quantity'] as int? ?? 0,
-      condition: json['condition'] as String? ?? 'new',
-      description: json['description'] as String?,
-      imageUrl: json['imageUrl'] as String?,
-      images: json['images'] != null 
-          ? List<String>.from(json['images'] as List)
-          : null,
-      warehouseCell: json['warehouseCell'] as String?,
-      synced: json['synced'] as bool? ?? false,
-      createdAt: json['createdAt'] != null 
-          ? DateTime.parse(json['createdAt'] as String)
-          : DateTime.now(),
-      updatedAt: json['updatedAt'] != null
-          ? DateTime.parse(json['updatedAt'] as String)
-          : DateTime.now(),
-    );
+      // Обработка дат
+      DateTime? parseDate(dynamic dateValue) {
+        if (dateValue == null) return null;
+        if (dateValue is DateTime) return dateValue;
+        if (dateValue is String) {
+          try {
+            return DateTime.parse(dateValue);
+          } catch (e) {
+            return null;
+          }
+        }
+        return null;
+      }
+
+      return ItemModel(
+        id: json['id'] is int ? json['id'] : (json['id'] is String ? int.tryParse(json['id']) : null),
+        name: json['name'] as String? ?? 'Без названия',
+        category: json['category'] as String?,
+        sku: json['sku'] as String?,
+        price: price,
+        quantity: json['quantity'] is int ? json['quantity'] : (json['quantity'] is num ? json['quantity'].toInt() : 0),
+        condition: json['condition'] as String? ?? 'new',
+        description: json['description'] as String?,
+        imageUrl: json['imageUrl'] as String?,
+        images: json['images'] != null 
+            ? (json['images'] is List ? List<String>.from(json['images'].map((e) => e.toString())) : null)
+            : null,
+        warehouseCell: json['warehouseCell'] as String?,
+        synced: json['synced'] is bool ? json['synced'] : false,
+        createdAt: parseDate(json['createdAt']) ?? DateTime.now(),
+        updatedAt: parseDate(json['updatedAt']) ?? DateTime.now(),
+      );
+    } catch (e) {
+      print('❌ Error parsing ItemModel: $e');
+      print('❌ JSON data: $json');
+      rethrow;
+    }
   }
 
   @override
