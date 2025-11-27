@@ -36,8 +36,13 @@ export class ItemsController {
   }
 
   @Get()
-  findAll(@CurrentUser() user: any) {
-    return this.itemsService.findAll(user.organizationId);
+  async findAll(@CurrentUser() user: any) {
+    try {
+      return await this.itemsService.findAll(user.organizationId);
+    } catch (error) {
+      console.error('Error in findAll controller:', error);
+      return [];
+    }
   }
 
   @Get(':id')

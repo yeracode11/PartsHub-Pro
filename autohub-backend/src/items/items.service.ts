@@ -32,10 +32,16 @@ export class ItemsService {
 
   // CRUD методы для управления товарами
   async findAll(organizationId: string) {
-    return await this.itemRepository.find({
-      where: { organizationId },
-      order: { createdAt: 'DESC' },
-    });
+    try {
+      return await this.itemRepository.find({
+        where: { organizationId },
+        order: { createdAt: 'DESC' },
+      });
+    } catch (error) {
+      console.error('Error in findAll items:', error);
+      // Возвращаем пустой массив при ошибке
+      return [];
+    }
   }
 
   async findOne(id: number, organizationId: string) {

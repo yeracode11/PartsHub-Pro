@@ -81,11 +81,16 @@ export class DashboardController {
     @Query('threshold') threshold: string = '5',
     @CurrentUser() user: any,
   ) {
-    const organizationId = await this.resolveOrganizationId(user);
-    if (!organizationId) {
+    try {
+      const organizationId = await this.resolveOrganizationId(user);
+      if (!organizationId) {
+        return { items: [] } as any;
+      }
+      return await this.dashboardService.getLowStockItems(organizationId, parseInt(threshold) || 5);
+    } catch (error) {
+      console.error('Error in getLowStockItems controller:', error);
       return { items: [] } as any;
     }
-    return this.dashboardService.getLowStockItems(organizationId, parseInt(threshold));
   }
 
   @Get('sales-by-category')

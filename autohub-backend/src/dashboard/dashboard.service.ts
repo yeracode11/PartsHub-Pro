@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, LessThanOrEqual } from 'typeorm';
+import { Repository, Between } from 'typeorm';
 import { Order } from '../orders/entities/order.entity';
 import { Item } from '../items/entities/item.entity';
 import { OrderItem } from '../order-items/entities/order-item.entity';
@@ -290,25 +290,29 @@ export class DashboardService {
 
   // Товары с низким остатком
   async getLowStockItems(organizationId: string, threshold: number = 5) {
-    const items = await this.itemRepository.find({
-      where: {
-        organizationId,
-        quantity: LessThanOrEqual(threshold),
-      },
-      order: { quantity: 'ASC' },
-      take: 20,
-    });
+    try {
+      const items = await this.itemRepository
+        .createQueryBuilder('item')
+        .where('item.organizationId = :organizationId', { organizationId })
+        .andWhere('item.quantity <= :threshold', { threshold })
+        .orderBy('item.quantity', 'ASC')
+        .limit(20)
+        .getMany();
 
-    return {
-      items: items.map((item) => ({
-        id: item.id,
-        name: item.name,
-        category: item.category,
-        quantity: item.quantity,
-        price: Number(item.price),
-        sku: item.sku,
-      })),
-    };
+      return {
+        items: items.map((item) => ({
+          id: item.id,
+          name: item.name || 'Без названия',
+          category: item.category || null,
+          quantity: item.quantity || 0,
+          price: Number(item.price) || 0,
+          sku: item.sku || null,
+        })),
+      };
+    } catch (error) {
+      console.error('Error in getLowStockItems:', error);
+      return { items: [] };
+    }
   }
 
   // Статистика продаж по категориям (реальные продажи)
