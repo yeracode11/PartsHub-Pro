@@ -25,7 +25,7 @@ export class VehiclesController {
    * GET /api/vehicles - получить все автомобили
    */
   @Get()
-  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.STOREKEEPER, UserRole.WORKER)
   async findAll(@CurrentUser() user: any) {
     return await this.vehiclesService.findAll(user.organizationId);
   }
@@ -49,7 +49,7 @@ export class VehiclesController {
    * GET /api/vehicles/upcoming-service - автомобили с близким ТО
    */
   @Get('upcoming-service')
-  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.STOREKEEPER, UserRole.WORKER)
   async getUpcomingService(@CurrentUser() user: any) {
     return await this.vehiclesService.getUpcomingService(user.organizationId);
   }
