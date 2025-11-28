@@ -259,4 +259,3 @@ class _WarehouseLocationScreenState extends State<WarehouseLocationScreen> {
     );
   }
 }
-

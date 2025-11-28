@@ -341,7 +341,19 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   Widget _buildSalesChart() {
     final data = salesChart!['data'] as List<dynamic>;
     if (data.isEmpty) {
-      return const SizedBox.shrink();
+      return Card(
+        elevation: 4,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Center(
+            child: Text(
+              'Нет данных о продажах за выбранный период',
+              style: TextStyle(color: AppTheme.textSecondary),
+            ),
+          ),
+        ),
+      );
     }
 
     final currencyFormatter = NumberFormat.currency(
@@ -350,7 +362,30 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       decimalDigits: 0,
     );
 
-    final maxAmount = data.map((d) => d['amount'] as num).reduce((a, b) => a > b ? a : b).toDouble();
+    final amounts = data.map((d) => (d['amount'] as num).toDouble()).toList();
+    final maxAmount = amounts.reduce((a, b) => a > b ? a : b);
+    final minAmount = amounts.reduce((a, b) => a < b ? a : b);
+    final avgAmount = amounts.reduce((a, b) => a + b) / amounts.length;
+
+    // Улучшенное форматирование для осей
+    String formatYAxis(double value) {
+      if (value >= 1000000) {
+        return '${(value / 1000000).toStringAsFixed(1)}М';
+      } else if (value >= 1000) {
+        return '${(value / 1000).toStringAsFixed(0)}К';
+      }
+      return value.toStringAsFixed(0);
+    }
+
+    // Показываем подписи на оси X не для всех точек, а через интервал
+    int getInterval() {
+      if (data.length <= 7) return 1;
+      if (data.length <= 14) return 2;
+      if (data.length <= 30) return 3;
+      return 5;
+    }
+
+    final interval = getInterval();
 
     return Card(
       elevation: 4,
@@ -360,25 +395,95 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Продажи по дням',
-              style: Theme.of(context).textTheme.headlineSmall,
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Продажи по дням',
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.trending_up, size: 16, color: AppTheme.primaryColor),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Макс: ${currencyFormatter.format(maxAmount)}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.primaryColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                _buildStatItem('Среднее', currencyFormatter.format(avgAmount), Colors.blue),
+                const SizedBox(width: 16),
+                _buildStatItem('Макс', currencyFormatter.format(maxAmount), Colors.green),
+                const SizedBox(width: 16),
+                _buildStatItem('Мин', currencyFormatter.format(minAmount), Colors.orange),
+              ],
             ),
             const SizedBox(height: 24),
             SizedBox(
-              height: 250,
+              height: 350, // Увеличил высоту для лучшей видимости
               child: LineChart(
                 LineChartData(
-                  gridData: FlGridData(show: true, drawVerticalLine: false),
+                  gridData: FlGridData(
+                    show: true,
+                    drawVerticalLine: true,
+                    horizontalInterval: maxAmount > 0 ? maxAmount / 5 : 1000,
+                    getDrawingHorizontalLine: (value) {
+                      return FlLine(
+                        color: AppTheme.borderColor,
+                        strokeWidth: 1,
+                        dashArray: [5, 5],
+                      );
+                    },
+                    getDrawingVerticalLine: (value) {
+                      return FlLine(
+                        color: AppTheme.borderColor.withOpacity(0.3),
+                        strokeWidth: 1,
+                      );
+                    },
+                  ),
                   titlesData: FlTitlesData(
                     leftTitles: AxisTitles(
                       sideTitles: SideTitles(
                         showTitles: true,
-                        reservedSize: 50,
+                        reservedSize: 60,
+                        interval: maxAmount > 0 ? maxAmount / 5 : 1000,
                         getTitlesWidget: (value, meta) {
-                          return Text(
-                            currencyFormatter.format(value),
-                            style: const TextStyle(fontSize: 10),
+                          if (value == 0) {
+                            return const Text('0', style: TextStyle(fontSize: 11, color: Colors.grey));
+                          }
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: Text(
+                              formatYAxis(value),
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: Colors.grey,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              textAlign: TextAlign.right,
+                            ),
                           );
                         },
                       ),
@@ -386,14 +491,23 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     bottomTitles: AxisTitles(
                       sideTitles: SideTitles(
                         showTitles: true,
+                        reservedSize: 30,
+                        interval: interval.toDouble(),
                         getTitlesWidget: (value, meta) {
                           final index = value.toInt();
-                          if (index >= 0 && index < data.length) {
+                          if (index >= 0 && index < data.length && index % interval == 0) {
                             final dateStr = data[index]['date'] as String;
                             final date = DateTime.parse(dateStr);
-                            return Text(
-                              '${date.day}/${date.month}',
-                              style: const TextStyle(fontSize: 10),
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: Text(
+                                '${date.day}.${date.month}',
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
                             );
                           }
                           return const Text('');
@@ -403,9 +517,41 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                     rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                   ),
-                  borderData: FlBorderData(show: true),
+                  borderData: FlBorderData(
+                    show: true,
+                    border: Border.all(
+                      color: AppTheme.borderColor,
+                      width: 1,
+                    ),
+                  ),
                   minY: 0,
-                  maxY: maxAmount * 1.2,
+                  maxY: maxAmount * 1.15, // Немного больше для лучшей видимости
+                  lineTouchData: LineTouchData(
+                    touchTooltipData: LineTouchTooltipData(
+                      getTooltipItems: (List<LineBarSpot> touchedSpots) {
+                        return touchedSpots.map((LineBarSpot touchedSpot) {
+                          final index = touchedSpot.x.toInt();
+                          if (index >= 0 && index < data.length) {
+                            final dateStr = data[index]['date'] as String;
+                            final date = DateTime.parse(dateStr);
+                            final amount = touchedSpot.y;
+                            return LineTooltipItem(
+                              '${date.day}.${date.month}.${date.year}\n${currencyFormatter.format(amount)}',
+                              const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            );
+                          }
+                          return null;
+                        }).toList();
+                      },
+                      tooltipRoundedRadius: 8,
+                      tooltipPadding: const EdgeInsets.all(12),
+                    ),
+                    handleBuiltInTouches: true,
+                  ),
                   lineBarsData: [
                     LineChartBarData(
                       spots: data.asMap().entries.map((entry) {
@@ -415,16 +561,69 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                         );
                       }).toList(),
                       isCurved: true,
+                      curveSmoothness: 0.35,
                       color: AppTheme.primaryColor,
-                      barWidth: 3,
-                      dotData: const FlDotData(show: false),
+                      barWidth: 4,
+                      dotData: FlDotData(
+                        show: true,
+                        getDotPainter: (spot, percent, barData, index) {
+                          return FlDotCirclePainter(
+                            radius: 5,
+                            color: AppTheme.primaryColor,
+                            strokeWidth: 2,
+                            strokeColor: Colors.white,
+                          );
+                        },
+                      ),
                       belowBarData: BarAreaData(
                         show: true,
-                        color: AppTheme.primaryColor.withOpacity(0.1),
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            AppTheme.primaryColor.withOpacity(0.3),
+                            AppTheme.primaryColor.withOpacity(0.05),
+                          ],
+                        ),
                       ),
                     ),
                   ],
                 ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatItem(String label, String value, Color color) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: color.withOpacity(0.3)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                color: AppTheme.textSecondary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: color,
               ),
             ),
           ],

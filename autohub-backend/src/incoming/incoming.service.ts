@@ -461,10 +461,11 @@ export class IncomingService {
             if (Number(incomingItem.purchasePrice) > Number(item.price)) {
               item.price = incomingItem.purchasePrice;
             }
+            // Временно отключено - поле warehouseCell еще не добавлено в БД
             // Обновляем ячейку склада, если она указана
-            if (incomingItem.warehouseCell) {
-              item.warehouseCell = incomingItem.warehouseCell;
-            }
+            // if (incomingItem.warehouseCell) {
+            //   item.warehouseCell = incomingItem.warehouseCell;
+            // }
             await queryRunner.manager.save(item);
           }
         } else {
