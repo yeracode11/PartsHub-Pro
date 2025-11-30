@@ -302,10 +302,33 @@ export class IncomingService {
 
   // Получение одной накладной
   async findOne(id: string, organizationId: string): Promise<IncomingDoc> {
-    const doc = await this.incomingDocRepository.findOne({
-      where: { id, organizationId },
-      relations: ['supplier', 'createdBy', 'items', 'items.item'],
-    });
+    // Используем QueryBuilder чтобы избежать загрузки warehouseCell из Item
+    const doc = await this.incomingDocRepository
+      .createQueryBuilder('doc')
+      .leftJoinAndSelect('doc.supplier', 'supplier')
+      .leftJoinAndSelect('doc.createdBy', 'createdBy')
+      .leftJoinAndSelect('doc.items', 'items')
+      .leftJoin('items.item', 'item')
+      .addSelect([
+        'item.id',
+        'item.name',
+        'item.sku',
+        'item.category',
+        'item.price',
+        'item.quantity',
+        'item.condition',
+        'item.description',
+        'item.imageUrl',
+        'item.images',
+        'item.synced',
+        'item.syncedToB2C',
+        'item.createdAt',
+        'item.updatedAt',
+        'item.organizationId',
+      ])
+      .where('doc.id = :id', { id })
+      .andWhere('doc.organizationId = :organizationId', { organizationId })
+      .getOne();
 
     if (!doc) {
       throw new NotFoundException(`Incoming document with ID ${id} not found`);

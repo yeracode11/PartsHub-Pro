@@ -56,13 +56,16 @@ class _SalesScreenState extends State<SalesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 768;
+    final padding = isMobile ? 16.0 : 24.0;
+
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
       body: Column(
         children: [
           // Заголовок
           Container(
-            padding: const EdgeInsets.all(24),
+            padding: EdgeInsets.all(padding),
             decoration: const BoxDecoration(
               color: AppTheme.surfaceColor,
               border: Border(
@@ -72,41 +75,54 @@ class _SalesScreenState extends State<SalesScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Продажи',
-                      style: Theme.of(context).textTheme.displayMedium,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Управление заказами и продажами',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: AppTheme.textSecondary,
-                          ),
-                    ),
-                  ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Продажи',
+                        style: Theme.of(context).textTheme.displayMedium?.copyWith(
+                          fontSize: isMobile ? 24 : 28,
+                        ),
+                      ),
+                      if (!isMobile) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          'Управление заказами и продажами',
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                color: AppTheme.textSecondary,
+                              ),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
-                FilledButton.icon(
-                  onPressed: () => _showOrderDialog(context),
-                  icon: const Icon(Icons.add),
-                  label: const Text('Новый заказ'),
-                ),
+                if (!isMobile)
+                  FilledButton.icon(
+                    onPressed: () => _showOrderDialog(context),
+                    icon: const Icon(Icons.add),
+                    label: const Text('Новый заказ'),
+                  )
+                else
+                  IconButton(
+                    icon: const Icon(Icons.add),
+                    onPressed: () => _showOrderDialog(context),
+                    tooltip: 'Новый заказ',
+                  ),
               ],
             ),
           ),
 
           // Список заказов
           Expanded(
-            child: _buildOrdersList(),
+            child: _buildOrdersList(isMobile: isMobile),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildOrdersList() {
+  Widget _buildOrdersList({bool isMobile = false}) {
     if (isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -169,15 +185,145 @@ class _SalesScreenState extends State<SalesScreen> {
       );
     }
 
+    if (isMobile) {
+      return _buildOrdersCards();
+    }
     return _buildOrdersTable();
+  }
+
+  Widget _buildOrdersCards() {
+    final numberFormat = NumberFormat('#,###', 'ru_RU');
+    final dateFormat = DateFormat('dd.MM.yyyy HH:mm');
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: orders.length,
+      itemBuilder: (context, index) {
+        final order = orders[index];
+        return Card(
+          margin: const EdgeInsets.only(bottom: 12),
+          child: InkWell(
+            onTap: () => _showOrderDialog(context, order: order),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          order.orderNumber ?? '#${order.id}',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      PopupMenuButton(
+                        itemBuilder: (context) => [
+                          const PopupMenuItem(
+                            value: 'edit',
+                            child: Row(
+                              children: [
+                                Icon(Icons.edit, size: 20),
+                                SizedBox(width: 8),
+                                Text('Редактировать'),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 'delete',
+                            child: Row(
+                              children: [
+                                Icon(Icons.delete, size: 20, color: Colors.red),
+                                SizedBox(width: 8),
+                                Text('Удалить', style: TextStyle(color: Colors.red)),
+                              ],
+                            ),
+                          ),
+                        ],
+                        onSelected: (value) {
+                          if (value == 'edit') {
+                            _showOrderDialog(context, order: order);
+                          } else if (value == 'delete') {
+                            _showDeleteDialog(context, order);
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Сумма',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppTheme.textSecondary,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${numberFormat.format(order.total)} ₸',
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.primaryColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          _buildStatusBadge(order.status),
+                          const SizedBox(height: 8),
+                          _buildPaymentBadge(order.paymentStatus),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.access_time,
+                        size: 16,
+                        color: AppTheme.textSecondary,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        dateFormat.format(order.createdAt),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppTheme.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Widget _buildOrdersTable() {
     final numberFormat = NumberFormat('#,###', 'ru_RU');
     final dateFormat = DateFormat('dd.MM.yyyy HH:mm');
+    final isMobile = MediaQuery.of(context).size.width < 768;
+    final margin = isMobile ? 16.0 : 24.0;
 
     return Container(
-      margin: const EdgeInsets.all(24),
+      margin: EdgeInsets.all(margin),
       decoration: BoxDecoration(
         color: AppTheme.surfaceColor,
         borderRadius: BorderRadius.circular(16),
@@ -583,31 +729,55 @@ class _OrderDialogState extends State<_OrderDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 768;
+    
     return AlertDialog(
       title: Text(widget.isEdit ? 'Редактировать заказ' : 'Новый заказ'),
       content: SizedBox(
-        width: 700,
-        height: 600,
+        width: isMobile 
+            ? MediaQuery.of(context).size.width * 0.9
+            : 700,
+        height: isMobile
+            ? MediaQuery.of(context).size.height * 0.8
+            : 600,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Выбор товаров
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Товары в заказе',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                ),
-                OutlinedButton.icon(
+            if (isMobile) ...[
+              Text(
+                'Товары в заказе',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
                   onPressed: _showAddItemDialog,
                   icon: const Icon(Icons.add, size: 18),
                   label: const Text('Добавить товар'),
                 ),
-              ],
-            ),
+              ),
+            ] else ...[
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Товары в заказе',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _showAddItemDialog,
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('Добавить товар'),
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: 12),
 
             // Список выбранных товаров
@@ -712,49 +882,98 @@ class _OrderDialogState extends State<_OrderDialog> {
             const SizedBox(height: 24),
 
             // Статусы и примечания
-            Row(
-              children: [
-                Expanded(
-                  child: DropdownButtonFormField<String>(
-                    value: selectedStatus,
-                    decoration: const InputDecoration(
-                      labelText: 'Статус',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: const [
-                      DropdownMenuItem(value: 'pending', child: Text('Ожидание')),
-                      DropdownMenuItem(value: 'processing', child: Text('В работе')),
-                      DropdownMenuItem(value: 'completed', child: Text('Завершен')),
-                      DropdownMenuItem(value: 'cancelled', child: Text('Отменен')),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final isMobile = constraints.maxWidth < 600;
+                
+                if (isMobile) {
+                  return Column(
+                    children: [
+                      DropdownButtonFormField<String>(
+                        value: selectedStatus,
+                        decoration: const InputDecoration(
+                          labelText: 'Статус',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: const [
+                          DropdownMenuItem(value: 'pending', child: Text('Ожидание')),
+                          DropdownMenuItem(value: 'processing', child: Text('В работе')),
+                          DropdownMenuItem(value: 'completed', child: Text('Завершен')),
+                          DropdownMenuItem(value: 'cancelled', child: Text('Отменен')),
+                        ],
+                        onChanged: (value) {
+                          setState(() {
+                            selectedStatus = value!;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      DropdownButtonFormField<String>(
+                        value: selectedPaymentStatus,
+                        decoration: const InputDecoration(
+                          labelText: 'Статус оплаты',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: const [
+                          DropdownMenuItem(value: 'pending', child: Text('Не оплачен')),
+                          DropdownMenuItem(value: 'partially_paid', child: Text('Частично')),
+                          DropdownMenuItem(value: 'paid', child: Text('Оплачен')),
+                        ],
+                        onChanged: (value) {
+                          setState(() {
+                            selectedPaymentStatus = value!;
+                          });
+                        },
+                      ),
                     ],
-                    onChanged: (value) {
-                      setState(() {
-                        selectedStatus = value!;
-                      });
-                    },
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: DropdownButtonFormField<String>(
-                    value: selectedPaymentStatus,
-                    decoration: const InputDecoration(
-                      labelText: 'Статус оплаты',
-                      border: OutlineInputBorder(),
+                  );
+                }
+                
+                return Row(
+                  children: [
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        value: selectedStatus,
+                        decoration: const InputDecoration(
+                          labelText: 'Статус',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: const [
+                          DropdownMenuItem(value: 'pending', child: Text('Ожидание')),
+                          DropdownMenuItem(value: 'processing', child: Text('В работе')),
+                          DropdownMenuItem(value: 'completed', child: Text('Завершен')),
+                          DropdownMenuItem(value: 'cancelled', child: Text('Отменен')),
+                        ],
+                        onChanged: (value) {
+                          setState(() {
+                            selectedStatus = value!;
+                          });
+                        },
+                      ),
                     ),
-                    items: const [
-                      DropdownMenuItem(value: 'pending', child: Text('Не оплачен')),
-                      DropdownMenuItem(value: 'partially_paid', child: Text('Частично')),
-                      DropdownMenuItem(value: 'paid', child: Text('Оплачен')),
-                    ],
-                    onChanged: (value) {
-                      setState(() {
-                        selectedPaymentStatus = value!;
-                      });
-                    },
-                  ),
-                ),
-              ],
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        value: selectedPaymentStatus,
+                        decoration: const InputDecoration(
+                          labelText: 'Статус оплаты',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: const [
+                          DropdownMenuItem(value: 'pending', child: Text('Не оплачен')),
+                          DropdownMenuItem(value: 'partially_paid', child: Text('Частично')),
+                          DropdownMenuItem(value: 'paid', child: Text('Оплачен')),
+                        ],
+                        onChanged: (value) {
+                          setState(() {
+                            selectedPaymentStatus = value!;
+                          });
+                        },
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
             const SizedBox(height: 16),
             TextField(
@@ -800,11 +1019,14 @@ class _OrderDialogState extends State<_OrderDialog> {
     showDialog(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Добавить товар'),
-          content: SizedBox(
-            width: 400,
-            child: Column(
+        builder: (context, setDialogState) {
+          final isMobile = MediaQuery.of(context).size.width < 768;
+          
+          return AlertDialog(
+            title: const Text('Добавить товар'),
+            content: SizedBox(
+              width: isMobile ? MediaQuery.of(context).size.width * 0.8 : 400,
+              child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 DropdownButtonFormField<Map<String, dynamic>>(
@@ -876,7 +1098,8 @@ class _OrderDialogState extends State<_OrderDialog> {
               child: const Text('Добавить'),
             ),
           ],
-        ),
+        );
+        },
       ),
     );
   }

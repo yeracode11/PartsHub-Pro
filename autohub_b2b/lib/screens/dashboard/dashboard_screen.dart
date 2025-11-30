@@ -80,9 +80,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildDashboardContent(BuildContext context, DashboardLoaded state) {
     final numberFormat = NumberFormat('#,###', 'ru_RU');
+    final isMobile = MediaQuery.of(context).size.width < 768;
+    final padding = isMobile ? 16.0 : 24.0;
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24.0),
+      padding: EdgeInsets.all(padding),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -90,139 +92,162 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Дашборд',
-                    style: Theme.of(context).textTheme.displayMedium,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Добро пожаловать в Auto+ Pro',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AppTheme.textSecondary,
-                        ),
-                  ),
-                ],
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: AppTheme.successGradient.colors[0].withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: AppTheme.successGradient.colors[0].withOpacity(0.3),
-                  ),
-                ),
-                child: Row(
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(
-                      Icons.circle,
-                      size: 8,
-                      color: AppTheme.successGradient.colors[0],
-                    ),
-                    const SizedBox(width: 8),
                     Text(
-                      'Онлайн',
+                      'Дашборд',
+                      style: Theme.of(context).textTheme.displayMedium?.copyWith(
+                        fontSize: isMobile ? 24 : 28,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Добро пожаловать в Auto+ Pro',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: AppTheme.successGradient.colors[0],
-                            fontWeight: FontWeight.w600,
+                            color: AppTheme.textSecondary,
                           ),
                     ),
                   ],
                 ),
               ),
+              if (!isMobile)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AppTheme.successGradient.colors[0].withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: AppTheme.successGradient.colors[0].withOpacity(0.3),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.circle,
+                        size: 8,
+                        color: AppTheme.successGradient.colors[0],
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Онлайн',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: AppTheme.successGradient.colors[0],
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
             ],
           ),
 
-          const SizedBox(height: 32),
+          SizedBox(height: isMobile ? 16 : 32),
 
           // Статистические карточки
-          GridView.count(
-            crossAxisCount: 4,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisSpacing: 24,
-            mainAxisSpacing: 24,
-            childAspectRatio: 1.5,
-            children: [
-              _buildStatCard(
-                context,
-                title: 'Общий доход',
-                value: '${numberFormat.format(state.stats.totalRevenue)} ₸',
-                icon: Icons.attach_money,
-                gradient: AppTheme.primaryGradient,
-                trend: '+12.5%',
-              ),
-              _buildStatCard(
-                context,
-                title: 'Доход за месяц',
-                value: '${numberFormat.format(state.stats.monthlyRevenue)} ₸',
-                icon: Icons.trending_up,
-                gradient: AppTheme.successGradient,
-                trend: '+8.2%',
-              ),
-              _buildStatCard(
-                context,
-                title: 'Товаров на складе',
-                value: '${state.stats.inventoryCount}',
-                icon: Icons.inventory_2,
-                gradient: AppTheme.warningGradient,
-              ),
-              _buildStatCard(
-                context,
-                title: 'Активные заказы',
-                value: '${state.stats.activeOrdersCount}',
-                icon: Icons.shopping_cart,
-                gradient: LinearGradient(
-                  colors: [Colors.blue.shade400, Colors.blue.shade600],
-                ),
-              ),
-            ],
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final crossAxisCount = isMobile ? 2 : 4;
+              final spacing = isMobile ? 12.0 : 24.0;
+              final aspectRatio = isMobile ? 1.3 : 1.5;
+              
+              return GridView.count(
+                crossAxisCount: crossAxisCount,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisSpacing: spacing,
+                mainAxisSpacing: spacing,
+                childAspectRatio: aspectRatio,
+                children: [
+                  _buildStatCard(
+                    context,
+                    title: 'Общий доход',
+                    value: '${numberFormat.format(state.stats.totalRevenue)} ₸',
+                    icon: Icons.attach_money,
+                    gradient: AppTheme.primaryGradient,
+                    trend: '+12.5%',
+                    isMobile: isMobile,
+                  ),
+                  _buildStatCard(
+                    context,
+                    title: 'Доход за месяц',
+                    value: '${numberFormat.format(state.stats.monthlyRevenue)} ₸',
+                    icon: Icons.trending_up,
+                    gradient: AppTheme.successGradient,
+                    trend: '+8.2%',
+                    isMobile: isMobile,
+                  ),
+                  _buildStatCard(
+                    context,
+                    title: 'Товаров на складе',
+                    value: '${state.stats.inventoryCount}',
+                    icon: Icons.inventory_2,
+                    gradient: AppTheme.warningGradient,
+                    isMobile: isMobile,
+                  ),
+                  _buildStatCard(
+                    context,
+                    title: 'Активные заказы',
+                    value: '${state.stats.activeOrdersCount}',
+                    icon: Icons.shopping_cart,
+                    gradient: LinearGradient(
+                      colors: [Colors.blue.shade400, Colors.blue.shade600],
+                    ),
+                    isMobile: isMobile,
+                  ),
+                ],
+              );
+            },
           ),
 
-          const SizedBox(height: 32),
+          SizedBox(height: isMobile ? 16 : 32),
 
           // График продаж и последние заказы
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // График продаж
-              Expanded(
-                flex: 2,
-                child: _buildSalesChart(context, state),
-              ),
-              const SizedBox(width: 24),
+          if (isMobile) ...[
+            _buildSalesChart(context, state, isMobile: true),
+            const SizedBox(height: 16),
+            _buildRecentOrders(context, state, isMobile: true),
+          ] else ...[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: _buildSalesChart(context, state),
+                ),
+                const SizedBox(width: 24),
+                Expanded(
+                  flex: 1,
+                  child: _buildRecentOrders(context, state),
+                ),
+              ],
+            ),
+          ],
 
-              // Последние заказы
-              Expanded(
-                flex: 1,
-                child: _buildRecentOrders(context, state),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 32),
+          SizedBox(height: isMobile ? 16 : 32),
 
           // Напоминания о ТО и Популярные товары
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Напоминания о ТО
-              const Expanded(
-                flex: 1,
-                child: ServiceRemindersWidget(),
-              ),
-              const SizedBox(width: 24),
-
-              // Популярные товары
-              Expanded(
-                flex: 1,
-                child: _buildPopularItems(context, state),
-              ),
-            ],
-          ),
+          if (isMobile) ...[
+            const ServiceRemindersWidget(),
+            const SizedBox(height: 16),
+            _buildPopularItems(context, state, isMobile: true),
+          ] else ...[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Expanded(
+                  flex: 1,
+                  child: ServiceRemindersWidget(),
+                ),
+                const SizedBox(width: 24),
+                Expanded(
+                  flex: 1,
+                  child: _buildPopularItems(context, state),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -235,9 +260,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     required IconData icon,
     required Gradient gradient,
     String? trend,
+    bool isMobile = false,
   }) {
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.all(isMobile ? 16 : 24),
       decoration: BoxDecoration(
         color: AppTheme.surfaceColor,
         borderRadius: BorderRadius.circular(16),
@@ -258,14 +284,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: EdgeInsets.all(isMobile ? 8 : 12),
                 decoration: BoxDecoration(
                   gradient: gradient,
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(icon, color: Colors.white, size: 24),
+                child: Icon(icon, color: Colors.white, size: isMobile ? 20 : 24),
               ),
-              if (trend != null)
+              if (trend != null && !isMobile)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
@@ -290,14 +316,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 value,
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                       fontWeight: FontWeight.bold,
+                      fontSize: isMobile ? 18 : 20,
                     ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 4),
               Text(
                 title,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: AppTheme.textSecondary,
+                      fontSize: isMobile ? 12 : 14,
                     ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
             ],
           ),
@@ -306,7 +338,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildSalesChart(BuildContext context, DashboardLoaded state) {
+  Widget _buildSalesChart(BuildContext context, DashboardLoaded state, {bool isMobile = false}) {
     final spots = state.chartData.data
         .asMap()
         .entries
@@ -314,7 +346,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         .toList();
 
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.all(isMobile ? 16 : 24),
       decoration: BoxDecoration(
         color: AppTheme.surfaceColor,
         borderRadius: BorderRadius.circular(16),
@@ -328,22 +360,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
             children: [
               Text(
                 'Продажи',
-                style: Theme.of(context).textTheme.titleLarge,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontSize: isMobile ? 18 : 20,
+                ),
               ),
-              Row(
-                children: [
-                  _buildPeriodButton('7д', state.currentPeriod == '7d'),
-                  const SizedBox(width: 8),
-                  _buildPeriodButton('30д', state.currentPeriod == '30d'),
-                  const SizedBox(width: 8),
-                  _buildPeriodButton('90д', state.currentPeriod == '90d'),
-                ],
-              ),
+              if (!isMobile)
+                Row(
+                  children: [
+                    _buildPeriodButton('7д', state.currentPeriod == '7d'),
+                    const SizedBox(width: 8),
+                    _buildPeriodButton('30д', state.currentPeriod == '30d'),
+                    const SizedBox(width: 8),
+                    _buildPeriodButton('90д', state.currentPeriod == '90d'),
+                  ],
+                ),
             ],
           ),
-          const SizedBox(height: 24),
+          if (isMobile) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(child: _buildPeriodButton('7д', state.currentPeriod == '7d')),
+                const SizedBox(width: 8),
+                Expanded(child: _buildPeriodButton('30д', state.currentPeriod == '30d')),
+                const SizedBox(width: 8),
+                Expanded(child: _buildPeriodButton('90д', state.currentPeriod == '90d')),
+              ],
+            ),
+          ],
+          SizedBox(height: isMobile ? 16 : 24),
           SizedBox(
-            height: 300,
+            height: isMobile ? 200 : 300,
             child: spots.isEmpty
                 ? const Center(child: Text('Нет данных'))
                 : LineChart(
@@ -464,9 +511,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildRecentOrders(BuildContext context, DashboardLoaded state) {
+  Widget _buildRecentOrders(BuildContext context, DashboardLoaded state, {bool isMobile = false}) {
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.all(isMobile ? 16 : 24),
       decoration: BoxDecoration(
         color: AppTheme.surfaceColor,
         borderRadius: BorderRadius.circular(16),
@@ -571,9 +618,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildPopularItems(BuildContext context, DashboardLoaded state) {
+  Widget _buildPopularItems(BuildContext context, DashboardLoaded state, {bool isMobile = false}) {
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.all(isMobile ? 16 : 24),
       decoration: BoxDecoration(
         color: AppTheme.surfaceColor,
         borderRadius: BorderRadius.circular(16),
@@ -584,74 +631,122 @@ class _DashboardScreenState extends State<DashboardScreen> {
         children: [
           Text(
             'Популярные товары',
-            style: Theme.of(context).textTheme.titleLarge,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontSize: isMobile ? 18 : 20,
+            ),
           ),
-          const SizedBox(height: 24),
-          Table(
-            columnWidths: const {
-              0: FlexColumnWidth(2),
-              1: FlexColumnWidth(1),
-              2: FlexColumnWidth(1),
-            },
-            children: [
-              TableRow(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: Text(
-                      'Название',
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+          SizedBox(height: isMobile ? 16 : 24),
+          if (isMobile)
+            ...state.popularItems.map((item) {
+              return Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppTheme.backgroundColor,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppTheme.borderColor),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.name,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Продано: ${item.soldCount}',
+                          style: const TextStyle(
+                            fontSize: 12,
                             color: AppTheme.textSecondary,
                           ),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: Text(
-                      'Продано',
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                            color: AppTheme.textSecondary,
+                        ),
+                        Text(
+                          '${NumberFormat('#,###', 'ru_RU').format(item.price)} ₸',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.primaryColor,
                           ),
+                        ),
+                      ],
                     ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: Text(
-                      'Цена',
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                            color: AppTheme.textSecondary,
-                          ),
-                    ),
-                  ),
-                ],
-              ),
-              ...state.popularItems.map((item) {
-                return TableRow(
+                  ],
+                ),
+              );
+            }).toList()
+          else
+            Table(
+              columnWidths: const {
+                0: FlexColumnWidth(2),
+                1: FlexColumnWidth(1),
+                2: FlexColumnWidth(1),
+              },
+              children: [
+                TableRow(
                   children: [
                     Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.only(bottom: 16),
                       child: Text(
-                        item.name,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w500,
-                        ),
+                        'Название',
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                              color: AppTheme.textSecondary,
+                            ),
                       ),
                     ),
                     Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: Text('${item.soldCount}'),
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: Text(
+                        'Продано',
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                              color: AppTheme.textSecondary,
+                            ),
+                      ),
                     ),
                     Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.only(bottom: 16),
                       child: Text(
-                        '${NumberFormat('#,###', 'ru_RU').format(item.price)} ₸',
+                        'Цена',
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                              color: AppTheme.textSecondary,
+                            ),
                       ),
                     ),
                   ],
-                );
-              }).toList(),
-            ],
-          ),
+                ),
+                ...state.popularItems.map((item) {
+                  return TableRow(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Text(
+                          item.name,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Text('${item.soldCount}'),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Text(
+                          '${NumberFormat('#,###', 'ru_RU').format(item.price)} ₸',
+                        ),
+                      ),
+                    ],
+                  );
+                }).toList(),
+              ],
+            ),
         ],
       ),
     );

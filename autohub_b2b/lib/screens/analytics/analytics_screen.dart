@@ -78,56 +78,50 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 768;
+    final padding = isMobile ? 16.0 : 24.0;
+
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
       body: Column(
         children: [
           // Заголовок
           Container(
-            padding: const EdgeInsets.all(24),
+            padding: EdgeInsets.all(padding),
             decoration: const BoxDecoration(
               color: AppTheme.surfaceColor,
               border: Border(
                 bottom: BorderSide(color: AppTheme.borderColor),
               ),
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Аналитика',
-                      style: Theme.of(context).textTheme.displayMedium,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Детальная аналитика продаж и товаров',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: AppTheme.textSecondary,
-                          ),
-                    ),
-                  ],
-                ),
                 Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    // Выбор периода для графика
-                    SegmentedButton<String>(
-                      segments: const [
-                        ButtonSegment(value: '7d', label: Text('7 дней')),
-                        ButtonSegment(value: '30d', label: Text('30 дней')),
-                        ButtonSegment(value: '90d', label: Text('90 дней')),
-                      ],
-                      selected: {selectedPeriod},
-                      onSelectionChanged: (Set<String> newSelection) {
-                        setState(() {
-                          selectedPeriod = newSelection.first;
-                        });
-                        _loadAnalytics();
-                      },
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Аналитика',
+                            style: Theme.of(context).textTheme.displayMedium?.copyWith(
+                              fontSize: isMobile ? 24 : 28,
+                            ),
+                          ),
+                          if (!isMobile) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              'Детальная аналитика продаж и товаров',
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: AppTheme.textSecondary,
+                                  ),
+                            ),
+                          ],
+                        ],
+                      ),
                     ),
-                    const SizedBox(width: 16),
                     IconButton(
                       icon: const Icon(Icons.refresh),
                       onPressed: _loadAnalytics,
@@ -135,6 +129,43 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     ),
                   ],
                 ),
+                if (isMobile) ...[
+                  const SizedBox(height: 12),
+                  SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment(value: '7d', label: Text('7д')),
+                      ButtonSegment(value: '30d', label: Text('30д')),
+                      ButtonSegment(value: '90d', label: Text('90д')),
+                    ],
+                    selected: {selectedPeriod},
+                    onSelectionChanged: (Set<String> newSelection) {
+                      setState(() {
+                        selectedPeriod = newSelection.first;
+                      });
+                      _loadAnalytics();
+                    },
+                  ),
+                ] else ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      SegmentedButton<String>(
+                        segments: const [
+                          ButtonSegment(value: '7d', label: Text('7 дней')),
+                          ButtonSegment(value: '30d', label: Text('30 дней')),
+                          ButtonSegment(value: '90d', label: Text('90 дней')),
+                        ],
+                        selected: {selectedPeriod},
+                        onSelectionChanged: (Set<String> newSelection) {
+                          setState(() {
+                            selectedPeriod = newSelection.first;
+                          });
+                          _loadAnalytics();
+                        },
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
@@ -171,31 +202,39 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       );
     }
 
+    final isMobile = MediaQuery.of(context).size.width < 768;
+    final padding = isMobile ? 16.0 : 24.0;
+    final spacing = isMobile ? 16.0 : 24.0;
+
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.all(padding),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Ключевые метрики
-          if (advancedAnalytics != null) _buildKeyMetrics(),
-          const SizedBox(height: 24),
+          if (advancedAnalytics != null) _buildKeyMetrics(isMobile: isMobile),
+          SizedBox(height: spacing),
 
           // График продаж
-          if (salesChart != null) _buildSalesChart(),
-          const SizedBox(height: 24),
+          if (salesChart != null) _buildSalesChart(isMobile: isMobile),
+          SizedBox(height: spacing),
 
           // Две колонки
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Топ продаваемых товаров
-              Expanded(child: _buildTopSellingItems()),
-              const SizedBox(width: 24),
-              // Товары с низким остатком
-              Expanded(child: _buildLowStockItems()),
-            ],
-          ),
-          const SizedBox(height: 24),
+          if (isMobile) ...[
+            _buildTopSellingItems(isMobile: true),
+            SizedBox(height: spacing),
+            _buildLowStockItems(isMobile: true),
+          ] else ...[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: _buildTopSellingItems()),
+                SizedBox(width: spacing),
+                Expanded(child: _buildLowStockItems()),
+              ],
+            ),
+          ],
+          SizedBox(height: spacing),
 
           // Продажи по категориям
           if (salesByCategory.isNotEmpty) _buildSalesByCategory(),
@@ -204,7 +243,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     );
   }
 
-  Widget _buildKeyMetrics() {
+  Widget _buildKeyMetrics({bool isMobile = false}) {
     final revenue = advancedAnalytics!['revenue'];
     final orders = advancedAnalytics!['orders'];
     final avgOrder = advancedAnalytics!['avgOrderValue'];
@@ -217,6 +256,59 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       decimalDigits: 0,
     );
 
+    final spacing = isMobile ? 12.0 : 16.0;
+
+    if (isMobile) {
+      return Column(
+        children: [
+          Row(
+            children: [
+              Expanded(child: _buildMetricCard(
+                'Выручка',
+                currencyFormatter.format(revenue['current']),
+                revenue['change']?.toDouble() ?? 0.0,
+                Icons.attach_money,
+                AppTheme.primaryColor,
+                isMobile: true,
+              )),
+              SizedBox(width: spacing),
+              Expanded(child: _buildMetricCard(
+                'Заказы',
+                '${orders['current']}',
+                orders['change']?.toDouble() ?? 0.0,
+                Icons.shopping_bag,
+                Colors.orange,
+                isMobile: true,
+              )),
+            ],
+          ),
+          SizedBox(height: spacing),
+          Row(
+            children: [
+              Expanded(child: _buildMetricCard(
+                'Средний чек',
+                currencyFormatter.format(avgOrder['current']),
+                avgOrder['change']?.toDouble() ?? 0.0,
+                Icons.receipt,
+                Colors.green,
+                isMobile: true,
+              )),
+              SizedBox(width: spacing),
+              Expanded(child: _buildMetricCard(
+                'Прибыль',
+                currencyFormatter.format(profit['amount']),
+                profit['margin']?.toDouble() ?? 0.0,
+                Icons.trending_up,
+                Colors.purple,
+                isPercent: true,
+                isMobile: true,
+              )),
+            ],
+          ),
+        ],
+      );
+    }
+
     return Row(
       children: [
         Expanded(child: _buildMetricCard(
@@ -226,7 +318,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           Icons.attach_money,
           AppTheme.primaryColor,
         )),
-        const SizedBox(width: 16),
+        SizedBox(width: spacing),
         Expanded(child: _buildMetricCard(
           'Заказы',
           '${orders['current']}',
@@ -234,7 +326,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           Icons.shopping_bag,
           Colors.orange,
         )),
-        const SizedBox(width: 16),
+        SizedBox(width: spacing),
         Expanded(child: _buildMetricCard(
           'Средний чек',
           currencyFormatter.format(avgOrder['current']),
@@ -242,7 +334,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           Icons.receipt,
           Colors.green,
         )),
-        const SizedBox(width: 16),
+        SizedBox(width: spacing),
         Expanded(child: _buildMetricCard(
           'Прибыль',
           currencyFormatter.format(profit['amount']),
@@ -262,6 +354,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     IconData icon,
     Color color, {
     bool isPercent = false,
+    bool isMobile = false,
   }) {
     final isPositive = change >= 0;
     final changeText = isPercent
@@ -272,7 +365,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: EdgeInsets.all(isMobile ? 16 : 20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -338,7 +431,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     );
   }
 
-  Widget _buildSalesChart() {
+  Widget _buildSalesChart({bool isMobile = false}) {
     final data = salesChart!['data'] as List<dynamic>;
     if (data.isEmpty) {
       return Card(
@@ -391,20 +484,24 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: EdgeInsets.all(isMobile ? 12 : 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  'Продажи по дням',
-                  style: Theme.of(context).textTheme.headlineSmall,
+                Expanded(
+                  child: Text(
+                    'Продажи по дням',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontSize: isMobile ? 18 : 20,
+                    ),
+                  ),
                 ),
-                Row(
-                  children: [
-                    Container(
+                if (!isMobile)
+                  Flexible(
+                    child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
                         color: AppTheme.primaryColor.withOpacity(0.1),
@@ -415,34 +512,47 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                         children: [
                           Icon(Icons.trending_up, size: 16, color: AppTheme.primaryColor),
                           const SizedBox(width: 4),
-                          Text(
-                            'Макс: ${currencyFormatter.format(maxAmount)}',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: AppTheme.primaryColor,
+                          Flexible(
+                            child: Text(
+                              'Макс: ${currencyFormatter.format(maxAmount)}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: AppTheme.primaryColor,
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ],
                       ),
                     ),
-                  ],
-                ),
+                  ),
               ],
             ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                _buildStatItem('Среднее', currencyFormatter.format(avgAmount), Colors.blue),
-                const SizedBox(width: 16),
-                _buildStatItem('Макс', currencyFormatter.format(maxAmount), Colors.green),
-                const SizedBox(width: 16),
-                _buildStatItem('Мин', currencyFormatter.format(minAmount), Colors.orange),
+            SizedBox(height: isMobile ? 8 : 8),
+            if (isMobile)
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  _buildStatItem('Среднее', currencyFormatter.format(avgAmount), Colors.blue, isMobile: true, inWrap: true),
+                  _buildStatItem('Макс', currencyFormatter.format(maxAmount), Colors.green, isMobile: true, inWrap: true),
+                  _buildStatItem('Мин', currencyFormatter.format(minAmount), Colors.orange, isMobile: true, inWrap: true),
+                ],
+              )
+            else
+              Row(
+                children: [
+                  _buildStatItem('Среднее', currencyFormatter.format(avgAmount), Colors.blue),
+                  const SizedBox(width: 16),
+                  _buildStatItem('Макс', currencyFormatter.format(maxAmount), Colors.green),
+                  const SizedBox(width: 16),
+                  _buildStatItem('Мин', currencyFormatter.format(minAmount), Colors.orange),
               ],
             ),
-            const SizedBox(height: 24),
+            SizedBox(height: isMobile ? 16 : 24),
             SizedBox(
-              height: 350, // Увеличил высоту для лучшей видимости
+              height: isMobile ? 320 : 350,
               child: LineChart(
                 LineChartData(
                   gridData: FlGridData(
@@ -467,18 +577,24 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     leftTitles: AxisTitles(
                       sideTitles: SideTitles(
                         showTitles: true,
-                        reservedSize: 60,
+                        reservedSize: isMobile ? 45 : 60,
                         interval: maxAmount > 0 ? maxAmount / 5 : 1000,
                         getTitlesWidget: (value, meta) {
                           if (value == 0) {
-                            return const Text('0', style: TextStyle(fontSize: 11, color: Colors.grey));
+                            return Text(
+                              '0',
+                              style: TextStyle(
+                                fontSize: isMobile ? 10 : 11,
+                                color: Colors.grey,
+                              ),
+                            );
                           }
                           return Padding(
-                            padding: const EdgeInsets.only(right: 8),
+                            padding: EdgeInsets.only(right: isMobile ? 4 : 8),
                             child: Text(
                               formatYAxis(value),
-                              style: const TextStyle(
-                                fontSize: 11,
+                              style: TextStyle(
+                                fontSize: isMobile ? 10 : 11,
                                 color: Colors.grey,
                                 fontWeight: FontWeight.w500,
                               ),
@@ -491,7 +607,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     bottomTitles: AxisTitles(
                       sideTitles: SideTitles(
                         showTitles: true,
-                        reservedSize: 30,
+                        reservedSize: isMobile ? 25 : 30,
                         interval: interval.toDouble(),
                         getTitlesWidget: (value, meta) {
                           final index = value.toInt();
@@ -499,11 +615,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                             final dateStr = data[index]['date'] as String;
                             final date = DateTime.parse(dateStr);
                             return Padding(
-                              padding: const EdgeInsets.only(top: 8),
+                              padding: EdgeInsets.only(top: isMobile ? 4 : 8),
                               child: Text(
                                 '${date.day}.${date.month}',
-                                style: const TextStyle(
-                                  fontSize: 11,
+                                style: TextStyle(
+                                  fontSize: isMobile ? 10 : 11,
                                   color: Colors.grey,
                                   fontWeight: FontWeight.w500,
                                 ),
@@ -597,42 +713,53 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     );
   }
 
-  Widget _buildStatItem(String label, String value, Color color) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: color.withOpacity(0.3)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                color: AppTheme.textSecondary,
-                fontWeight: FontWeight.w500,
-              ),
+  Widget _buildStatItem(String label, String value, Color color, {bool isMobile = false, bool inWrap = false}) {
+    final container = Container(
+      padding: EdgeInsets.all(isMobile ? 8 : 12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: isMobile ? 9 : 11,
+              color: AppTheme.textSecondary,
+              fontWeight: FontWeight.w500,
             ),
-            const SizedBox(height: 4),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
+          ),
+          SizedBox(height: isMobile ? 2 : 4),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: isMobile ? 11 : 14,
+              fontWeight: FontWeight.bold,
+              color: color,
             ),
-          ],
-        ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
       ),
     );
+
+    // Если используется в Wrap, не оборачиваем в Flexible/Expanded
+    if (inWrap) {
+      return container;
+    }
+    
+    if (isMobile) {
+      return Flexible(child: container);
+    }
+    return Expanded(child: container);
   }
 
-  Widget _buildTopSellingItems() {
+  Widget _buildTopSellingItems({bool isMobile = false}) {
     if (topSellingItems.isEmpty) {
       return Card(
         elevation: 4,
@@ -659,21 +786,25 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: EdgeInsets.all(isMobile ? 16 : 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                Icon(Icons.trending_up, color: AppTheme.primaryColor),
-                const SizedBox(width: 8),
-                Text(
-                  'Топ продаваемых товаров',
-                  style: Theme.of(context).textTheme.headlineSmall,
+                Icon(Icons.trending_up, color: AppTheme.primaryColor, size: isMobile ? 20 : 24),
+                SizedBox(width: isMobile ? 6 : 8),
+                Expanded(
+                  child: Text(
+                    'Топ продаваемых товаров',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontSize: isMobile ? 16 : 18,
+                    ),
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: isMobile ? 12 : 16),
             ListView.separated(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
@@ -726,23 +857,24 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     );
   }
 
-  Widget _buildLowStockItems() {
+  Widget _buildLowStockItems({bool isMobile = false}) {
     if (lowStockItems.isEmpty) {
       return Card(
         elevation: 4,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: EdgeInsets.all(isMobile ? 16 : 24),
           child: Center(
             child: Column(
               children: [
-                Icon(Icons.check_circle, size: 48, color: Colors.green),
+                Icon(Icons.check_circle, size: isMobile ? 40 : 48, color: Colors.green),
                 const SizedBox(height: 8),
                 Text(
                   'Все товары в наличии',
                   style: TextStyle(
                     color: AppTheme.textSecondary,
                     fontWeight: FontWeight.w500,
+                    fontSize: isMobile ? 14 : 16,
                   ),
                 ),
               ],
@@ -762,21 +894,25 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: EdgeInsets.all(isMobile ? 16 : 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                Icon(Icons.warning, color: Colors.orange),
-                const SizedBox(width: 8),
-                Text(
-                  'Товары с низким остатком',
-                  style: Theme.of(context).textTheme.headlineSmall,
+                Icon(Icons.warning, color: Colors.orange, size: isMobile ? 20 : 24),
+                SizedBox(width: isMobile ? 6 : 8),
+                Expanded(
+                  child: Text(
+                    'Товары с низким остатком',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontSize: isMobile ? 16 : 18,
+                    ),
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: isMobile ? 12 : 16),
             ListView.separated(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
@@ -836,6 +972,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   }
 
   Widget _buildSalesByCategory() {
+    final isMobile = MediaQuery.of(context).size.width < 768;
     final currencyFormatter = NumberFormat.currency(
       locale: 'ru_RU',
       symbol: '₸',
@@ -851,64 +988,24 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: EdgeInsets.all(isMobile ? 16 : 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               'Продажи по категориям',
-              style: Theme.of(context).textTheme.headlineSmall,
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                fontSize: isMobile ? 18 : 20,
+              ),
             ),
-            const SizedBox(height: 24),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Круговая диаграмма
-                Expanded(
-                  child: AspectRatio(
-                    aspectRatio: 1.5,
-                    child: PieChart(
-                      PieChartData(
-                        sections: salesByCategory.asMap().entries.map((entry) {
-                          final index = entry.key;
-                          final category = entry.value;
-                          final colors = [
-                            AppTheme.primaryColor,
-                            Colors.orange.shade400,
-                            Colors.green.shade400,
-                            Colors.purple.shade400,
-                            Colors.blue.shade400,
-                            Colors.red.shade400,
-                          ];
-
-                          final percentage = totalRevenue > 0
-                              ? ((category['revenue'] as num).toDouble() / totalRevenue) * 100
-                              : 0.0;
-
-                          return PieChartSectionData(
-                            value: (category['revenue'] as num).toDouble(),
-                            title: '${percentage.toStringAsFixed(1)}%',
-                            color: colors[index % colors.length],
-                            radius: 100,
-                            titleStyle: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          );
-                        }).toList(),
-                        sectionsSpace: 2,
-                        centerSpaceRadius: 40,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 32),
-                // Легенда
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: salesByCategory.asMap().entries.map((entry) {
+            SizedBox(height: isMobile ? 16 : 24),
+            if (isMobile) ...[
+              // На мобильных: диаграмма сверху, легенда снизу
+              AspectRatio(
+                aspectRatio: 1.2,
+                child: PieChart(
+                  PieChartData(
+                    sections: salesByCategory.asMap().entries.map((entry) {
                       final index = entry.key;
                       final category = entry.value;
                       final colors = [
@@ -920,47 +1017,181 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                         Colors.red.shade400,
                       ];
 
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: Row(
+                      final percentage = totalRevenue > 0
+                          ? ((category['revenue'] as num).toDouble() / totalRevenue) * 100
+                          : 0.0;
+
+                      return PieChartSectionData(
+                        value: (category['revenue'] as num).toDouble(),
+                        title: '${percentage.toStringAsFixed(1)}%',
+                        color: colors[index % colors.length],
+                        radius: 80,
+                        titleStyle: TextStyle(
+                          fontSize: isMobile ? 12 : 14,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      );
+                    }).toList(),
+                    sectionsSpace: 2,
+                    centerSpaceRadius: isMobile ? 30 : 40,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              // Легенда
+              ...salesByCategory.asMap().entries.map((entry) {
+                final index = entry.key;
+                final category = entry.value;
+                final colors = [
+                  AppTheme.primaryColor,
+                  Colors.orange.shade400,
+                  Colors.green.shade400,
+                  Colors.purple.shade400,
+                  Colors.blue.shade400,
+                  Colors.red.shade400,
+                ];
+
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 16,
+                        height: 16,
+                        decoration: BoxDecoration(
+                          color: colors[index % colors.length],
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Container(
-                              width: 16,
-                              height: 16,
-                              decoration: BoxDecoration(
-                                color: colors[index % colors.length],
-                                borderRadius: BorderRadius.circular(4),
+                            Text(
+                              category['category'] ?? 'Без категории',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
                               ),
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    category['category'] ?? 'Без категории',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  Text(
-                                    '${category['quantity']} шт · ${currencyFormatter.format(category['revenue'])}',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: AppTheme.textSecondary,
-                                    ),
-                                  ),
-                                ],
+                            Text(
+                              '${category['quantity']} шт · ${currencyFormatter.format(category['revenue'])}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppTheme.textSecondary,
                               ),
                             ),
                           ],
                         ),
-                      );
-                    }).toList(),
+                      ),
+                    ],
                   ),
-                ),
-              ],
-            ),
+                );
+              }).toList(),
+            ] else ...[
+              // На desktop: диаграмма и легенда рядом
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: AspectRatio(
+                      aspectRatio: 1.5,
+                      child: PieChart(
+                        PieChartData(
+                          sections: salesByCategory.asMap().entries.map((entry) {
+                            final index = entry.key;
+                            final category = entry.value;
+                            final colors = [
+                              AppTheme.primaryColor,
+                              Colors.orange.shade400,
+                              Colors.green.shade400,
+                              Colors.purple.shade400,
+                              Colors.blue.shade400,
+                              Colors.red.shade400,
+                            ];
+
+                            final percentage = totalRevenue > 0
+                                ? ((category['revenue'] as num).toDouble() / totalRevenue) * 100
+                                : 0.0;
+
+                            return PieChartSectionData(
+                              value: (category['revenue'] as num).toDouble(),
+                              title: '${percentage.toStringAsFixed(1)}%',
+                              color: colors[index % colors.length],
+                              radius: 100,
+                              titleStyle: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            );
+                          }).toList(),
+                          sectionsSpace: 2,
+                          centerSpaceRadius: 40,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 32),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: salesByCategory.asMap().entries.map((entry) {
+                        final index = entry.key;
+                        final category = entry.value;
+                        final colors = [
+                          AppTheme.primaryColor,
+                          Colors.orange.shade400,
+                          Colors.green.shade400,
+                          Colors.purple.shade400,
+                          Colors.blue.shade400,
+                          Colors.red.shade400,
+                        ];
+
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 16,
+                                height: 16,
+                                decoration: BoxDecoration(
+                                  color: colors[index % colors.length],
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      category['category'] ?? 'Без категории',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    Text(
+                                      '${category['quantity']} шт · ${currencyFormatter.format(category['revenue'])}',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: AppTheme.textSecondary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
       ),

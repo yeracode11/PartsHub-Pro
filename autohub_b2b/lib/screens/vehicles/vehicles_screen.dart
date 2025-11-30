@@ -146,13 +146,16 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 768;
+    final padding = isMobile ? 16.0 : 24.0;
+
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
       body: Column(
         children: [
           // Заголовок и поиск
           Container(
-            padding: const EdgeInsets.all(24),
+            padding: EdgeInsets.all(padding),
             decoration: BoxDecoration(
               color: Colors.white,
               boxShadow: [
@@ -162,54 +165,74 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
                 ),
               ],
             ),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '🚗 Автомобили',
-                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '🚗 Автомобили',
+                            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: isMobile ? 20 : 24,
+                                ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Всего: ${filteredVehicles.length}',
+                            style: TextStyle(
+                              color: AppTheme.textSecondary,
+                              fontSize: 14,
                             ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Всего: ${filteredVehicles.length}',
-                        style: TextStyle(
-                          color: AppTheme.textSecondary,
-                          fontSize: 14,
+                    ),
+                    if (!isMobile)
+                      ElevatedButton.icon(
+                        onPressed: _showAddVehicleDialog,
+                        icon: const Icon(Icons.add),
+                        label: const Text('Добавить авто'),
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 16,
+                          ),
+                        ),
+                      )
+                    else
+                      IconButton(
+                        icon: const Icon(Icons.add),
+                        onPressed: _showAddVehicleDialog,
+                        tooltip: 'Добавить авто',
+                      ),
+                  ],
+                ),
+                SizedBox(height: isMobile ? 12 : 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        onChanged: _filterVehicles,
+                        decoration: InputDecoration(
+                          hintText: 'Поиск по марке, номеру, VIN...',
+                          prefixIcon: const Icon(Icons.search),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: isMobile ? 12 : 16,
+                          ),
                         ),
                       ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 16),
-                SizedBox(
-                  width: 300,
-                  child: TextField(
-                    onChanged: _filterVehicles,
-                    decoration: InputDecoration(
-                      hintText: 'Поиск по марке, номеру, VIN...',
-                      prefixIcon: const Icon(Icons.search),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
                     ),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                ElevatedButton.icon(
-                  onPressed: _showAddVehicleDialog,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Добавить авто'),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 16,
-                    ),
-                  ),
+                  ],
                 ),
               ],
             ),
@@ -242,18 +265,26 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
                           ],
                         ),
                       )
-                    : GridView.builder(
-                        padding: const EdgeInsets.all(24),
-                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 3,
-                          childAspectRatio: 1.5,
-                          crossAxisSpacing: 16,
-                          mainAxisSpacing: 16,
-                        ),
-                        itemCount: filteredVehicles.length,
-                        itemBuilder: (context, index) {
-                          final vehicle = filteredVehicles[index];
-                          return _buildVehicleCard(vehicle);
+                    : LayoutBuilder(
+                        builder: (context, constraints) {
+                          final crossAxisCount = isMobile ? 1 : 3;
+                          // Увеличиваем aspectRatio для мобильных, чтобы карточки были выше
+                          final aspectRatio = isMobile ? 1.3 : 1.5;
+                          
+                          return GridView.builder(
+                            padding: EdgeInsets.all(padding),
+                            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: crossAxisCount,
+                              childAspectRatio: aspectRatio,
+                              crossAxisSpacing: isMobile ? 0 : 16,
+                              mainAxisSpacing: isMobile ? 12 : 16,
+                            ),
+                            itemCount: filteredVehicles.length,
+                            itemBuilder: (context, index) {
+                              final vehicle = filteredVehicles[index];
+                              return _buildVehicleCard(vehicle);
+                            },
+                          );
                         },
                       ),
           ),
@@ -263,6 +294,8 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
   }
 
   Widget _buildVehicleCard(VehicleModel vehicle) {
+    final isMobile = MediaQuery.of(context).size.width < 768;
+    
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(
@@ -275,9 +308,10 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
         onTap: () => _openVehicleDetail(vehicle),
         borderRadius: BorderRadius.circular(12),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(isMobile ? 10 : 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
               // Заголовок и действия
               Row(
@@ -285,8 +319,8 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
                   Expanded(
                     child: Text(
                       vehicle.displayName,
-                      style: const TextStyle(
-                        fontSize: 18,
+                      style: TextStyle(
+                        fontSize: isMobile ? 15 : 18,
                         fontWeight: FontWeight.bold,
                       ),
                       maxLines: 1,
@@ -294,6 +328,7 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
                     ),
                   ),
                   PopupMenuButton(
+                    iconSize: isMobile ? 18 : 24,
                     itemBuilder: (context) => [
                       const PopupMenuItem(
                         value: 'edit',
@@ -326,41 +361,50 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
+              SizedBox(height: isMobile ? 4 : 8),
 
               // Госномер
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: EdgeInsets.symmetric(
+                  horizontal: isMobile ? 8 : 12,
+                  vertical: isMobile ? 3 : 6,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.black,
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
                   vehicle.plateNumber,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                    letterSpacing: 2,
+                    fontSize: isMobile ? 13 : 16,
+                    letterSpacing: 1.5,
                   ),
                 ),
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: isMobile ? 6 : 12),
 
               // Информация
-              _buildInfoRow(Icons.person, vehicle.customerName),
-              _buildInfoRow(Icons.speed, '${vehicle.currentMileage} км'),
+              _buildInfoRow(Icons.person, vehicle.customerName, isMobile: isMobile),
+              SizedBox(height: isMobile ? 1 : 4),
+              _buildInfoRow(Icons.speed, '${vehicle.currentMileage} км', isMobile: isMobile),
+              SizedBox(height: isMobile ? 1 : 4),
               _buildInfoRow(
                 Icons.local_gas_station,
                 '${vehicle.fuelTypeDisplay} • ${vehicle.transmissionDisplay}',
+                isMobile: isMobile,
               ),
 
-              const Spacer(),
+              SizedBox(height: isMobile ? 6 : 12),
 
               // Статус ТО
               if (vehicle.needsService)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isMobile ? 10 : 12,
+                    vertical: isMobile ? 4 : 6,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.orange.shade100,
                     borderRadius: BorderRadius.circular(6),
@@ -368,14 +412,14 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.warning, size: 16, color: Colors.orange.shade700),
-                      const SizedBox(width: 4),
+                      Icon(Icons.warning, size: isMobile ? 14 : 16, color: Colors.orange.shade700),
+                      SizedBox(width: isMobile ? 3 : 4),
                       Text(
                         'Требуется ТО',
                         style: TextStyle(
                           color: Colors.orange.shade700,
                           fontWeight: FontWeight.bold,
-                          fontSize: 12,
+                          fontSize: isMobile ? 11 : 12,
                         ),
                       ),
                     ],
@@ -386,7 +430,7 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
                   'ТО через ${vehicle.daysUntilService} дней',
                   style: TextStyle(
                     color: AppTheme.textSecondary,
-                    fontSize: 12,
+                    fontSize: isMobile ? 11 : 12,
                   ),
                 ),
             ],
@@ -396,26 +440,23 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
     );
   }
 
-  Widget _buildInfoRow(IconData icon, String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Row(
-        children: [
-          Icon(icon, size: 16, color: AppTheme.textSecondary),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              text,
-              style: TextStyle(
-                fontSize: 13,
-                color: AppTheme.textSecondary,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+  Widget _buildInfoRow(IconData icon, String text, {bool isMobile = false}) {
+    return Row(
+      children: [
+        Icon(icon, size: isMobile ? 14 : 16, color: AppTheme.textSecondary),
+        SizedBox(width: isMobile ? 6 : 8),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(
+              fontSize: isMobile ? 12 : 13,
+              color: AppTheme.textSecondary,
             ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -541,7 +582,9 @@ class _VehicleDialogState extends State<_VehicleDialog> {
     return AlertDialog(
       title: Text(widget.vehicle == null ? 'Добавить автомобиль' : 'Редактировать автомобиль'),
       content: SizedBox(
-        width: 600,
+        width: MediaQuery.of(context).size.width < 768
+            ? MediaQuery.of(context).size.width * 0.9
+            : 600,
         child: Form(
           key: _formKey,
           child: SingleChildScrollView(
@@ -569,46 +612,94 @@ class _VehicleDialogState extends State<_VehicleDialog> {
                 const SizedBox(height: 16),
 
                 // Марка и модель
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextFormField(
-                        controller: _brandController,
-                        decoration: const InputDecoration(labelText: 'Марка *'),
-                        validator: (value) => value?.isEmpty ?? true ? 'Обязательно' : null,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: TextFormField(
-                        controller: _modelController,
-                        decoration: const InputDecoration(labelText: 'Модель *'),
-                        validator: (value) => value?.isEmpty ?? true ? 'Обязательно' : null,
-                      ),
-                    ),
-                  ],
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final isMobile = constraints.maxWidth < 600;
+                    
+                    if (isMobile) {
+                      return Column(
+                        children: [
+                          TextFormField(
+                            controller: _brandController,
+                            decoration: const InputDecoration(labelText: 'Марка *'),
+                            validator: (value) => value?.isEmpty ?? true ? 'Обязательно' : null,
+                          ),
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _modelController,
+                            decoration: const InputDecoration(labelText: 'Модель *'),
+                            validator: (value) => value?.isEmpty ?? true ? 'Обязательно' : null,
+                          ),
+                        ],
+                      );
+                    }
+                    
+                    return Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: _brandController,
+                            decoration: const InputDecoration(labelText: 'Марка *'),
+                            validator: (value) => value?.isEmpty ?? true ? 'Обязательно' : null,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: TextFormField(
+                            controller: _modelController,
+                            decoration: const InputDecoration(labelText: 'Модель *'),
+                            validator: (value) => value?.isEmpty ?? true ? 'Обязательно' : null,
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
                 const SizedBox(height: 16),
 
                 // Год и цвет
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextFormField(
-                        controller: _yearController,
-                        decoration: const InputDecoration(labelText: 'Год *'),
-                        keyboardType: TextInputType.number,
-                        validator: (value) => value?.isEmpty ?? true ? 'Обязательно' : null,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: TextFormField(
-                        controller: _colorController,
-                        decoration: const InputDecoration(labelText: 'Цвет'),
-                      ),
-                    ),
-                  ],
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final isMobile = constraints.maxWidth < 600;
+                    
+                    if (isMobile) {
+                      return Column(
+                        children: [
+                          TextFormField(
+                            controller: _yearController,
+                            decoration: const InputDecoration(labelText: 'Год *'),
+                            keyboardType: TextInputType.number,
+                            validator: (value) => value?.isEmpty ?? true ? 'Обязательно' : null,
+                          ),
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _colorController,
+                            decoration: const InputDecoration(labelText: 'Цвет'),
+                          ),
+                        ],
+                      );
+                    }
+                    
+                    return Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: _yearController,
+                            decoration: const InputDecoration(labelText: 'Год *'),
+                            keyboardType: TextInputType.number,
+                            validator: (value) => value?.isEmpty ?? true ? 'Обязательно' : null,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: TextFormField(
+                            controller: _colorController,
+                            decoration: const InputDecoration(labelText: 'Цвет'),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
                 const SizedBox(height: 16),
 
@@ -628,62 +719,126 @@ class _VehicleDialogState extends State<_VehicleDialog> {
                 const SizedBox(height: 16),
 
                 // Топливо и КПП
-                Row(
-                  children: [
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        value: _selectedFuelType,
-                        decoration: const InputDecoration(labelText: 'Топливо'),
-                        items: const [
-                          DropdownMenuItem(value: 'petrol', child: Text('Бензин')),
-                          DropdownMenuItem(value: 'diesel', child: Text('Дизель')),
-                          DropdownMenuItem(value: 'electric', child: Text('Электро')),
-                          DropdownMenuItem(value: 'hybrid', child: Text('Гибрид')),
-                          DropdownMenuItem(value: 'gas', child: Text('Газ')),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final isMobile = constraints.maxWidth < 600;
+                    
+                    if (isMobile) {
+                      return Column(
+                        children: [
+                          DropdownButtonFormField<String>(
+                            value: _selectedFuelType,
+                            decoration: const InputDecoration(labelText: 'Топливо'),
+                            items: const [
+                              DropdownMenuItem(value: 'petrol', child: Text('Бензин')),
+                              DropdownMenuItem(value: 'diesel', child: Text('Дизель')),
+                              DropdownMenuItem(value: 'electric', child: Text('Электро')),
+                              DropdownMenuItem(value: 'hybrid', child: Text('Гибрид')),
+                              DropdownMenuItem(value: 'gas', child: Text('Газ')),
+                            ],
+                            onChanged: (value) {
+                              setState(() => _selectedFuelType = value!);
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                          DropdownButtonFormField<String>(
+                            value: _selectedTransmission,
+                            decoration: const InputDecoration(labelText: 'КПП'),
+                            items: const [
+                              DropdownMenuItem(value: 'manual', child: Text('Механика')),
+                              DropdownMenuItem(value: 'automatic', child: Text('Автомат')),
+                              DropdownMenuItem(value: 'robot', child: Text('Робот')),
+                              DropdownMenuItem(value: 'cvt', child: Text('Вариатор')),
+                            ],
+                            onChanged: (value) {
+                              setState(() => _selectedTransmission = value!);
+                            },
+                          ),
                         ],
-                        onChanged: (value) {
-                          setState(() => _selectedFuelType = value!);
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        value: _selectedTransmission,
-                        decoration: const InputDecoration(labelText: 'КПП'),
-                        items: const [
-                          DropdownMenuItem(value: 'manual', child: Text('Механика')),
-                          DropdownMenuItem(value: 'automatic', child: Text('Автомат')),
-                          DropdownMenuItem(value: 'robot', child: Text('Робот')),
-                          DropdownMenuItem(value: 'cvt', child: Text('Вариатор')),
-                        ],
-                        onChanged: (value) {
-                          setState(() => _selectedTransmission = value!);
-                        },
-                      ),
-                    ),
-                  ],
+                      );
+                    }
+                    
+                    return Row(
+                      children: [
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            value: _selectedFuelType,
+                            decoration: const InputDecoration(labelText: 'Топливо'),
+                            items: const [
+                              DropdownMenuItem(value: 'petrol', child: Text('Бензин')),
+                              DropdownMenuItem(value: 'diesel', child: Text('Дизель')),
+                              DropdownMenuItem(value: 'electric', child: Text('Электро')),
+                              DropdownMenuItem(value: 'hybrid', child: Text('Гибрид')),
+                              DropdownMenuItem(value: 'gas', child: Text('Газ')),
+                            ],
+                            onChanged: (value) {
+                              setState(() => _selectedFuelType = value!);
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            value: _selectedTransmission,
+                            decoration: const InputDecoration(labelText: 'КПП'),
+                            items: const [
+                              DropdownMenuItem(value: 'manual', child: Text('Механика')),
+                              DropdownMenuItem(value: 'automatic', child: Text('Автомат')),
+                              DropdownMenuItem(value: 'robot', child: Text('Робот')),
+                              DropdownMenuItem(value: 'cvt', child: Text('Вариатор')),
+                            ],
+                            onChanged: (value) {
+                              setState(() => _selectedTransmission = value!);
+                            },
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
                 const SizedBox(height: 16),
 
                 // Объем и мощность
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextFormField(
-                        controller: _engineVolumeController,
-                        decoration: const InputDecoration(labelText: 'Объем (л)'),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: TextFormField(
-                        controller: _enginePowerController,
-                        decoration: const InputDecoration(labelText: 'Мощность (л.с.)'),
-                        keyboardType: TextInputType.number,
-                      ),
-                    ),
-                  ],
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final isMobile = constraints.maxWidth < 600;
+                    
+                    if (isMobile) {
+                      return Column(
+                        children: [
+                          TextFormField(
+                            controller: _engineVolumeController,
+                            decoration: const InputDecoration(labelText: 'Объем (л)'),
+                          ),
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _enginePowerController,
+                            decoration: const InputDecoration(labelText: 'Мощность (л.с.)'),
+                            keyboardType: TextInputType.number,
+                          ),
+                        ],
+                      );
+                    }
+                    
+                    return Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: _engineVolumeController,
+                            decoration: const InputDecoration(labelText: 'Объем (л)'),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: TextFormField(
+                            controller: _enginePowerController,
+                            decoration: const InputDecoration(labelText: 'Мощность (л.с.)'),
+                            keyboardType: TextInputType.number,
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
                 const SizedBox(height: 16),
 

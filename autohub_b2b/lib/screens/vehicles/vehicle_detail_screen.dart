@@ -373,35 +373,65 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
   }
 
   Widget _buildServiceCard() {
+    final isMobile = MediaQuery.of(context).size.width < 768;
+    
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: EdgeInsets.all(isMobile ? 16 : 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                const Text(
-                  'Обслуживание',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
+            if (isMobile) ...[
+              const Text(
+                'Обслуживание',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
                 ),
-                const Spacer(),
-                OutlinedButton.icon(
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
                   onPressed: _updateMileage,
                   icon: const Icon(Icons.speed, size: 18),
                   label: const Text('Обновить пробег'),
                 ),
-                const SizedBox(width: 12),
-                ElevatedButton.icon(
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
                   onPressed: _recordService,
                   icon: const Icon(Icons.build, size: 18),
                   label: const Text('Записать ТО'),
                 ),
-              ],
-            ),
+              ),
+            ] else ...[
+              Row(
+                children: [
+                  const Text(
+                    'Обслуживание',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const Spacer(),
+                  OutlinedButton.icon(
+                    onPressed: _updateMileage,
+                    icon: const Icon(Icons.speed, size: 18),
+                    label: const Text('Обновить пробег'),
+                  ),
+                  const SizedBox(width: 12),
+                  ElevatedButton.icon(
+                    onPressed: _recordService,
+                    icon: const Icon(Icons.build, size: 18),
+                    label: const Text('Записать ТО'),
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: 16),
 
             // Текущий пробег

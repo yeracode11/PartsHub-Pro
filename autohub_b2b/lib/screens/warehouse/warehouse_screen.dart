@@ -97,7 +97,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
     });
   }
 
-  Widget _buildItemsList() {
+  Widget _buildItemsList({bool isMobile = false}) {
     if (isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -164,18 +164,172 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
       );
     }
 
+    if (isMobile) {
+      return _buildItemsCards(context, filteredItems);
+    }
     return _buildItemsTable(context, filteredItems);
+  }
+
+  Widget _buildItemsCards(BuildContext context, List<ItemModel> items) {
+    final numberFormat = NumberFormat('#,###', 'ru_RU');
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: items.length,
+      itemBuilder: (context, index) {
+        final item = items[index];
+        return Card(
+          margin: const EdgeInsets.only(bottom: 12),
+          child: InkWell(
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => ItemEditScreen(item: item),
+                ),
+              );
+            },
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          item.name ?? 'Без названия',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      PopupMenuButton(
+                        itemBuilder: (context) => [
+                          const PopupMenuItem(
+                            value: 'edit',
+                            child: Row(
+                              children: [
+                                Icon(Icons.edit, size: 20),
+                                SizedBox(width: 8),
+                                Text('Редактировать'),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 'delete',
+                            child: Row(
+                              children: [
+                                Icon(Icons.delete, size: 20, color: Colors.red),
+                                SizedBox(width: 8),
+                                Text('Удалить', style: TextStyle(color: Colors.red)),
+                              ],
+                            ),
+                          ),
+                        ],
+                        onSelected: (value) {
+                          if (value == 'edit') {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (context) => ItemEditScreen(item: item),
+                              ),
+                            );
+                          } else if (value == 'delete') {
+                            _showDeleteDialog(context, item);
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                  if (item.sku != null && item.sku!.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Артикул: ${item.sku}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppTheme.textSecondary,
+                      ),
+                    ),
+                  ],
+                  if (item.category != null && item.category!.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'Категория: ${item.category}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppTheme.textSecondary,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Количество',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppTheme.textSecondary,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${item.quantity}',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          const Text(
+                            'Цена',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppTheme.textSecondary,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${numberFormat.format(item.price)} ₸',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.primaryColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 768;
+    final padding = isMobile ? 16.0 : 24.0;
+
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
       body: Column(
         children: [
           // Заголовок и поиск
           Container(
-            padding: const EdgeInsets.all(24),
+            padding: EdgeInsets.all(padding),
             decoration: const BoxDecoration(
               color: AppTheme.surfaceColor,
               border: Border(
@@ -188,47 +342,74 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Товары',
-                          style: Theme.of(context).textTheme.displayMedium,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Управление товарами и запчастями',
-                          style:
-                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Товары',
+                            style: Theme.of(context).textTheme.displayMedium?.copyWith(
+                              fontSize: isMobile ? 24 : 28,
+                            ),
+                          ),
+                          if (!isMobile) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              'Управление товарами и запчастями',
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                                     color: AppTheme.textSecondary,
                                   ),
-                        ),
-                      ],
+                            ),
+                          ],
+                        ],
+                      ),
                     ),
-                    Row(
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.print),
-                          onPressed: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (context) => const PrinterSettingsScreen(),
-                              ),
-                            );
-                          },
-                          tooltip: 'Настройки принтера',
-                        ),
-                        const SizedBox(width: 8),
-                        FilledButton.icon(
-                          onPressed: () => _showItemDialog(context),
-                          icon: const Icon(Icons.add),
-                          label: const Text('Добавить товар'),
-                        ),
-                      ],
-                    ),
+                    if (!isMobile)
+                      Row(
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.print),
+                            onPressed: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (context) => const PrinterSettingsScreen(),
+                                ),
+                              );
+                            },
+                            tooltip: 'Настройки принтера',
+                          ),
+                          const SizedBox(width: 8),
+                          FilledButton.icon(
+                            onPressed: () => _showItemDialog(context),
+                            icon: const Icon(Icons.add),
+                            label: const Text('Добавить товар'),
+                          ),
+                        ],
+                      )
+                    else
+                      Row(
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.print),
+                            onPressed: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (context) => const PrinterSettingsScreen(),
+                                ),
+                              );
+                            },
+                            tooltip: 'Настройки принтера',
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.add),
+                            onPressed: () => _showItemDialog(context),
+                            tooltip: 'Добавить товар',
+                          ),
+                        ],
+                      ),
                   ],
                 ),
-                const SizedBox(height: 24),
+                SizedBox(height: isMobile ? 16 : 24),
                 Row(
                   children: [
                     Expanded(
@@ -242,18 +423,24 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                           ),
                           filled: true,
                           fillColor: AppTheme.backgroundColor,
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: isMobile ? 12 : 16,
+                          ),
                         ),
                         onChanged: _filterItems,
                       ),
                     ),
-                    const SizedBox(width: 16),
-                    OutlinedButton.icon(
-                      onPressed: () {
-                        // Фильтры будут реализованы позже
-                      },
-                      icon: const Icon(Icons.filter_list),
-                      label: const Text('Фильтры'),
-                    ),
+                    if (!isMobile) ...[
+                      const SizedBox(width: 16),
+                      OutlinedButton.icon(
+                        onPressed: () {
+                          // Фильтры будут реализованы позже
+                        },
+                        icon: const Icon(Icons.filter_list),
+                        label: const Text('Фильтры'),
+                      ),
+                    ],
                   ],
                 ),
               ],
@@ -262,7 +449,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
 
           // Список товаров
           Expanded(
-            child: _buildItemsList(),
+            child: _buildItemsList(isMobile: isMobile),
           ),
         ],
       ),
