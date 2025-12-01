@@ -250,6 +250,119 @@ export class AutoDataService {
       throw error;
     }
   }
+
+  // Статический список популярных марок автомобилей
+  getStaticBrands(): KolesaListItem[] {
+    return [
+      { slug: 'toyota', name: 'Toyota' },
+      { slug: 'lexus', name: 'Lexus' },
+      { slug: 'bmw', name: 'BMW' },
+      { slug: 'mercedes-benz', name: 'Mercedes-Benz' },
+      { slug: 'audi', name: 'Audi' },
+      { slug: 'volkswagen', name: 'Volkswagen' },
+      { slug: 'hyundai', name: 'Hyundai' },
+      { slug: 'kia', name: 'Kia' },
+      { slug: 'nissan', name: 'Nissan' },
+      { slug: 'mazda', name: 'Mazda' },
+      { slug: 'honda', name: 'Honda' },
+      { slug: 'ford', name: 'Ford' },
+      { slug: 'chevrolet', name: 'Chevrolet' },
+      { slug: 'skoda', name: 'Škoda' },
+      { slug: 'renault', name: 'Renault' },
+      { slug: 'peugeot', name: 'Peugeot' },
+      { slug: 'citroen', name: 'Citroën' },
+      { slug: 'opel', name: 'Opel' },
+      { slug: 'volvo', name: 'Volvo' },
+      { slug: 'subaru', name: 'Subaru' },
+      { slug: 'mitsubishi', name: 'Mitsubishi' },
+      { slug: 'suzuki', name: 'Suzuki' },
+      { slug: 'geely', name: 'Geely' },
+      { slug: 'haval', name: 'Haval' },
+      { slug: 'chery', name: 'Chery' },
+      { slug: 'lada', name: 'Lada' },
+      { slug: 'uaz', name: 'UAZ' },
+      { slug: 'gaz', name: 'GAZ' },
+    ];
+  }
+
+  // Статический список моделей для популярных марок
+  getStaticModels(brandSlug: string): KolesaListItem[] {
+    const modelsMap: Record<string, KolesaListItem[]> = {
+      toyota: [
+        { slug: 'camry', name: 'Camry' },
+        { slug: 'corolla', name: 'Corolla' },
+        { slug: 'rav4', name: 'RAV4' },
+        { slug: 'land-cruiser', name: 'Land Cruiser' },
+        { slug: 'prado', name: 'Prado' },
+        { slug: 'highlander', name: 'Highlander' },
+        { slug: 'hilux', name: 'Hilux' },
+        { slug: 'prius', name: 'Prius' },
+      ],
+      lexus: [
+        { slug: 'rx', name: 'RX' },
+        { slug: 'lx', name: 'LX' },
+        { slug: 'es', name: 'ES' },
+        { slug: 'nx', name: 'NX' },
+        { slug: 'gx', name: 'GX' },
+      ],
+      bmw: [
+        { slug: '3-series', name: '3 Series' },
+        { slug: '5-series', name: '5 Series' },
+        { slug: '7-series', name: '7 Series' },
+        { slug: 'x3', name: 'X3' },
+        { slug: 'x5', name: 'X5' },
+        { slug: 'x7', name: 'X7' },
+      ],
+      'mercedes-benz': [
+        { slug: 'c-class', name: 'C-Class' },
+        { slug: 'e-class', name: 'E-Class' },
+        { slug: 's-class', name: 'S-Class' },
+        { slug: 'gle', name: 'GLE' },
+        { slug: 'gls', name: 'GLS' },
+        { slug: 'g-class', name: 'G-Class' },
+      ],
+      audi: [
+        { slug: 'a4', name: 'A4' },
+        { slug: 'a6', name: 'A6' },
+        { slug: 'a8', name: 'A8' },
+        { slug: 'q5', name: 'Q5' },
+        { slug: 'q7', name: 'Q7' },
+        { slug: 'q8', name: 'Q8' },
+      ],
+      volkswagen: [
+        { slug: 'polo', name: 'Polo' },
+        { slug: 'jetta', name: 'Jetta' },
+        { slug: 'passat', name: 'Passat' },
+        { slug: 'tiguan', name: 'Tiguan' },
+        { slug: 'touareg', name: 'Touareg' },
+      ],
+      hyundai: [
+        { slug: 'solaris', name: 'Solaris' },
+        { slug: 'elantra', name: 'Elantra' },
+        { slug: 'sonata', name: 'Sonata' },
+        { slug: 'santa-fe', name: 'Santa Fe' },
+        { slug: 'tucson', name: 'Tucson' },
+        { slug: 'palisade', name: 'Palisade' },
+      ],
+      kia: [
+        { slug: 'rio', name: 'Rio' },
+        { slug: 'cerato', name: 'Cerato' },
+        { slug: 'optima', name: 'Optima' },
+        { slug: 'sportage', name: 'Sportage' },
+        { slug: 'sorento', name: 'Sorento' },
+      ],
+      nissan: [
+        { slug: 'almera', name: 'Almera' },
+        { slug: 'sentra', name: 'Sentra' },
+        { slug: 'altima', name: 'Altima' },
+        { slug: 'x-trail', name: 'X-Trail' },
+        { slug: 'patrol', name: 'Patrol' },
+        { slug: 'qashqai', name: 'Qashqai' },
+      ],
+    };
+
+    return modelsMap[brandSlug.toLowerCase()] || [];
+  }
 }
 
 

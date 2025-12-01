@@ -676,8 +676,8 @@ class _VehicleDialogState extends State<_VehicleDialog> {
   Future<void> _save() async {
     if (!_formKey.currentState!.validate() || 
         _selectedCustomerId == null ||
-        selectedBrandName == null ||
-        selectedModelName == null) {
+        (selectedBrandName == null || selectedBrandName!.isEmpty) ||
+        (selectedModelName == null || selectedModelName!.isEmpty)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Пожалуйста, заполните все обязательные поля'),
@@ -697,8 +697,8 @@ class _VehicleDialogState extends State<_VehicleDialog> {
 
     final data = {
       'customerId': _selectedCustomerId,
-      'brand': selectedBrandName!,
-      'model': selectedModelName!,
+      'brand': selectedBrandName!.trim(),
+      'model': selectedModelName!.trim(),
       'year': year,
       'color': _colorController.text.isEmpty ? null : _colorController.text,
       'plateNumber': _plateNumberController.text,
@@ -768,78 +768,30 @@ class _VehicleDialogState extends State<_VehicleDialog> {
                 if (isLoadingBrands)
                   const LinearProgressIndicator()
                 else
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      DropdownButtonFormField<String>(
-                        value: selectedBrandSlug,
-                        decoration: const InputDecoration(labelText: 'Марка *'),
-                        hint: brands.isEmpty 
-                            ? const Text('Марки не загружены. Нажмите "Повторить" ниже')
-                            : const Text('Выберите марку'),
-                        items: brands.isEmpty
-                            ? [const DropdownMenuItem<String>(
-                                value: '__empty__',
-                                enabled: false,
-                                child: Text('Нет доступных марок'),
-                              )]
-                            : brands.map((brand) {
-                                return DropdownMenuItem<String>(
-                                  value: brand['slug'] as String,
-                                  child: Text(brand['name'] as String),
-                                );
-                              }).toList(),
-                        onChanged: brands.isEmpty
-                            ? null
-                            : (value) {
-                                if (value == null || value == '__empty__') return;
-                                setState(() {
-                                  selectedBrandSlug = value;
-                                  selectedBrandName = brands.firstWhere((b) => b['slug'] == value)['name'] as String;
-                                  models = [];
-                                  generations = [];
-                                  selectedModelSlug = null;
-                                  selectedModelName = null;
-                                  selectedGeneration = null;
-                                });
-                                _loadModels(value);
-                              },
-                        validator: (value) {
-                          if (value == null || value == '__empty__') {
-                            return 'Выберите марку';
-                          }
-                          return null;
-                        },
-                      ),
-                      if (brands.isEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8.0),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.warning_amber_rounded, size: 16, color: Colors.orange),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  'Марки не загружены. Проверьте подключение к серверу.',
-                                  style: TextStyle(fontSize: 12, color: Colors.orange[700]),
-                                ),
-                              ),
-                              TextButton.icon(
-                                onPressed: () {
-                                  _loadBrands();
-                                },
-                                icon: const Icon(Icons.refresh, size: 16),
-                                label: const Text('Повторить'),
-                                style: TextButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  minimumSize: Size.zero,
-                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                    ],
+                  DropdownButtonFormField<String>(
+                    value: selectedBrandSlug,
+                    decoration: const InputDecoration(labelText: 'Марка *'),
+                    hint: const Text('Выберите марку'),
+                    items: brands.map((brand) {
+                      return DropdownMenuItem<String>(
+                        value: brand['slug'] as String,
+                        child: Text(brand['name'] as String),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setState(() {
+                        selectedBrandSlug = value;
+                        selectedBrandName = brands.firstWhere((b) => b['slug'] == value)['name'] as String;
+                        models = [];
+                        generations = [];
+                        selectedModelSlug = null;
+                        selectedModelName = null;
+                        selectedGeneration = null;
+                      });
+                      _loadModels(value);
+                    },
+                    validator: (value) => value == null ? 'Выберите марку' : null,
                   ),
                 const SizedBox(height: 16),
 

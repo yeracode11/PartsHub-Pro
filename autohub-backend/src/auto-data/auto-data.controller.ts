@@ -14,18 +14,14 @@ export class AutoDataController {
   async getBrands(): Promise<KolesaListItem[]> {
     try {
       const brands = await this.autoDataService.getBrands();
-      this.logger.log(`✅ Successfully fetched ${brands?.length || 0} brands`);
+      this.logger.log(`✅ Successfully fetched ${brands?.length || 0} brands from Kolesa.kz`);
       return brands || [];
     } catch (error: any) {
-      this.logger.error(`❌ Error fetching brands: ${error.message}`, error.stack);
-      throw new HttpException(
-        {
-          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: 'Failed to fetch brands from Kolesa.kz',
-          error: error.message,
-        },
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+      this.logger.warn(`⚠️ Error fetching brands from Kolesa.kz: ${error.message}. Using static list.`);
+      // Возвращаем статический список популярных марок
+      const staticBrands = this.autoDataService.getStaticBrands();
+      this.logger.log(`✅ Returning ${staticBrands.length} static brands`);
+      return staticBrands;
     }
   }
 
@@ -33,18 +29,14 @@ export class AutoDataController {
   async getModels(@Param('brandSlug') brandSlug: string): Promise<KolesaListItem[]> {
     try {
       const models = await this.autoDataService.getModels(brandSlug);
-      this.logger.log(`✅ Successfully fetched ${models?.length || 0} models for brand: ${brandSlug}`);
+      this.logger.log(`✅ Successfully fetched ${models?.length || 0} models for brand: ${brandSlug} from Kolesa.kz`);
       return models || [];
     } catch (error: any) {
-      this.logger.error(`❌ Error fetching models for ${brandSlug}: ${error.message}`, error.stack);
-      throw new HttpException(
-        {
-          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: `Failed to fetch models for brand: ${brandSlug}`,
-          error: error.message,
-        },
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+      this.logger.warn(`⚠️ Error fetching models for ${brandSlug}: ${error.message}. Using static list.`);
+      // Возвращаем статический список моделей для марки
+      const staticModels = this.autoDataService.getStaticModels(brandSlug);
+      this.logger.log(`✅ Returning ${staticModels.length} static models for ${brandSlug}`);
+      return staticModels;
     }
   }
 
@@ -58,15 +50,9 @@ export class AutoDataController {
       this.logger.log(`✅ Successfully fetched ${generations?.length || 0} generations for ${brandSlug}/${modelSlug}`);
       return generations || [];
     } catch (error: any) {
-      this.logger.error(`❌ Error fetching generations for ${brandSlug}/${modelSlug}: ${error.message}`, error.stack);
-      throw new HttpException(
-        {
-          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: `Failed to fetch generations for ${brandSlug}/${modelSlug}`,
-          error: error.message,
-        },
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+      this.logger.warn(`⚠️ Error fetching generations for ${brandSlug}/${modelSlug}: ${error.message}. Returning empty array.`);
+      // Поколения не критичны, возвращаем пустой массив
+      return [];
     }
   }
 }
