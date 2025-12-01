@@ -1,12 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import axios, { AxiosInstance } from 'axios';
 
-interface KolesaListItem {
+export interface KolesaListItem {
   slug: string;
   name: string;
 }
 
-interface KolesaGeneration {
+export interface KolesaGeneration {
   id: string;
   name: string;
   year_from: number | null;
