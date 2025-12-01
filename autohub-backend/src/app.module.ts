@@ -16,6 +16,7 @@ import { OrderItemsModule } from './order-items/order-items.module';
 import { WhatsAppModule } from './whatsapp/whatsapp.module';
 import { VehiclesModule } from './vehicles/vehicles.module';
 import { B2CModule } from './b2c/b2c.module';
+import { AutoDataModule } from './auto-data/auto-data.module';
 import { IncomingModule } from './incoming/incoming.module';
 
 @Module({
@@ -99,6 +100,7 @@ import { IncomingModule } from './incoming/incoming.module';
     WhatsAppModule,
     VehiclesModule,
     B2CModule,
+    AutoDataModule,
     IncomingModule,
   ],
   controllers: [AppController],

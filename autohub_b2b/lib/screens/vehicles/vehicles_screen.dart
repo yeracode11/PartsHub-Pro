@@ -577,6 +577,24 @@ class _VehicleDialogState extends State<_VehicleDialog> {
     }
   }
 
+  Future<void> _openKolesaSelector() async {
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => const _KolesaVehicleSelectorDialog(),
+    );
+
+    if (result != null && mounted) {
+      setState(() {
+        _brandController.text = result['brandName'] ?? _brandController.text;
+        _modelController.text = result['modelName'] ?? _modelController.text;
+        if (result['yearFrom'] != null && (_yearController.text.isEmpty || _yearController.text == '0')) {
+          _yearController.text = (result['yearFrom'] as int).toString();
+        }
+        // VIN/другие поля здесь не задаём, Kolesa их не возвращает
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
@@ -630,6 +648,15 @@ class _VehicleDialogState extends State<_VehicleDialog> {
                             decoration: const InputDecoration(labelText: 'Модель *'),
                             validator: (value) => value?.isEmpty ?? true ? 'Обязательно' : null,
                           ),
+                          const SizedBox(height: 12),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton.icon(
+                              onPressed: _openKolesaSelector,
+                              icon: const Icon(Icons.search),
+                              label: const Text('Подобрать с Kolesa.kz'),
+                            ),
+                          ),
                         ],
                       );
                     }
@@ -650,6 +677,12 @@ class _VehicleDialogState extends State<_VehicleDialog> {
                             decoration: const InputDecoration(labelText: 'Модель *'),
                             validator: (value) => value?.isEmpty ?? true ? 'Обязательно' : null,
                           ),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton(
+                          tooltip: 'Подобрать с Kolesa.kz',
+                          icon: const Icon(Icons.search),
+                          onPressed: _openKolesaSelector,
                         ),
                       ],
                     );
@@ -888,6 +921,218 @@ class _VehicleDialogState extends State<_VehicleDialog> {
     _mileageController.dispose();
     _notesController.dispose();
     super.dispose();
+  }
+}
+
+/// Диалог выбора автомобиля с Kolesa.kz: Марка → Модель → Поколение
+class _KolesaVehicleSelectorDialog extends StatefulWidget {
+  const _KolesaVehicleSelectorDialog({super.key});
+
+  @override
+  State<_KolesaVehicleSelectorDialog> createState() => _KolesaVehicleSelectorDialogState();
+}
+
+class _KolesaVehicleSelectorDialogState extends State<_KolesaVehicleSelectorDialog> {
+  final Dio dio = ApiClient().dio;
+
+  List<Map<String, dynamic>> brands = [];
+  List<Map<String, dynamic>> models = [];
+  List<Map<String, dynamic>> generations = [];
+
+  String? selectedBrandSlug;
+  String? selectedBrandName;
+  String? selectedModelSlug;
+  String? selectedModelName;
+  Map<String, dynamic>? selectedGeneration;
+
+  bool isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBrands();
+  }
+
+  Future<void> _loadBrands() async {
+    setState(() => isLoading = true);
+    try {
+      final res = await dio.get('/api/auto-data/brands');
+      setState(() {
+        brands = List<Map<String, dynamic>>.from(res.data ?? []);
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка загрузки марок: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => isLoading = false);
+    }
+  }
+
+  Future<void> _loadModels(String brandSlug) async {
+    setState(() {
+      isLoading = true;
+      models = [];
+      generations = [];
+      selectedModelSlug = null;
+      selectedModelName = null;
+      selectedGeneration = null;
+    });
+    try {
+      final res = await dio.get('/api/auto-data/brands/$brandSlug/models');
+      setState(() {
+        models = List<Map<String, dynamic>>.from(res.data ?? []);
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка загрузки моделей: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => isLoading = false);
+    }
+  }
+
+  Future<void> _loadGenerations(String brandSlug, String modelSlug) async {
+    setState(() {
+      isLoading = true;
+      generations = [];
+      selectedGeneration = null;
+    });
+    try {
+      final res = await dio.get(
+        '/api/auto-data/brands/$brandSlug/models/$modelSlug/generations',
+      );
+      setState(() {
+        generations = List<Map<String, dynamic>>.from(res.data ?? []);
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка загрузки поколений: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 768;
+
+    return AlertDialog(
+      title: const Text('Подбор авто (Kolesa.kz)'),
+      content: SizedBox(
+        width: isMobile ? MediaQuery.of(context).size.width * 0.9 : 480,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isLoading) const LinearProgressIndicator(),
+            const SizedBox(height: 8),
+            // Марка
+            DropdownButtonFormField<String>(
+              value: selectedBrandSlug,
+              decoration: const InputDecoration(labelText: 'Марка'),
+              items: brands
+                  .map(
+                    (b) => DropdownMenuItem<String>(
+                      value: b['slug'] as String,
+                      child: Text(b['name'] as String),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                if (value == null) return;
+                setState(() {
+                  selectedBrandSlug = value;
+                  selectedBrandName = brands
+                      .firstWhere(
+                        (b) => b['slug'] == value,
+                        orElse: () => {'name': value},
+                      )['name'] as String?;
+                });
+                _loadModels(value);
+              },
+            ),
+            const SizedBox(height: 12),
+            // Модель
+            DropdownButtonFormField<String>(
+              value: selectedModelSlug,
+              decoration: const InputDecoration(labelText: 'Модель'),
+              items: models
+                  .map(
+                    (m) => DropdownMenuItem<String>(
+                      value: m['slug'] as String,
+                      child: Text(m['name'] as String),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                if (value == null || selectedBrandSlug == null) return;
+                setState(() {
+                  selectedModelSlug = value;
+                  selectedModelName = models
+                      .firstWhere(
+                        (m) => m['slug'] == value,
+                        orElse: () => {'name': value},
+                      )['name'] as String?;
+                });
+                _loadGenerations(selectedBrandSlug!, value);
+              },
+            ),
+            const SizedBox(height: 12),
+            // Поколение
+            DropdownButtonFormField<Map<String, dynamic>>(
+              value: selectedGeneration,
+              decoration: const InputDecoration(labelText: 'Поколение'),
+              items: generations
+                  .map(
+                    (g) => DropdownMenuItem<Map<String, dynamic>>(
+                      value: g,
+                      child: Text(
+                        '${g['name']}'
+                        ' (${g['year_from'] ?? '-'}'
+                        '${g['year_to'] != null ? '–${g['year_to']}' : '–н.в.'})',
+                      ),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                setState(() {
+                  selectedGeneration = value;
+                });
+              },
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Отмена'),
+        ),
+        ElevatedButton(
+          onPressed: selectedBrandSlug != null && selectedModelSlug != null
+              ? () {
+                  Navigator.pop<Map<String, dynamic>>(context, {
+                    'brandSlug': selectedBrandSlug,
+                    'brandName': selectedBrandName,
+                    'modelSlug': selectedModelSlug,
+                    'modelName': selectedModelName,
+                    'generation': selectedGeneration,
+                    'yearFrom': selectedGeneration?['year_from'],
+                    'yearTo': selectedGeneration?['year_to'],
+                  });
+                }
+              : null,
+          child: const Text('Выбрать'),
+        ),
+      ],
+    );
   }
 }
 

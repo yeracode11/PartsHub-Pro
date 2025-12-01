@@ -68,6 +68,25 @@ class AppTheme {
         clipBehavior: Clip.antiAlias,
       ),
 
+      // Диалоги (попапы)
+      dialogTheme: DialogThemeData(
+        backgroundColor: surfaceColor,
+        surfaceTintColor: Colors.transparent, // убираем розовый/цветной оттенок
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: borderColor),
+        ),
+        titleTextStyle: const TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.w600,
+          color: textPrimary,
+        ),
+        contentTextStyle: const TextStyle(
+          fontSize: 14,
+          color: textSecondary,
+        ),
+      ),
+
       // FloatingActionButton
       floatingActionButtonTheme: FloatingActionButtonThemeData(
         backgroundColor: primaryColor,
