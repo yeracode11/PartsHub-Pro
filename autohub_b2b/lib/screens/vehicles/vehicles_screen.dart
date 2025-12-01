@@ -553,25 +553,60 @@ class _VehicleDialogState extends State<_VehicleDialog> {
     setState(() => isLoadingBrands = true);
     try {
       final res = await dio.get('/api/auto-data/brands');
-      setState(() {
-        brands = List<Map<String, dynamic>>.from(res.data ?? []);
-        // Если редактируем и есть марка, пытаемся найти её в списке
-        if (widget.vehicle != null && widget.vehicle!.brand.isNotEmpty) {
-          final foundBrand = brands.firstWhere(
-            (b) => (b['name'] as String).toLowerCase() == widget.vehicle!.brand.toLowerCase(),
-            orElse: () => {},
-          );
-          if (foundBrand.isNotEmpty) {
-            selectedBrandSlug = foundBrand['slug'] as String;
-            selectedBrandName = foundBrand['name'] as String;
-            _loadModels(selectedBrandSlug!);
-          }
-        }
-      });
-    } catch (e) {
+      final data = res.data;
+      
       if (mounted) {
+        setState(() {
+          // Проверяем, что данные есть и это массив
+          if (data != null && data is List) {
+            brands = List<Map<String, dynamic>>.from(data);
+          } else {
+            brands = [];
+            if (data != null) {
+              print('⚠️ Unexpected brands data format: ${data.runtimeType}');
+            }
+          }
+          
+          // Если редактируем и есть марка, пытаемся найти её в списке
+          if (widget.vehicle != null && widget.vehicle!.brand.isNotEmpty && brands.isNotEmpty) {
+            try {
+              final foundBrand = brands.firstWhere(
+                (b) => (b['name'] as String).toLowerCase() == widget.vehicle!.brand.toLowerCase(),
+                orElse: () => {},
+              );
+              if (foundBrand.isNotEmpty) {
+                selectedBrandSlug = foundBrand['slug'] as String;
+                selectedBrandName = foundBrand['name'] as String;
+                _loadModels(selectedBrandSlug!);
+              }
+            } catch (e) {
+              print('⚠️ Error finding brand in list: $e');
+            }
+          }
+        });
+        
+        if (brands.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Марки не загружены. Проверьте подключение к серверу.'),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('❌ Error loading brands: $e');
+      if (mounted) {
+        setState(() {
+          brands = [];
+        });
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка загрузки марок: $e')),
+          SnackBar(
+            content: Text('Ошибка загрузки марок: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
         );
       }
     } finally {
@@ -733,30 +768,78 @@ class _VehicleDialogState extends State<_VehicleDialog> {
                 if (isLoadingBrands)
                   const LinearProgressIndicator()
                 else
-                  DropdownButtonFormField<String>(
-                    value: selectedBrandSlug,
-                    decoration: const InputDecoration(labelText: 'Марка *'),
-                    hint: const Text('Выберите марку'),
-                    items: brands.map((brand) {
-                      return DropdownMenuItem<String>(
-                        value: brand['slug'] as String,
-                        child: Text(brand['name'] as String),
-                      );
-                    }).toList(),
-                    onChanged: (value) {
-                      if (value == null) return;
-                      setState(() {
-                        selectedBrandSlug = value;
-                        selectedBrandName = brands.firstWhere((b) => b['slug'] == value)['name'] as String;
-                        models = [];
-                        generations = [];
-                        selectedModelSlug = null;
-                        selectedModelName = null;
-                        selectedGeneration = null;
-                      });
-                      _loadModels(value);
-                    },
-                    validator: (value) => value == null ? 'Выберите марку' : null,
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      DropdownButtonFormField<String>(
+                        value: selectedBrandSlug,
+                        decoration: const InputDecoration(labelText: 'Марка *'),
+                        hint: brands.isEmpty 
+                            ? const Text('Марки не загружены. Нажмите "Повторить" ниже')
+                            : const Text('Выберите марку'),
+                        items: brands.isEmpty
+                            ? [const DropdownMenuItem<String>(
+                                value: '__empty__',
+                                enabled: false,
+                                child: Text('Нет доступных марок'),
+                              )]
+                            : brands.map((brand) {
+                                return DropdownMenuItem<String>(
+                                  value: brand['slug'] as String,
+                                  child: Text(brand['name'] as String),
+                                );
+                              }).toList(),
+                        onChanged: brands.isEmpty
+                            ? null
+                            : (value) {
+                                if (value == null || value == '__empty__') return;
+                                setState(() {
+                                  selectedBrandSlug = value;
+                                  selectedBrandName = brands.firstWhere((b) => b['slug'] == value)['name'] as String;
+                                  models = [];
+                                  generations = [];
+                                  selectedModelSlug = null;
+                                  selectedModelName = null;
+                                  selectedGeneration = null;
+                                });
+                                _loadModels(value);
+                              },
+                        validator: (value) {
+                          if (value == null || value == '__empty__') {
+                            return 'Выберите марку';
+                          }
+                          return null;
+                        },
+                      ),
+                      if (brands.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8.0),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.warning_amber_rounded, size: 16, color: Colors.orange),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Марки не загружены. Проверьте подключение к серверу.',
+                                  style: TextStyle(fontSize: 12, color: Colors.orange[700]),
+                                ),
+                              ),
+                              TextButton.icon(
+                                onPressed: () {
+                                  _loadBrands();
+                                },
+                                icon: const Icon(Icons.refresh, size: 16),
+                                label: const Text('Повторить'),
+                                style: TextButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  minimumSize: Size.zero,
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
                   ),
                 const SizedBox(height: 16),
 

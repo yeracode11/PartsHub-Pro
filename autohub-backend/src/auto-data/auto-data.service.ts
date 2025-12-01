@@ -24,14 +24,21 @@ export class AutoDataService {
       timeout: 15000, // Увеличиваем таймаут до 15 секунд
       headers: {
         'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         Accept: 'application/json, text/javascript, */*; q=0.01',
         'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+        'Accept-Encoding': 'gzip, deflate, br',
         'X-Requested-With': 'XMLHttpRequest',
-        Referer: 'https://kolesa.kz/a/',
+        Referer: 'https://kolesa.kz/a/new/',
         Origin: 'https://kolesa.kz',
+        'Cache-Control': 'no-cache',
+        Pragma: 'no-cache',
+        'Sec-Fetch-Dest': 'empty',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Site': 'same-origin',
       },
-      validateStatus: (status) => status < 500, // Не выбрасывать ошибку для 4xx
+      maxRedirects: 5,
+      validateStatus: (status) => status >= 200 && status < 400,
     });
   }
 
@@ -50,22 +57,58 @@ export class AutoDataService {
         attempt++;
         this.logger.log(`🌐 [Kolesa] ${description} (attempt ${attempt}) -> ${url}`);
 
-        const res = await this.client.get<T>(url);
+        const res = await this.client.get(url, {
+          responseType: 'text', // Сначала получаем как текст, чтобы проверить на HTML
+        });
         
         // Проверяем, что данные есть
         if (!res.data) {
           throw new Error(`Empty response from Kolesa.kz for ${description}`);
         }
 
-        // Логируем структуру ответа для отладки
-        this.logger.debug(`✅ [Kolesa] ${description} response type: ${typeof res.data}, isArray: ${Array.isArray(res.data)}`);
+        // Проверяем Content-Type
+        const contentType = res.headers['content-type'] || '';
+        this.logger.debug(`📋 [Kolesa] ${description} Content-Type: ${contentType}`);
+
+        // Проверяем, что это не HTML
+        const dataStr = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
+        const trimmed = dataStr.trim();
         
-        return res.data;
+        if (trimmed.startsWith('<!DOCTYPE') || trimmed.startsWith('<html') || trimmed.startsWith('<!')) {
+          this.logger.error(`❌ [Kolesa] Received HTML instead of JSON for ${description}`);
+          this.logger.error(`📄 First 500 chars of response: ${trimmed.substring(0, 500)}`);
+          throw new Error(`Kolesa.kz returned HTML instead of JSON. The endpoint may have changed or requires authentication.`);
+        }
+
+        // Пытаемся распарсить как JSON
+        let parsedData: any;
+        try {
+          parsedData = JSON.parse(dataStr);
+        } catch (parseError) {
+          this.logger.error(`❌ [Kolesa] Failed to parse JSON for ${description}: ${parseError}`);
+          this.logger.error(`📄 First 500 chars of response: ${trimmed.substring(0, 500)}`);
+          throw new Error(`Failed to parse Kolesa.kz response as JSON: ${parseError}`);
+        }
+
+        // Логируем структуру ответа для отладки
+        this.logger.debug(`✅ [Kolesa] ${description} response type: ${typeof parsedData}, isArray: ${Array.isArray(parsedData)}`);
+        
+        return parsedData as T;
       } catch (error: any) {
-        const errorMessage = error.response?.data 
-          ? JSON.stringify(error.response.data) 
-          : error.message || String(error);
         const statusCode = error.response?.status || 'N/A';
+        let errorMessage = error.message || String(error);
+        
+        // Если получили HTML, пытаемся извлечь полезную информацию
+        if (error.response?.data && typeof error.response.data === 'string') {
+          const htmlData = error.response.data.substring(0, 200); // Первые 200 символов
+          if (htmlData.includes('<!DOCTYPE') || htmlData.includes('<html')) {
+            errorMessage = `Kolesa.kz returned HTML (status ${statusCode}). The endpoint may have changed.`;
+          } else {
+            errorMessage = error.response.data.substring(0, 500);
+          }
+        } else if (error.response?.data) {
+          errorMessage = JSON.stringify(error.response.data).substring(0, 500);
+        }
         
         this.logger.warn(
           `⚠️ [Kolesa] Error on ${description} (attempt ${attempt}/${retries}): Status ${statusCode}, ${errorMessage}`,
@@ -82,39 +125,59 @@ export class AutoDataService {
   }
 
   async getBrands(): Promise<KolesaListItem[]> {
-    try {
-      const data = await this.requestWithRetry<any>(
-        '/a/ajax-get-list-by-first-letters/?category=cars',
-        'get brands',
-      );
-      
-      // Проверяем формат ответа - может быть массив или объект с данными
-      if (Array.isArray(data)) {
-        this.logger.log(`✅ Got ${data.length} brands (array format)`);
-        return data;
-      } else if (data && typeof data === 'object') {
-        // Если ответ - объект, пытаемся найти массив внутри
-        const keys = Object.keys(data);
-        this.logger.log(`⚠️ Response is object with keys: ${keys.join(', ')}`);
+    // Пробуем несколько вариантов эндпоинтов
+    const endpoints = [
+      '/a/ajax-get-list-by-first-letters/?category=cars',
+      '/a/ajax-get-list-by-first-letters/?category=cars&_=' + Date.now(),
+      '/cars/ajax-get-list-by-first-letters/?category=cars',
+    ];
+
+    for (const endpoint of endpoints) {
+      try {
+        this.logger.log(`🔄 Trying endpoint: ${endpoint}`);
+        const data = await this.requestWithRetry<any>(endpoint, 'get brands');
         
-        // Пробуем найти массив в первом уровне объекта
-        for (const key of keys) {
-          if (Array.isArray(data[key])) {
-            this.logger.log(`✅ Found brands array in key: ${key}, length: ${data[key].length}`);
-            return data[key];
-          }
+        const result = this.extractBrandsArray(data);
+        if (result.length > 0) {
+          this.logger.log(`✅ Successfully got ${result.length} brands from ${endpoint}`);
+          return result;
         }
-        
-        // Если не нашли массив, возвращаем пустой массив
-        this.logger.warn(`⚠️ Could not find brands array in response object`);
-        return [];
-      } else {
-        this.logger.warn(`⚠️ Unexpected response format: ${typeof data}`);
-        return [];
+      } catch (error: any) {
+        this.logger.warn(`⚠️ Endpoint ${endpoint} failed: ${error.message}`);
+        // Продолжаем пробовать следующий эндпоинт
+        continue;
       }
-    } catch (error: any) {
-      this.logger.error(`❌ Error in getBrands: ${error.message}`, error.stack);
-      throw error;
+    }
+
+    // Если все эндпоинты не сработали, возвращаем пустой массив
+    this.logger.error(`❌ All endpoints failed. Kolesa.kz API may have changed.`);
+    throw new Error('Failed to fetch brands from Kolesa.kz. The API endpoints may have changed.');
+  }
+
+  private extractBrandsArray(data: any): KolesaListItem[] {
+    // Проверяем формат ответа - может быть массив или объект с данными
+    if (Array.isArray(data)) {
+      this.logger.log(`✅ Got ${data.length} brands (array format)`);
+      return data;
+    } else if (data && typeof data === 'object') {
+      // Если ответ - объект, пытаемся найти массив внутри
+      const keys = Object.keys(data);
+      this.logger.log(`⚠️ Response is object with keys: ${keys.join(', ')}`);
+      
+      // Пробуем найти массив в первом уровне объекта
+      for (const key of keys) {
+        if (Array.isArray(data[key])) {
+          this.logger.log(`✅ Found brands array in key: ${key}, length: ${data[key].length}`);
+          return data[key];
+        }
+      }
+      
+      // Если не нашли массив, возвращаем пустой массив
+      this.logger.warn(`⚠️ Could not find brands array in response object`);
+      return [];
+    } else {
+      this.logger.warn(`⚠️ Unexpected response format: ${typeof data}`);
+      return [];
     }
   }
 
