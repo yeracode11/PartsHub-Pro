@@ -479,8 +479,6 @@ class _VehicleDialogState extends State<_VehicleDialog> {
   final _formKey = GlobalKey<FormState>();
   final dio = ApiClient().dio;
 
-  late TextEditingController _brandController;
-  late TextEditingController _modelController;
   late TextEditingController _yearController;
   late TextEditingController _colorController;
   late TextEditingController _plateNumberController;
@@ -496,13 +494,26 @@ class _VehicleDialogState extends State<_VehicleDialog> {
   List<Map<String, dynamic>> customers = [];
   bool isLoadingCustomers = true;
 
+  // Kolesa.kz данные
+  List<Map<String, dynamic>> brands = [];
+  List<Map<String, dynamic>> models = [];
+  List<Map<String, dynamic>> generations = [];
+  
+  String? selectedBrandSlug;
+  String? selectedBrandName;
+  String? selectedModelSlug;
+  String? selectedModelName;
+  Map<String, dynamic>? selectedGeneration;
+  
+  bool isLoadingBrands = false;
+  bool isLoadingModels = false;
+  bool isLoadingGenerations = false;
+
   @override
   void initState() {
     super.initState();
 
     final v = widget.vehicle;
-    _brandController = TextEditingController(text: v?.brand ?? '');
-    _modelController = TextEditingController(text: v?.model ?? '');
     _yearController = TextEditingController(text: v?.year.toString() ?? '');
     _colorController = TextEditingController(text: v?.color ?? '');
     _plateNumberController = TextEditingController(text: v?.plateNumber ?? '');
@@ -516,7 +527,14 @@ class _VehicleDialogState extends State<_VehicleDialog> {
     _selectedFuelType = v?.fuelType ?? 'petrol';
     _selectedTransmission = v?.transmission ?? 'manual';
 
+    // Если редактируем существующий автомобиль, пытаемся найти марку/модель в списках
+    if (v != null && v.brand.isNotEmpty && v.model.isNotEmpty) {
+      selectedBrandName = v.brand;
+      selectedModelName = v.model;
+    }
+
     _loadCustomers();
+    _loadBrands();
   }
 
   Future<void> _loadCustomers() async {
@@ -531,8 +549,100 @@ class _VehicleDialogState extends State<_VehicleDialog> {
     }
   }
 
+  Future<void> _loadBrands() async {
+    setState(() => isLoadingBrands = true);
+    try {
+      final res = await dio.get('/api/auto-data/brands');
+      setState(() {
+        brands = List<Map<String, dynamic>>.from(res.data ?? []);
+        // Если редактируем и есть марка, пытаемся найти её в списке
+        if (widget.vehicle != null && widget.vehicle!.brand.isNotEmpty) {
+          final foundBrand = brands.firstWhere(
+            (b) => (b['name'] as String).toLowerCase() == widget.vehicle!.brand.toLowerCase(),
+            orElse: () => {},
+          );
+          if (foundBrand.isNotEmpty) {
+            selectedBrandSlug = foundBrand['slug'] as String;
+            selectedBrandName = foundBrand['name'] as String;
+            _loadModels(selectedBrandSlug!);
+          }
+        }
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка загрузки марок: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => isLoadingBrands = false);
+    }
+  }
+
+  Future<void> _loadModels(String brandSlug) async {
+    setState(() {
+      isLoadingModels = true;
+      models = [];
+      generations = [];
+      selectedModelSlug = null;
+      selectedModelName = null;
+      selectedGeneration = null;
+    });
+    try {
+      final res = await dio.get('/api/auto-data/brands/$brandSlug/models');
+      setState(() {
+        models = List<Map<String, dynamic>>.from(res.data ?? []);
+        // Если редактируем и есть модель, пытаемся найти её в списке
+        if (widget.vehicle != null && widget.vehicle!.model.isNotEmpty) {
+          final foundModel = models.firstWhere(
+            (m) => (m['name'] as String).toLowerCase() == widget.vehicle!.model.toLowerCase(),
+            orElse: () => {},
+          );
+          if (foundModel.isNotEmpty) {
+            selectedModelSlug = foundModel['slug'] as String;
+            selectedModelName = foundModel['name'] as String;
+            _loadGenerations(brandSlug, selectedModelSlug!);
+          }
+        }
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка загрузки моделей: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => isLoadingModels = false);
+    }
+  }
+
+  Future<void> _loadGenerations(String brandSlug, String modelSlug) async {
+    setState(() {
+      isLoadingGenerations = true;
+      generations = [];
+      selectedGeneration = null;
+    });
+    try {
+      final res = await dio.get('/api/auto-data/brands/$brandSlug/models/$modelSlug/generations');
+      setState(() {
+        generations = List<Map<String, dynamic>>.from(res.data ?? []);
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка загрузки поколений: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => isLoadingGenerations = false);
+    }
+  }
+
   Future<void> _save() async {
-    if (!_formKey.currentState!.validate() || _selectedCustomerId == null) {
+    if (!_formKey.currentState!.validate() || 
+        _selectedCustomerId == null ||
+        selectedBrandName == null ||
+        selectedModelName == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Пожалуйста, заполните все обязательные поля'),
@@ -542,11 +652,19 @@ class _VehicleDialogState extends State<_VehicleDialog> {
       return;
     }
 
+    // Определяем год из поколения или из поля
+    int year;
+    if (selectedGeneration != null && selectedGeneration!['year_from'] != null) {
+      year = selectedGeneration!['year_from'] as int;
+    } else {
+      year = int.parse(_yearController.text);
+    }
+
     final data = {
       'customerId': _selectedCustomerId,
-      'brand': _brandController.text,
-      'model': _modelController.text,
-      'year': int.parse(_yearController.text),
+      'brand': selectedBrandName!,
+      'model': selectedModelName!,
+      'year': year,
       'color': _colorController.text.isEmpty ? null : _colorController.text,
       'plateNumber': _plateNumberController.text,
       'vin': _vinController.text.isEmpty ? null : _vinController.text,
@@ -574,24 +692,6 @@ class _VehicleDialogState extends State<_VehicleDialog> {
           ),
         );
       }
-    }
-  }
-
-  Future<void> _openKolesaSelector() async {
-    final result = await showDialog<Map<String, dynamic>>(
-      context: context,
-      builder: (context) => const _KolesaVehicleSelectorDialog(),
-    );
-
-    if (result != null && mounted) {
-      setState(() {
-        _brandController.text = result['brandName'] ?? _brandController.text;
-        _modelController.text = result['modelName'] ?? _modelController.text;
-        if (result['yearFrom'] != null && (_yearController.text.isEmpty || _yearController.text == '0')) {
-          _yearController.text = (result['yearFrom'] as int).toString();
-        }
-        // VIN/другие поля здесь не задаём, Kolesa их не возвращает
-      });
     }
   }
 
@@ -629,65 +729,103 @@ class _VehicleDialogState extends State<_VehicleDialog> {
                   ),
                 const SizedBox(height: 16),
 
-                // Марка и модель
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final isMobile = constraints.maxWidth < 600;
-                    
-                    if (isMobile) {
-                      return Column(
-                        children: [
-                          TextFormField(
-                            controller: _brandController,
-                            decoration: const InputDecoration(labelText: 'Марка *'),
-                            validator: (value) => value?.isEmpty ?? true ? 'Обязательно' : null,
-                          ),
-                          const SizedBox(height: 16),
-                          TextFormField(
-                            controller: _modelController,
-                            decoration: const InputDecoration(labelText: 'Модель *'),
-                            validator: (value) => value?.isEmpty ?? true ? 'Обязательно' : null,
-                          ),
-                          const SizedBox(height: 12),
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: TextButton.icon(
-                              onPressed: _openKolesaSelector,
-                              icon: const Icon(Icons.search),
-                              label: const Text('Подобрать с Kolesa.kz'),
-                            ),
-                          ),
-                        ],
+                // Марка
+                if (isLoadingBrands)
+                  const LinearProgressIndicator()
+                else
+                  DropdownButtonFormField<String>(
+                    value: selectedBrandSlug,
+                    decoration: const InputDecoration(labelText: 'Марка *'),
+                    hint: const Text('Выберите марку'),
+                    items: brands.map((brand) {
+                      return DropdownMenuItem<String>(
+                        value: brand['slug'] as String,
+                        child: Text(brand['name'] as String),
                       );
-                    }
-                    
-                    return Row(
-                      children: [
-                        Expanded(
-                          child: TextFormField(
-                            controller: _brandController,
-                            decoration: const InputDecoration(labelText: 'Марка *'),
-                            validator: (value) => value?.isEmpty ?? true ? 'Обязательно' : null,
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: TextFormField(
-                            controller: _modelController,
-                            decoration: const InputDecoration(labelText: 'Модель *'),
-                            validator: (value) => value?.isEmpty ?? true ? 'Обязательно' : null,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        IconButton(
-                          tooltip: 'Подобрать с Kolesa.kz',
-                          icon: const Icon(Icons.search),
-                          onPressed: _openKolesaSelector,
-                        ),
-                      ],
-                    );
-                  },
-                ),
+                    }).toList(),
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setState(() {
+                        selectedBrandSlug = value;
+                        selectedBrandName = brands.firstWhere((b) => b['slug'] == value)['name'] as String;
+                        models = [];
+                        generations = [];
+                        selectedModelSlug = null;
+                        selectedModelName = null;
+                        selectedGeneration = null;
+                      });
+                      _loadModels(value);
+                    },
+                    validator: (value) => value == null ? 'Выберите марку' : null,
+                  ),
+                const SizedBox(height: 16),
+
+                // Модель
+                if (selectedBrandSlug == null)
+                  const SizedBox.shrink()
+                else if (isLoadingModels)
+                  const LinearProgressIndicator()
+                else
+                  DropdownButtonFormField<String>(
+                    value: selectedModelSlug,
+                    decoration: const InputDecoration(labelText: 'Модель *'),
+                    hint: const Text('Выберите модель'),
+                    items: models.map((model) {
+                      return DropdownMenuItem<String>(
+                        value: model['slug'] as String,
+                        child: Text(model['name'] as String),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      if (value == null || selectedBrandSlug == null) return;
+                      setState(() {
+                        selectedModelSlug = value;
+                        selectedModelName = models.firstWhere((m) => m['slug'] == value)['name'] as String;
+                        generations = [];
+                        selectedGeneration = null;
+                      });
+                      _loadGenerations(selectedBrandSlug!, value);
+                    },
+                    validator: (value) => value == null ? 'Выберите модель' : null,
+                  ),
+                const SizedBox(height: 16),
+
+                // Поколение
+                if (selectedModelSlug == null)
+                  const SizedBox.shrink()
+                else if (isLoadingGenerations)
+                  const LinearProgressIndicator()
+                else if (generations.isEmpty)
+                  const SizedBox.shrink()
+                else
+                  DropdownButtonFormField<Map<String, dynamic>>(
+                    value: selectedGeneration,
+                    decoration: const InputDecoration(labelText: 'Поколение'),
+                    hint: const Text('Выберите поколение (необязательно)'),
+                    items: generations.map((gen) {
+                      final yearFrom = gen['year_from'] as int?;
+                      final yearTo = gen['year_to'] as int?;
+                      final yearText = yearFrom != null
+                          ? ' (${yearFrom}${yearTo != null ? '–$yearTo' : '–н.в.'})'
+                          : '';
+                      return DropdownMenuItem<Map<String, dynamic>>(
+                        value: gen,
+                        child: Text('${gen['name']}$yearText'),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        selectedGeneration = value;
+                        // Автоматически заполняем год из поколения, если поле пустое
+                        if (value != null && value['year_from'] != null) {
+                          final yearFrom = value['year_from'] as int;
+                          if (_yearController.text.isEmpty || _yearController.text == '0') {
+                            _yearController.text = yearFrom.toString();
+                          }
+                        }
+                      });
+                    },
+                  ),
                 const SizedBox(height: 16),
 
                 // Год и цвет
@@ -910,8 +1048,6 @@ class _VehicleDialogState extends State<_VehicleDialog> {
 
   @override
   void dispose() {
-    _brandController.dispose();
-    _modelController.dispose();
     _yearController.dispose();
     _colorController.dispose();
     _plateNumberController.dispose();
@@ -924,215 +1060,4 @@ class _VehicleDialogState extends State<_VehicleDialog> {
   }
 }
 
-/// Диалог выбора автомобиля с Kolesa.kz: Марка → Модель → Поколение
-class _KolesaVehicleSelectorDialog extends StatefulWidget {
-  const _KolesaVehicleSelectorDialog({super.key});
-
-  @override
-  State<_KolesaVehicleSelectorDialog> createState() => _KolesaVehicleSelectorDialogState();
-}
-
-class _KolesaVehicleSelectorDialogState extends State<_KolesaVehicleSelectorDialog> {
-  final Dio dio = ApiClient().dio;
-
-  List<Map<String, dynamic>> brands = [];
-  List<Map<String, dynamic>> models = [];
-  List<Map<String, dynamic>> generations = [];
-
-  String? selectedBrandSlug;
-  String? selectedBrandName;
-  String? selectedModelSlug;
-  String? selectedModelName;
-  Map<String, dynamic>? selectedGeneration;
-
-  bool isLoading = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadBrands();
-  }
-
-  Future<void> _loadBrands() async {
-    setState(() => isLoading = true);
-    try {
-      final res = await dio.get('/api/auto-data/brands');
-      setState(() {
-        brands = List<Map<String, dynamic>>.from(res.data ?? []);
-      });
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка загрузки марок: $e')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => isLoading = false);
-    }
-  }
-
-  Future<void> _loadModels(String brandSlug) async {
-    setState(() {
-      isLoading = true;
-      models = [];
-      generations = [];
-      selectedModelSlug = null;
-      selectedModelName = null;
-      selectedGeneration = null;
-    });
-    try {
-      final res = await dio.get('/api/auto-data/brands/$brandSlug/models');
-      setState(() {
-        models = List<Map<String, dynamic>>.from(res.data ?? []);
-      });
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка загрузки моделей: $e')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => isLoading = false);
-    }
-  }
-
-  Future<void> _loadGenerations(String brandSlug, String modelSlug) async {
-    setState(() {
-      isLoading = true;
-      generations = [];
-      selectedGeneration = null;
-    });
-    try {
-      final res = await dio.get(
-        '/api/auto-data/brands/$brandSlug/models/$modelSlug/generations',
-      );
-      setState(() {
-        generations = List<Map<String, dynamic>>.from(res.data ?? []);
-      });
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка загрузки поколений: $e')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => isLoading = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isMobile = MediaQuery.of(context).size.width < 768;
-
-    return AlertDialog(
-      title: const Text('Подбор авто (Kolesa.kz)'),
-      content: SizedBox(
-        width: isMobile ? MediaQuery.of(context).size.width * 0.9 : 480,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (isLoading) const LinearProgressIndicator(),
-            const SizedBox(height: 8),
-            // Марка
-            DropdownButtonFormField<String>(
-              value: selectedBrandSlug,
-              decoration: const InputDecoration(labelText: 'Марка'),
-              items: brands
-                  .map(
-                    (b) => DropdownMenuItem<String>(
-                      value: b['slug'] as String,
-                      child: Text(b['name'] as String),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (value) {
-                if (value == null) return;
-                setState(() {
-                  selectedBrandSlug = value;
-                  selectedBrandName = brands
-                      .firstWhere(
-                        (b) => b['slug'] == value,
-                        orElse: () => {'name': value},
-                      )['name'] as String?;
-                });
-                _loadModels(value);
-              },
-            ),
-            const SizedBox(height: 12),
-            // Модель
-            DropdownButtonFormField<String>(
-              value: selectedModelSlug,
-              decoration: const InputDecoration(labelText: 'Модель'),
-              items: models
-                  .map(
-                    (m) => DropdownMenuItem<String>(
-                      value: m['slug'] as String,
-                      child: Text(m['name'] as String),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (value) {
-                if (value == null || selectedBrandSlug == null) return;
-                setState(() {
-                  selectedModelSlug = value;
-                  selectedModelName = models
-                      .firstWhere(
-                        (m) => m['slug'] == value,
-                        orElse: () => {'name': value},
-                      )['name'] as String?;
-                });
-                _loadGenerations(selectedBrandSlug!, value);
-              },
-            ),
-            const SizedBox(height: 12),
-            // Поколение
-            DropdownButtonFormField<Map<String, dynamic>>(
-              value: selectedGeneration,
-              decoration: const InputDecoration(labelText: 'Поколение'),
-              items: generations
-                  .map(
-                    (g) => DropdownMenuItem<Map<String, dynamic>>(
-                      value: g,
-                      child: Text(
-                        '${g['name']}'
-                        ' (${g['year_from'] ?? '-'}'
-                        '${g['year_to'] != null ? '–${g['year_to']}' : '–н.в.'})',
-                      ),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (value) {
-                setState(() {
-                  selectedGeneration = value;
-                });
-              },
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Отмена'),
-        ),
-        ElevatedButton(
-          onPressed: selectedBrandSlug != null && selectedModelSlug != null
-              ? () {
-                  Navigator.pop<Map<String, dynamic>>(context, {
-                    'brandSlug': selectedBrandSlug,
-                    'brandName': selectedBrandName,
-                    'modelSlug': selectedModelSlug,
-                    'modelName': selectedModelName,
-                    'generation': selectedGeneration,
-                    'yearFrom': selectedGeneration?['year_from'],
-                    'yearTo': selectedGeneration?['year_to'],
-                  });
-                }
-              : null,
-          child: const Text('Выбрать'),
-        ),
-      ],
-    );
-  }
-}
 
