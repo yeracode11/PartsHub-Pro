@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Item } from './entities/item.entity';
+import { FilterItemsDto } from './dto/filter-items.dto';
 
 @Injectable()
 export class ItemsService {
@@ -30,18 +31,80 @@ export class ItemsService {
     return { items: formattedItems };
   }
 
-  // CRUD методы для управления товарами
-  async findAll(organizationId: string) {
+  // CRUD методы для управления товарами с фильтрацией
+  async findAll(organizationId: string, filters?: FilterItemsDto) {
     try {
       console.log('🔍 findAll items called for organizationId:', organizationId);
+      console.log('📋 Filters:', filters);
       
-      // Простой запрос - поле warehouseCell временно закомментировано в entity
-      const items = await this.itemRepository.find({
-        where: { organizationId },
-        order: { createdAt: 'DESC' },
-      });
+      const queryBuilder = this.itemRepository
+        .createQueryBuilder('item')
+        .where('item.organizationId = :organizationId', { organizationId });
+
+      // Фильтр по поиску (название или артикул)
+      if (filters?.search) {
+        queryBuilder.andWhere(
+          '(LOWER(item.name) LIKE LOWER(:search) OR LOWER(item.sku) LIKE LOWER(:search))',
+          { search: `%${filters.search}%` }
+        );
+      }
+
+      // Фильтр по категории (одна)
+      if (filters?.category) {
+        queryBuilder.andWhere('item.category = :category', { category: filters.category });
+      }
+
+      // Фильтр по категориям (множественный)
+      if (filters?.categories && filters.categories.length > 0) {
+        queryBuilder.andWhere('item.category IN (:...categories)', { categories: filters.categories });
+      }
+
+      // Фильтр по состоянию
+      if (filters?.condition) {
+        queryBuilder.andWhere('item.condition = :condition', { condition: filters.condition });
+      }
+
+      // Фильтр по цене
+      if (filters?.minPrice !== undefined) {
+        queryBuilder.andWhere('item.price >= :minPrice', { minPrice: filters.minPrice });
+      }
+      if (filters?.maxPrice !== undefined) {
+        queryBuilder.andWhere('item.price <= :maxPrice', { maxPrice: filters.maxPrice });
+      }
+
+      // Фильтр по складу
+      if (filters?.warehouseId) {
+        queryBuilder.andWhere('item.warehouseId = :warehouseId', { warehouseId: filters.warehouseId });
+      }
+
+      // Фильтр по наличию
+      if (filters?.inStock !== undefined) {
+        if (filters.inStock) {
+          queryBuilder.andWhere('item.quantity > 0');
+        } else {
+          queryBuilder.andWhere('item.quantity = 0');
+        }
+      }
+
+      // Фильтр по количеству
+      if (filters?.minQuantity !== undefined) {
+        queryBuilder.andWhere('item.quantity >= :minQuantity', { minQuantity: filters.minQuantity });
+      }
+      if (filters?.maxQuantity !== undefined) {
+        queryBuilder.andWhere('item.quantity <= :maxQuantity', { maxQuantity: filters.maxQuantity });
+      }
+
+      // Фильтр по синхронизации с B2C
+      if (filters?.syncedToB2C !== undefined) {
+        queryBuilder.andWhere('item.syncedToB2C = :syncedToB2C', { syncedToB2C: filters.syncedToB2C });
+      }
+
+      // Сортировка
+      queryBuilder.orderBy('item.createdAt', 'DESC');
+
+      const items = await queryBuilder.getMany();
       
-      console.log(`✅ Found ${items.length} items`);
+      console.log(`✅ Found ${items.length} items after filtering`);
       return items;
     } catch (error) {
       console.error('❌ Error in findAll items:', error);

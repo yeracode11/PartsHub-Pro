@@ -14,6 +14,7 @@ import {
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { ItemsService } from './items.service';
+import { FilterItemsDto } from './dto/filter-items.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -36,13 +37,13 @@ export class ItemsController {
   }
 
   @Get()
-  async findAll(@CurrentUser() user: any) {
+  async findAll(@CurrentUser() user: any, @Query() filters: FilterItemsDto) {
     try {
       if (!user || !user.organizationId) {
         console.error('❌ No organizationId in user:', user);
         return [];
       }
-      return await this.itemsService.findAll(user.organizationId);
+      return await this.itemsService.findAll(user.organizationId, filters);
     } catch (error) {
       console.error('❌ Error in findAll controller:', error);
       console.error('Error stack:', error?.stack);

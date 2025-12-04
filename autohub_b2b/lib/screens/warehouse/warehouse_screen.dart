@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/models/item_model.dart';
+import 'package:autohub_b2b/models/warehouse_model.dart';
+import 'package:autohub_b2b/services/warehouse_service.dart';
+import 'package:autohub_b2b/widgets/items_filter_widget.dart';
 import 'package:intl/intl.dart';
 import 'package:dio/dio.dart';
 import 'package:autohub_b2b/services/api/api_client.dart';
@@ -17,15 +20,36 @@ class WarehouseScreen extends StatefulWidget {
 class _WarehouseScreenState extends State<WarehouseScreen> {
   final dio = ApiClient().dio;
   final _searchController = TextEditingController();
+  final WarehouseService _warehouseService = WarehouseService();
+  
   List<ItemModel> items = [];
   List<ItemModel> filteredItems = [];
+  List<Warehouse> warehouses = [];
   bool isLoading = true;
   String? error;
+  
+  // Активные фильтры
+  Map<String, dynamic> activeFilters = {};
+  int activeFiltersCount = 0;
 
   @override
   void initState() {
     super.initState();
+    _loadWarehouses();
     _loadItems();
+  }
+
+  Future<void> _loadWarehouses() async {
+    try {
+      final loadedWarehouses = await _warehouseService.getWarehouses();
+      if (mounted) {
+        setState(() {
+          warehouses = loadedWarehouses;
+        });
+      }
+    } catch (e) {
+      print('Error loading warehouses: $e');
+    }
   }
 
   Future<void> _loadItems() async {
@@ -37,7 +61,15 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
     });
 
     try {
-      final response = await dio.get('/api/items');
+      // Подготовка query параметров из activeFilters
+      final queryParams = <String, dynamic>{};
+      activeFilters.forEach((key, value) {
+        if (value != null) {
+          queryParams[key] = value.toString();
+        }
+      });
+
+      final response = await dio.get('/api/items', queryParameters: queryParams);
       final List<dynamic> data = response.data;
 
       print('📦 Loaded ${data.length} items from API');
@@ -95,6 +127,24 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
         }).toList();
       }
     });
+  }
+
+  void _showFiltersDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => ItemsFilterWidget(
+        warehouses: warehouses,
+        onApplyFilters: _applyFilters,
+      ),
+    );
+  }
+
+  void _applyFilters(Map<String, dynamic> filters) {
+    setState(() {
+      activeFilters = filters;
+      activeFiltersCount = filters.values.where((v) => v != null).length;
+    });
+    _loadItems();
   }
 
   Widget _buildItemsList({bool isMobile = false}) {
@@ -368,6 +418,35 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                       Row(
                         children: [
                           IconButton(
+                            icon: Stack(
+                              children: [
+                                const Icon(Icons.filter_list),
+                                if (activeFiltersCount > 0)
+                                  Positioned(
+                                    right: 0,
+                                    top: 0,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: const BoxDecoration(
+                                        color: Colors.red,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Text(
+                                        activeFiltersCount.toString(),
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            onPressed: _showFiltersDialog,
+                            tooltip: 'Фильтры',
+                          ),
+                          IconButton(
                             icon: const Icon(Icons.print),
                             onPressed: () {
                               Navigator.of(context).push(
@@ -389,6 +468,35 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                     else
                       Row(
                         children: [
+                          IconButton(
+                            icon: Stack(
+                              children: [
+                                const Icon(Icons.filter_list),
+                                if (activeFiltersCount > 0)
+                                  Positioned(
+                                    right: 0,
+                                    top: 0,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: const BoxDecoration(
+                                        color: Colors.red,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Text(
+                                        activeFiltersCount.toString(),
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            onPressed: _showFiltersDialog,
+                            tooltip: 'Фильтры',
+                          ),
                           IconButton(
                             icon: const Icon(Icons.print),
                             onPressed: () {
@@ -431,18 +539,72 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                         onChanged: _filterItems,
                       ),
                     ),
-                    if (!isMobile) ...[
-                      const SizedBox(width: 16),
-                      OutlinedButton.icon(
-                        onPressed: () {
-                          // Фильтры будут реализованы позже
-                        },
-                        icon: const Icon(Icons.filter_list),
-                        label: const Text('Фильтры'),
-                      ),
-                    ],
                   ],
                 ),
+                // Активные фильтры
+                if (activeFiltersCount > 0) ...[
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      if (activeFilters['category'] != null)
+                        Chip(
+                          label: Text('Категория: ${activeFilters['category']}'),
+                          onDeleted: () {
+                            setState(() => activeFilters.remove('category'));
+                            _applyFilters(activeFilters);
+                          },
+                        ),
+                      if (activeFilters['condition'] != null)
+                        Chip(
+                          label: Text('Состояние: ${_getConditionLabel(activeFilters['condition'])}'),
+                          onDeleted: () {
+                            setState(() => activeFilters.remove('condition'));
+                            _applyFilters(activeFilters);
+                          },
+                        ),
+                      if (activeFilters['warehouseId'] != null)
+                        Chip(
+                          label: Text('Склад: ${_getWarehouseName(activeFilters['warehouseId'])}'),
+                          onDeleted: () {
+                            setState(() => activeFilters.remove('warehouseId'));
+                            _applyFilters(activeFilters);
+                          },
+                        ),
+                      if (activeFilters['inStock'] != null)
+                        Chip(
+                          label: Text(activeFilters['inStock'] == true ? 'В наличии' : 'Нет в наличии'),
+                          onDeleted: () {
+                            setState(() => activeFilters.remove('inStock'));
+                            _applyFilters(activeFilters);
+                          },
+                        ),
+                      if (activeFilters['minPrice'] != null || activeFilters['maxPrice'] != null)
+                        Chip(
+                          label: Text('Цена: ${activeFilters['minPrice'] ?? 0} - ${activeFilters['maxPrice'] ?? '∞'} ₸'),
+                          onDeleted: () {
+                            setState(() {
+                              activeFilters.remove('minPrice');
+                              activeFilters.remove('maxPrice');
+                            });
+                            _applyFilters(activeFilters);
+                          },
+                        ),
+                      TextButton.icon(
+                        onPressed: () {
+                          setState(() {
+                            activeFilters.clear();
+                            activeFiltersCount = 0;
+                          });
+                          _loadItems();
+                        },
+                        icon: const Icon(Icons.clear_all, size: 18),
+                        label: const Text('Сбросить все'),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
@@ -867,6 +1029,33 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
       // Обновляем список товаров после редактирования
       _loadItems();
     }
+  }
+
+  String _getConditionLabel(String condition) {
+    switch (condition) {
+      case 'new':
+        return 'Новый';
+      case 'used':
+        return 'Б/У';
+      case 'refurbished':
+        return 'Восстановленный';
+      default:
+        return condition;
+    }
+  }
+
+  String _getWarehouseName(String warehouseId) {
+    final warehouse = warehouses.firstWhere(
+      (w) => w.id == warehouseId,
+      orElse: () => Warehouse(
+        id: warehouseId,
+        name: 'Неизвестный склад',
+        organizationId: '',
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      ),
+    );
+    return warehouse.name;
   }
 
   @override
