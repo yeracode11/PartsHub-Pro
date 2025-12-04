@@ -8,6 +8,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { Organization } from '../../organizations/entities/organization.entity';
+import { Warehouse } from '../../warehouses/entities/warehouse.entity';
 
 @Entity('items')
 export class Item {
@@ -51,6 +52,13 @@ export class Item {
 
   @Column({ type: 'varchar', length: 100, nullable: true })
   warehouseCell: string | null; // Ячейка хранения на складе
+
+  @Column({ type: 'uuid', nullable: true })
+  warehouseId: string | null;
+
+  @ManyToOne(() => Warehouse, warehouse => warehouse.items, { nullable: true })
+  @JoinColumn({ name: 'warehouseId' })
+  warehouse: Warehouse;
 
   @Column({ type: 'boolean', default: false })
   synced: boolean; // Для оффлайн синхронизации

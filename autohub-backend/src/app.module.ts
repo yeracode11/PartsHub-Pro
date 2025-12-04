@@ -18,6 +18,7 @@ import { VehiclesModule } from './vehicles/vehicles.module';
 import { B2CModule } from './b2c/b2c.module';
 import { AutoDataModule } from './auto-data/auto-data.module';
 import { IncomingModule } from './incoming/incoming.module';
+import { WarehousesModule } from './warehouses/warehouses.module';
 
 @Module({
   imports: [
@@ -102,6 +103,7 @@ import { IncomingModule } from './incoming/incoming.module';
     B2CModule,
     AutoDataModule,
     IncomingModule,
+    WarehousesModule,
   ],
   controllers: [AppController],
   providers: [AppService],
