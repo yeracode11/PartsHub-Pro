@@ -12,6 +12,7 @@ class ItemModel extends Equatable {
   final String? imageUrl;
   final List<String>? images;
   final String? warehouseCell;
+  final String? warehouseId;
   final bool synced;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -28,6 +29,7 @@ class ItemModel extends Equatable {
     this.imageUrl,
     this.images,
     this.warehouseCell,
+    this.warehouseId,
     this.synced = false,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -46,6 +48,7 @@ class ItemModel extends Equatable {
     String? imageUrl,
     List<String>? images,
     String? warehouseCell,
+    String? warehouseId,
     bool? synced,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -62,6 +65,7 @@ class ItemModel extends Equatable {
       imageUrl: imageUrl ?? this.imageUrl,
       images: images ?? this.images,
       warehouseCell: warehouseCell ?? this.warehouseCell,
+      warehouseId: warehouseId ?? this.warehouseId,
       synced: synced ?? this.synced,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -81,6 +85,7 @@ class ItemModel extends Equatable {
       'imageUrl': imageUrl,
       'images': images,
       'warehouseCell': warehouseCell,
+      'warehouseId': warehouseId,
       'synced': synced,
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
@@ -128,6 +133,7 @@ class ItemModel extends Equatable {
             ? (json['images'] is List ? List<String>.from(json['images'].map((e) => e.toString())) : null)
             : null,
         warehouseCell: json['warehouseCell'] as String?,
+        warehouseId: json['warehouseId'] as String?,
         synced: json['synced'] is bool ? json['synced'] : false,
         createdAt: parseDate(json['createdAt']) ?? DateTime.now(),
         updatedAt: parseDate(json['updatedAt']) ?? DateTime.now(),
@@ -152,6 +158,7 @@ class ItemModel extends Equatable {
         imageUrl,
         images,
         warehouseCell,
+        warehouseId,
         synced,
         createdAt,
         updatedAt,

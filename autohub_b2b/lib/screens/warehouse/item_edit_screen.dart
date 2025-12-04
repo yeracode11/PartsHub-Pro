@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/models/item_model.dart';
+import 'package:autohub_b2b/models/warehouse_model.dart';
 import 'package:autohub_b2b/services/api/api_client.dart';
 import 'package:autohub_b2b/services/image_upload_service.dart';
+import 'package:autohub_b2b/services/warehouse_service.dart';
 import 'package:autohub_b2b/widgets/image_upload_widget.dart';
 
 class ItemEditScreen extends StatefulWidget {
@@ -28,11 +30,14 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
   
   late final ApiClient _apiClient;
   late final ImageUploadService _imageUploadService;
+  final WarehouseService _warehouseService = WarehouseService();
   
   String? _selectedCategory;
   String _selectedCondition = 'new';
+  String? _selectedWarehouseId;
   bool _isLoading = false;
   List<String> _currentImages = [];
+  List<Warehouse> _warehouses = [];
 
   final List<String> _conditions = ['new', 'used', 'refurbished'];
   
@@ -69,7 +74,21 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
     _descriptionController.text = widget.item.description ?? '';
     _warehouseCellController.text = widget.item.warehouseCell ?? '';
     _selectedCondition = widget.item.condition ?? 'new';
+    _selectedWarehouseId = widget.item.warehouseId;
     _currentImages = widget.item.images ?? [];
+    
+    _loadWarehouses();
+  }
+
+  Future<void> _loadWarehouses() async {
+    try {
+      final warehouses = await _warehouseService.getWarehouses();
+      setState(() {
+        _warehouses = warehouses;
+      });
+    } catch (e) {
+      print('Error loading warehouses: $e');
+    }
   }
 
   @override
@@ -261,6 +280,33 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
                     ),
                     const SizedBox(height: 16),
                     
+                    // Выбор склада
+                    DropdownButtonFormField<String>(
+                      value: _selectedWarehouseId,
+                      decoration: const InputDecoration(
+                        labelText: 'Склад',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.warehouse),
+                      ),
+                      hint: const Text('Выберите склад'),
+                      isExpanded: true,
+                      items: _warehouses.map((warehouse) {
+                        return DropdownMenuItem(
+                          value: warehouse.id,
+                          child: Text(
+                            warehouse.name,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        setState(() {
+                          _selectedWarehouseId = value;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    
                     // Ячейка склада
                     TextFormField(
                       controller: _warehouseCellController,
@@ -353,6 +399,7 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
         'condition': _selectedCondition,
         'description': _descriptionController.text.isEmpty ? null : _descriptionController.text,
         'warehouseCell': _warehouseCellController.text.isEmpty ? null : _warehouseCellController.text.trim(),
+        'warehouseId': _selectedWarehouseId,
         'images': _currentImages,
       };
 

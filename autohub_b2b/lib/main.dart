@@ -11,6 +11,8 @@ import 'package:autohub_b2b/screens/dashboard/dashboard_screen.dart';
 import 'package:autohub_b2b/screens/warehouse/warehouse_screen.dart';
 import 'package:autohub_b2b/screens/warehouse/incoming_list_screen.dart';
 import 'package:autohub_b2b/screens/warehouse/warehouse_location_screen.dart';
+import 'package:autohub_b2b/screens/warehouse/warehouses_screen.dart';
+import 'package:autohub_b2b/screens/warehouse/warehouse_transfers_screen.dart';
 import 'package:autohub_b2b/screens/sales/sales_screen.dart';
 import 'package:autohub_b2b/screens/crm/crm_screen.dart';
 import 'package:autohub_b2b/screens/analytics/analytics_screen.dart';
@@ -111,7 +113,7 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
   bool _warehouseMenuExpanded = false;
-  int? _warehouseSubMenuIndex; // null = закрыто, 0 = Товары, 1 = Оприходование, 2 = Расположение
+  int? _warehouseSubMenuIndex; // null = закрыто, 0 = Товары, 1 = Оприходование, 2 = Расположение, 3 = Склады, 4 = Перемещения
 
   final List<Widget> _screens = [
     const DashboardScreen(),
@@ -136,6 +138,10 @@ class _MainScreenState extends State<MainScreen> {
         return const IncomingListScreen(); // Оприходование
       case 2:
         return const WarehouseLocationScreen(); // Расположение
+      case 3:
+        return const WarehousesScreen(); // Склады
+      case 4:
+        return const WarehouseTransfersScreen(); // Перемещения
       default:
         return const WarehouseScreen();
     }
@@ -406,6 +412,10 @@ class _MainScreenState extends State<MainScreen> {
           return 'Оприходование';
         case 2:
           return 'Расположение';
+        case 3:
+          return 'Склады';
+        case 4:
+          return 'Перемещения';
         default:
           return 'Склад';
       }
@@ -760,6 +770,18 @@ class _MainScreenState extends State<MainScreen> {
           subIndex: 2,
           context: context,
         ),
+        _buildDrawerSubMenuItem(
+          icon: Icons.warehouse_outlined,
+          label: 'Склады',
+          subIndex: 3,
+          context: context,
+        ),
+        _buildDrawerSubMenuItem(
+          icon: Icons.swap_horiz,
+          label: 'Перемещения',
+          subIndex: 4,
+          context: context,
+        ),
       ],
     );
   }
@@ -892,6 +914,16 @@ class _MainScreenState extends State<MainScreen> {
                   icon: Icons.location_on_outlined,
                   label: 'Расположение',
                   subIndex: 2,
+                ),
+                _buildSubMenuItem(
+                  icon: Icons.warehouse_outlined,
+                  label: 'Склады',
+                  subIndex: 3,
+                ),
+                _buildSubMenuItem(
+                  icon: Icons.swap_horiz,
+                  label: 'Перемещения',
+                  subIndex: 4,
                 ),
               ],
             ),
