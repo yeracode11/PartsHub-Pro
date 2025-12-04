@@ -740,9 +740,10 @@ class _OrderDialogState extends State<_OrderDialog> {
         height: isMobile
             ? MediaQuery.of(context).size.height * 0.8
             : 600,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
             // Выбор товаров
             if (isMobile) ...[
               Text(
@@ -985,6 +986,7 @@ class _OrderDialogState extends State<_OrderDialog> {
               maxLines: 2,
             ),
           ],
+        ),
         ),
       ),
       actions: [

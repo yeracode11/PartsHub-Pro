@@ -1,4 +1,6 @@
 PODS:
+  - blue_thermal_printer (0.0.1):
+    - FlutterMacOS
   - file_selector_macos (0.0.1):
     - FlutterMacOS
   - FlutterMacOS (1.0.0)
@@ -40,6 +42,7 @@ PODS:
     - sqlite3/session
 
 DEPENDENCIES:
+  - blue_thermal_printer (from `Flutter/ephemeral/.symlinks/plugins/blue_thermal_printer/macos`)
   - file_selector_macos (from `Flutter/ephemeral/.symlinks/plugins/file_selector_macos/macos`)
   - FlutterMacOS (from `Flutter/ephemeral`)
   - path_provider_foundation (from `Flutter/ephemeral/.symlinks/plugins/path_provider_foundation/darwin`)
@@ -53,6 +56,8 @@ SPEC REPOS:
     - sqlite3
 
 EXTERNAL SOURCES:
+  blue_thermal_printer:
+    :path: Flutter/ephemeral/.symlinks/plugins/blue_thermal_printer/macos
   file_selector_macos:
     :path: Flutter/ephemeral/.symlinks/plugins/file_selector_macos/macos
   FlutterMacOS:
@@ -69,6 +74,7 @@ EXTERNAL SOURCES:
     :path: Flutter/ephemeral/.symlinks/plugins/sqlite3_flutter_libs/darwin
 
 SPEC CHECKSUMS:
+  blue_thermal_printer: f2dde78e2fb9be6a5c6741376622a5d548648b37
   file_selector_macos: 6280b52b459ae6c590af5d78fc35c7267a3c4b31
   FlutterMacOS: d0db08ddef1a9af05a5ec4b724367152bb0500b1
   path_provider_foundation: 080d55be775b7414fd5a5ef3ac137b97b097e564

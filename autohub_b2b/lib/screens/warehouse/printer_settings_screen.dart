@@ -60,7 +60,11 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
       }
 
       // Подключаемся к выбранному принтеру
-      final connected = await _printer.connectUSB(printerName: printer['name'] as String);
+      // Передаем весь объект printer для поддержки Bluetooth на мобильных устройствах
+      final connected = await _printer.connectUSB(
+        printerName: printer['name'] as String?,
+        printerData: printer,
+      );
 
       if (mounted) {
         setState(() {

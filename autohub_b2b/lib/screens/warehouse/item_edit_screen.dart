@@ -137,11 +137,15 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
                               labelText: 'Категория',
                               border: OutlineInputBorder(),
                             ),
+                            isExpanded: true,
                             hint: const Text('Выберите категорию'),
                             items: _categories.map((category) {
                               return DropdownMenuItem(
                                 value: category,
-                                child: Text(category),
+                                child: Text(
+                                  category,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               );
                             }).toList(),
                             onChanged: (value) {

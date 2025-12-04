@@ -451,40 +451,100 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Позиции (${items.length})',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                if (_document!.status == IncomingDocStatus.draft) ...[
-                  ElevatedButton.icon(
-                    onPressed: () async {
-                      final result = await Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) => IncomingAddItemScreen(
-                            docId: _document!.id,
-                            docType: _selectedType,
-                          ),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final isMobile = constraints.maxWidth < 600;
+                
+                if (isMobile) {
+                  // На мобильных устройствах размещаем вертикально
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Позиции (${items.length})',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      if (_document!.status == IncomingDocStatus.draft) ...[
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: () async {
+                                  final result = await Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (context) => IncomingAddItemScreen(
+                                        docId: _document!.id,
+                                        docType: _selectedType,
+                                      ),
+                                    ),
+                                  );
+                                  if (result == true) {
+                                    _loadDocument();
+                                  }
+                                },
+                                icon: const Icon(Icons.add, size: 18),
+                                label: const Text('Добавить'),
+                              ),
+                            ),
+                            if (items.isNotEmpty) ...[
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: () => _printAllLabels(items),
+                                  icon: const Icon(Icons.print, size: 18),
+                                  label: const Text('Печать'),
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
-                      );
-                      if (result == true) {
-                        _loadDocument();
-                      }
-                    },
-                    icon: const Icon(Icons.add),
-                    label: const Text('Добавить позицию'),
-                  ),
-                  const SizedBox(width: 8),
-                  if (items.isNotEmpty)
-                    OutlinedButton.icon(
-                      onPressed: () => _printAllLabels(items),
-                      icon: const Icon(Icons.print),
-                      label: const Text('Печать всех наклеек'),
+                      ],
+                    ],
+                  );
+                }
+                
+                // На десктопе оставляем горизонтально
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Позиции (${items.length})',
+                      style: Theme.of(context).textTheme.titleLarge,
                     ),
-                ],
-              ],
+                    if (_document!.status == IncomingDocStatus.draft)
+                      Row(
+                        children: [
+                          ElevatedButton.icon(
+                            onPressed: () async {
+                              final result = await Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (context) => IncomingAddItemScreen(
+                                    docId: _document!.id,
+                                    docType: _selectedType,
+                                  ),
+                                ),
+                              );
+                              if (result == true) {
+                                _loadDocument();
+                              }
+                            },
+                            icon: const Icon(Icons.add),
+                            label: const Text('Добавить позицию'),
+                          ),
+                          if (items.isNotEmpty) ...[
+                            const SizedBox(width: 8),
+                            OutlinedButton.icon(
+                              onPressed: () => _printAllLabels(items),
+                              icon: const Icon(Icons.print),
+                              label: const Text('Печать всех наклеек'),
+                            ),
+                          ],
+                        ],
+                      ),
+                  ],
+                );
+              },
             ),
             const SizedBox(height: 16),
             if (items.isEmpty)
