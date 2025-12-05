@@ -2,8 +2,10 @@ import 'package:printing/printing.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:typed_data';
 import 'dart:io' show Platform;
+import 'dart:async';
 // Bluetooth printer support only for Android
 import 'package:blue_thermal_printer/blue_thermal_printer.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -26,11 +28,16 @@ class ThermalPrinterService {
   Printer? _selectedPrinter;
   bool _isConnected = false;
   String? _printerName;
+  String? _printerUrl; // URL принтера для сохранения
   pw.Font? _cyrillicFont;
   
   // Для Bluetooth на мобильных устройствах
   BlueThermalPrinter? _bluetoothPrinter;
   BluetoothDevice? _bluetoothDevice;
+  
+  // Ключи для SharedPreferences
+  static const String _prefKeyPrinterName = 'saved_printer_name';
+  static const String _prefKeyPrinterUrl = 'saved_printer_url';
 
   /// Подключение к принтеру
   /// 
@@ -67,6 +74,10 @@ class ThermalPrinterService {
 
         _isConnected = true;
         _printerName = _selectedPrinter!.name;
+        _printerUrl = _selectedPrinter!.url;
+        
+        // Сохраняем настройки принтера
+        await savePrinterSettings();
         
         print('✅ Подключено к принтеру: $_printerName');
         return true;
@@ -84,10 +95,17 @@ class ThermalPrinterService {
   }
 
   /// Отключение от принтера
-  Future<void> disconnect() async {
+  /// [clearSettings] - если true, также очищает сохраненные настройки (отвязать)
+  Future<void> disconnect({bool clearSettings = false}) async {
     _isConnected = false;
     _printerName = null;
+    _printerUrl = null;
     _selectedPrinter = null;
+    
+    if (clearSettings) {
+      await clearPrinterSettings();
+      print('🗑️ Принтер отвязан и настройки очищены');
+    }
     
     // Отключаемся от Bluetooth принтера, если подключены
     if (_bluetoothPrinter != null) {
@@ -104,9 +122,10 @@ class ThermalPrinterService {
     }
   }
 
-  /// Проверка подключения
+  /// Проверка подключения и геттеры
   bool get isConnected => _isConnected;
   String? get printerName => _printerName;
+  String? get connectedPrinterName => _printerName; // Алиас для удобства
 
   /// Загрузка шрифта с поддержкой кириллицы
   /// 
@@ -149,7 +168,15 @@ class ThermalPrinterService {
     required double price,
     String? warehouseCell,
     int quantity = 1,
+    bool useDialog = false, // Новый параметр для использования диалога
   }) async {
+    print('🖨️ Начало печати этикетки...');
+    print('   Товар: $itemName');
+    print('   Метод: ${useDialog ? "диалог" : "прямая печать"}');
+    
+    // Даём UI время на обновление перед тяжёлой операцией
+    await Future.delayed(Duration.zero);
+    
     try {
       // Если подключен Bluetooth принтер, используем ESC/POS
       if (_bluetoothPrinter != null) {
@@ -185,67 +212,76 @@ class ThermalPrinterService {
           pw.Page(
             pageFormat: PdfPageFormat(labelWidth, labelHeight, marginAll: margin),
             build: (pw.Context context) {
-              return pw.Column(
-                mainAxisAlignment: pw.MainAxisAlignment.center,
+              return pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.start,
                 crossAxisAlignment: pw.CrossAxisAlignment.center,
                 children: [
-                  // Название товара
-                  pw.Text(
-                    itemName,
-                    style: pw.TextStyle(
-                      fontSize: 14,
-                      fontWeight: pw.FontWeight.bold,
-                      font: font,
-                    ),
-                    textAlign: pw.TextAlign.center,
-                    maxLines: 2,
-                  ),
-                  pw.SizedBox(height: 4),
-                  
-                  // Артикул
+                  // QR код слева (если есть артикул)
                   if (sku != null && sku.isNotEmpty) ...[
-                    pw.Text(
-                      'Артикул: $sku',
-                      style: pw.TextStyle(
-                        fontSize: 10,
-                        font: font,
-                      ),
-                      textAlign: pw.TextAlign.center,
-                    ),
-                    pw.SizedBox(height: 4),
-                    
-                    // Штрих-код
                     pw.BarcodeWidget(
-                      barcode: pw.Barcode.code128(),
+                      barcode: pw.Barcode.qrCode(),
                       data: sku,
-                      width: labelWidth - 8 * mmToPoint,
-                      height: 30,
+                      width: 55,
+                      height: 55,
                     ),
-                    pw.SizedBox(height: 4),
+                    pw.SizedBox(width: 6),
                   ],
                   
-                  // Ячейка хранения
-                  if (warehouseCell != null && warehouseCell.isNotEmpty) ...[
-                    pw.Text(
-                      'Ячейка: $warehouseCell',
-                      style: pw.TextStyle(
-                        fontSize: 10,
-                        font: font,
-                      ),
-                      textAlign: pw.TextAlign.center,
+                  // Текстовая информация справа
+                  pw.Expanded(
+                    child: pw.Column(
+                      mainAxisAlignment: pw.MainAxisAlignment.center,
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        // Название товара
+                        pw.Text(
+                          itemName,
+                          style: pw.TextStyle(
+                            fontSize: 18,
+                            fontWeight: pw.FontWeight.bold,
+                            font: font,
+                          ),
+                          maxLines: 2,
+                          overflow: pw.TextOverflow.clip,
+                        ),
+                        
+                        pw.SizedBox(height: 3),
+                        
+                        // Артикул
+                        if (sku != null && sku.isNotEmpty) ...[
+                          pw.Text(
+                            'Артикул: $sku',
+                            style: pw.TextStyle(
+                              fontSize: 12,
+                              font: font,
+                            ),
+                          ),
+                          pw.SizedBox(height: 3),
+                        ],
+                        
+                        // Ячейка хранения
+                        if (warehouseCell != null && warehouseCell.isNotEmpty) ...[
+                          pw.Text(
+                            'Ячейка: $warehouseCell',
+                            style: pw.TextStyle(
+                              fontSize: 12,
+                              font: font,
+                            ),
+                          ),
+                          pw.SizedBox(height: 3),
+                        ],
+                        
+                        // Цена (крупным шрифтом)
+                        pw.Text(
+                          '${price.toStringAsFixed(2)} ₸',
+                          style: pw.TextStyle(
+                            fontSize: 20,
+                            fontWeight: pw.FontWeight.bold,
+                            font: font,
+                          ),
+                        ),
+                      ],
                     ),
-                    pw.SizedBox(height: 4),
-                  ],
-                  
-                  // Цена
-                  pw.Text(
-                    'Цена: ${price.toStringAsFixed(2)} ₸',
-                    style: pw.TextStyle(
-                      fontSize: 12,
-                      fontWeight: pw.FontWeight.bold,
-                      font: font,
-                    ),
-                    textAlign: pw.TextAlign.center,
                   ),
                 ],
               );
@@ -254,18 +290,42 @@ class ThermalPrinterService {
         );
       }
 
-      // Печатаем PDF
-      if (_selectedPrinter != null) {
-        // Прямая печать на выбранный принтер
-        await Printing.directPrintPdf(
-          printer: _selectedPrinter!,
-          onLayout: (PdfPageFormat format) async => pdf.save(),
+      // На macOS используем sharePdf для открытия в Preview
+      // Это предотвращает зависание UI
+      print('🖨️ Отправка на печать...');
+      
+      if (Platform.isMacOS) {
+        print('📋 Открытие PDF в Preview (macOS)');
+        print('   Используйте ⌘P для печати из Preview');
+        
+        // Генерируем PDF и открываем через Preview
+        final pdfBytes = await pdf.save();
+        print('✅ PDF сгенерирован (${pdfBytes.length} байт)');
+        
+        await Printing.sharePdf(
+          bytes: pdfBytes,
+          filename: 'label_${itemName.replaceAll(' ', '_')}.pdf',
         );
+        
+        print('✅ PDF открыт в Preview');
       } else {
-        // Показываем диалог выбора принтера
-        await Printing.layoutPdf(
-          onLayout: (PdfPageFormat format) async => pdf.save(),
-        );
+        // Для Windows/Linux - сохраняем PDF и печатаем
+        print('📄 Генерация PDF...');
+        final pdfBytes = await pdf.save();
+        print('✅ PDF сгенерирован (${pdfBytes.length} байт)');
+        
+        if (_selectedPrinter != null && !useDialog) {
+          print('🎯 Прямая печать на $_printerName');
+          await Printing.directPrintPdf(
+            printer: _selectedPrinter!,
+            onLayout: (PdfPageFormat format) async => pdfBytes,
+          );
+        } else {
+          await Printing.layoutPdf(
+            name: 'Этикетка: $itemName',
+            onLayout: (PdfPageFormat format) async => pdfBytes,
+          );
+        }
       }
 
       print('✅ Наклейка отправлена на печать');
@@ -348,6 +408,11 @@ class ThermalPrinterService {
 
   /// Печать тестовой страницы
   Future<bool> printTestPage() async {
+    print('🖨️ Начало тестовой печати...');
+    
+    // Даём UI время на обновление перед тяжёлой операцией
+    await Future.delayed(Duration.zero);
+    
     try {
       // Если подключен Bluetooth принтер, используем ESC/POS
       if (_bluetoothPrinter != null) {
@@ -374,43 +439,59 @@ class ThermalPrinterService {
         pw.Page(
           pageFormat: PdfPageFormat(labelWidth, labelHeight, marginAll: margin),
           build: (pw.Context context) {
-            return pw.Column(
-              mainAxisAlignment: pw.MainAxisAlignment.center,
+            return pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.start,
               crossAxisAlignment: pw.CrossAxisAlignment.center,
               children: [
-                pw.Text(
-                  'ТЕСТ ПРИНТЕРА',
-                  style: pw.TextStyle(
-                    fontSize: 16,
-                    fontWeight: pw.FontWeight.bold,
-                    font: font,
-                  ),
-                  textAlign: pw.TextAlign.center,
-                ),
-                pw.SizedBox(height: 8),
-                pw.Text(
-                  'Если вы видите этот текст,',
-                  style: pw.TextStyle(
-                    fontSize: 10,
-                    font: font,
-                  ),
-                  textAlign: pw.TextAlign.center,
-                ),
-                pw.SizedBox(height: 2),
-                pw.Text(
-                  'принтер работает корректно.',
-                  style: pw.TextStyle(
-                    fontSize: 10,
-                    font: font,
-                  ),
-                  textAlign: pw.TextAlign.center,
-                ),
-                pw.SizedBox(height: 8),
+                // QR код слева
                 pw.BarcodeWidget(
-                  barcode: pw.Barcode.code128(),
-                  data: 'TEST123456',
-                  width: labelWidth - 8 * mmToPoint,
-                  height: 30,
+                  barcode: pw.Barcode.qrCode(),
+                  data: 'XPRINTER-TEST-${DateTime.now().millisecondsSinceEpoch}',
+                  width: 55,
+                  height: 55,
+                ),
+                pw.SizedBox(width: 6),
+                
+                // Текст справа
+                pw.Expanded(
+                  child: pw.Column(
+                    mainAxisAlignment: pw.MainAxisAlignment.center,
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(
+                        'ТЕСТ ПРИНТЕРА',
+                        style: pw.TextStyle(
+                          fontSize: 18,
+                          fontWeight: pw.FontWeight.bold,
+                          font: font,
+                        ),
+                      ),
+                      pw.SizedBox(height: 4),
+                      pw.Text(
+                        'Размер: ${paperWidthMm.toInt()}×${paperHeightMm.toInt()} мм',
+                        style: pw.TextStyle(
+                          fontSize: 14,
+                          font: font,
+                        ),
+                      ),
+                      pw.SizedBox(height: 3),
+                      pw.Text(
+                        'Кириллица: Работает',
+                        style: pw.TextStyle(
+                          fontSize: 12,
+                          font: font,
+                        ),
+                      ),
+                      pw.SizedBox(height: 3),
+                      pw.Text(
+                        _printerName ?? "Системный принтер",
+                        style: pw.TextStyle(
+                          fontSize: 11,
+                          font: font,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             );
@@ -418,15 +499,40 @@ class ThermalPrinterService {
         ),
       );
 
-      if (_selectedPrinter != null) {
-        await Printing.directPrintPdf(
-          printer: _selectedPrinter!,
-          onLayout: (PdfPageFormat format) async => pdf.save(),
+      // Простой подход для macOS
+      print('🖨️ Отправка тестовой страницы...');
+      
+      if (Platform.isMacOS) {
+        // На macOS используем sharePdf - открывает в Preview
+        print('📋 Открытие PDF в Preview (macOS)...');
+        print('   Используйте ⌘P для печати из Preview');
+        
+        final pdfBytes = await pdf.save();
+        print('📄 PDF сгенерирован: ${pdfBytes.length} байт');
+        
+        await Printing.sharePdf(
+          bytes: pdfBytes,
+          filename: 'test_printer_${paperWidthMm.toInt()}x${paperHeightMm.toInt()}mm.pdf',
         );
+        
+        print('✅ PDF открыт в Preview');
       } else {
-        await Printing.layoutPdf(
-          onLayout: (PdfPageFormat format) async => pdf.save(),
-        );
+        // Для Windows/Linux
+        print('📄 Генерация PDF...');
+        final pdfBytes = await pdf.save();
+        print('✅ PDF готов (${pdfBytes.length} байт)');
+        
+        if (_selectedPrinter != null) {
+          await Printing.directPrintPdf(
+            printer: _selectedPrinter!,
+            onLayout: (PdfPageFormat format) async => pdfBytes,
+          );
+        } else {
+          await Printing.layoutPdf(
+            name: 'Тест принтера',
+            onLayout: (PdfPageFormat format) async => pdfBytes,
+          );
+        }
       }
 
       print('✅ Тестовая страница отправлена на печать');
@@ -677,4 +783,100 @@ class ThermalPrinterService {
       return [];
     }
   }
+
+  /// Сохранение настроек принтера
+  Future<void> savePrinterSettings() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (_printerName != null) {
+        await prefs.setString(_prefKeyPrinterName, _printerName!);
+        print('💾 Настройки принтера сохранены: $_printerName');
+      }
+      if (_printerUrl != null) {
+        await prefs.setString(_prefKeyPrinterUrl, _printerUrl!);
+      }
+    } catch (e) {
+      print('❌ Ошибка сохранения настроек принтера: $e');
+    }
+  }
+
+  /// Загрузка сохраненных настроек принтера
+  Future<Map<String, String?>> loadPrinterSettings() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final name = prefs.getString(_prefKeyPrinterName);
+      final url = prefs.getString(_prefKeyPrinterUrl);
+      
+      if (name != null) {
+        print('📥 Загружены настройки принтера: $name');
+      }
+      
+      return {
+        'name': name,
+        'url': url,
+      };
+    } catch (e) {
+      print('❌ Ошибка загрузки настроек принтера: $e');
+      return {'name': null, 'url': null};
+    }
+  }
+
+  /// Очистка сохраненных настроек принтера (отвязать)
+  Future<void> clearPrinterSettings() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_prefKeyPrinterName);
+      await prefs.remove(_prefKeyPrinterUrl);
+      print('🗑️ Настройки принтера очищены');
+    } catch (e) {
+      print('❌ Ошибка очистки настроек принтера: $e');
+    }
+  }
+
+  /// Автоматическое подключение к сохраненному принтеру
+  Future<bool> autoConnectToSavedPrinter() async {
+    try {
+      final settings = await loadPrinterSettings();
+      final savedName = settings['name'];
+      
+      if (savedName == null) {
+        print('ℹ️ Нет сохраненного принтера для автоподключения');
+        return false;
+      }
+
+      print('🔄 Попытка автоподключения к сохраненному принтеру: $savedName');
+      
+      // Получаем список доступных принтеров
+      final printers = await Printing.listPrinters();
+      final savedPrinter = printers.where((p) => p.name == savedName).firstOrNull;
+      
+      if (savedPrinter != null) {
+        _selectedPrinter = savedPrinter;
+        _printerName = savedPrinter.name;
+        _isConnected = true;
+        print('✅ Автоматически подключено к: $_printerName');
+        return true;
+      } else {
+        print('⚠️ Сохраненный принтер "$savedName" не найден');
+        return false;
+      }
+    } catch (e) {
+      print('❌ Ошибка автоподключения: $e');
+      return false;
+    }
+  }
+
+  /// Получение информации о текущем состоянии принтера
+  Map<String, dynamic> getPrinterStatus() {
+    return {
+      'isConnected': _isConnected,
+      'printerName': _printerName,
+      'printerUrl': _printerUrl,
+      'isBluetooth': _bluetoothPrinter != null,
+      'bluetoothDevice': _bluetoothDevice?.name,
+    };
+  }
+
+  /// Геттеры для расширенной информации
+  String? get connectedPrinterUrl => _printerUrl;
 }

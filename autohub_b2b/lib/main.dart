@@ -22,6 +22,7 @@ import 'package:autohub_b2b/screens/profile/profile_screen.dart';
 import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/models/user_model.dart';
 import 'package:autohub_b2b/services/auth/secure_storage_service.dart';
+import 'package:autohub_b2b/test_print_simple.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -144,6 +145,47 @@ class _MainScreenState extends State<MainScreen> {
         return const WarehouseTransfersScreen(); // Перемещения
       default:
         return const WarehouseScreen();
+    }
+  }
+
+  // Заголовок AppBar в зависимости от выбранного раздела
+  String _getAppBarTitle() {
+    if (_selectedIndex == 1) {
+      // Склад - показываем название подменю
+      switch (_warehouseSubMenuIndex) {
+        case 0:
+          return 'Товары';
+        case 1:
+          return 'Оприходование';
+        case 2:
+          return 'Расположение';
+        case 3:
+          return 'Склады';
+        case 4:
+          return 'Перемещения';
+        default:
+          return 'Склад';
+      }
+    }
+    
+    // Другие разделы
+    switch (_selectedIndex) {
+      case 0:
+        return 'Дашборд';
+      case 2:
+        return 'Продажи';
+      case 3:
+        return 'CRM';
+      case 4:
+        return 'Автомобили';
+      case 5:
+        return 'Аналитика';
+      case 6:
+        return 'WhatsApp';
+      case 7:
+        return 'Настройки';
+      default:
+        return 'AutoHub B2B';
     }
   }
 
@@ -279,6 +321,40 @@ class _MainScreenState extends State<MainScreen> {
                           label: 'Настройки',
                           index: 7,
                         ),
+                        // Кнопка тестовой печати (для отладки)
+                        const SizedBox(height: 8),
+                        Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.orange.shade200),
+                          ),
+                          child: ListTile(
+                            dense: true,
+                            leading: const Icon(
+                              Icons.bug_report,
+                              color: Colors.orange,
+                              size: 20,
+                            ),
+                            title: const Text(
+                              '🧪 Тест печати',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.orange,
+                              ),
+                            ),
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const TestPrintSimple(),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -403,7 +479,7 @@ class _MainScreenState extends State<MainScreen> {
     }
   }
 
-  String _getAppBarTitle() {
+  String _getApprarTitle() {
     if (_selectedIndex == 1) {
       switch (_warehouseSubMenuIndex) {
         case 0:
@@ -539,6 +615,29 @@ class _MainScreenState extends State<MainScreen> {
                   label: 'Настройки',
                   index: 7,
                   context: context,
+                ),
+                // Кнопка тестовой печати (для отладки)
+                ListTile(
+                  leading: const Icon(
+                    Icons.bug_report,
+                    color: Colors.orange,
+                  ),
+                  title: const Text(
+                    '🧪 Тест печати',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.pop(context); // Закрыть drawer
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const TestPrintSimple(),
+                      ),
+                    );
+                  },
                 ),
               ],
             ),

@@ -9,6 +9,7 @@ import 'package:dio/dio.dart';
 import 'package:autohub_b2b/services/api/api_client.dart';
 import 'package:autohub_b2b/screens/warehouse/item_edit_screen.dart';
 import 'package:autohub_b2b/screens/warehouse/printer_settings_screen.dart';
+import 'package:autohub_b2b/services/hardware/thermal_printer_service.dart';
 
 class WarehouseScreen extends StatefulWidget {
   const WarehouseScreen({super.key});
@@ -31,6 +32,9 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
   // Активные фильтры
   Map<String, dynamic> activeFilters = {};
   int activeFiltersCount = 0;
+  
+  // Выбранные товары для массовой печати
+  Set<int> selectedItemIds = {};
 
   @override
   void initState() {
@@ -246,6 +250,20 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
+                      // Чекбокс для выбора товара
+                      Checkbox(
+                        value: selectedItemIds.contains(item.id),
+                        onChanged: (bool? value) {
+                          setState(() {
+                            if (value == true) {
+                              selectedItemIds.add(item.id!);
+                            } else {
+                              selectedItemIds.remove(item.id);
+                            }
+                          });
+                        },
+                        activeColor: AppTheme.primaryColor,
+                      ),
                       Expanded(
                         child: Text(
                           item.name ?? 'Без названия',
@@ -268,6 +286,16 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                             ),
                           ),
                           const PopupMenuItem(
+                            value: 'print',
+                            child: Row(
+                              children: [
+                                Icon(Icons.print, size: 20, color: Colors.blue),
+                                SizedBox(width: 8),
+                                Text('Печать этикетки', style: TextStyle(color: Colors.blue)),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem(
                             value: 'delete',
                             child: Row(
                               children: [
@@ -285,6 +313,8 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                                 builder: (context) => ItemEditScreen(item: item),
                               ),
                             );
+                          } else if (value == 'print') {
+                            _printLabel(context, item);
                           } else if (value == 'delete') {
                             _showDeleteDialog(context, item);
                           }
@@ -417,6 +447,39 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                     if (!isMobile)
                       Row(
                         children: [
+                          // Кнопка "Выбрать все"
+                          if (filteredItems.isNotEmpty)
+                            TextButton.icon(
+                              onPressed: () {
+                                setState(() {
+                                  if (selectedItemIds.length == filteredItems.length) {
+                                    // Снять выбор со всех
+                                    selectedItemIds.clear();
+                                  } else {
+                                    // Выбрать все
+                                    selectedItemIds.clear();
+                                    for (var item in filteredItems) {
+                                      if (item.id != null) {
+                                        selectedItemIds.add(item.id!);
+                                      }
+                                    }
+                                  }
+                                });
+                              },
+                              icon: Icon(
+                                selectedItemIds.length == filteredItems.length
+                                    ? Icons.check_box
+                                    : Icons.check_box_outline_blank,
+                                size: 20,
+                              ),
+                              label: Text(
+                                selectedItemIds.isEmpty
+                                    ? 'Выбрать все'
+                                    : selectedItemIds.length == filteredItems.length
+                                        ? 'Снять выбор'
+                                        : 'Выбрано: ${selectedItemIds.length}',
+                              ),
+                            ),
                           IconButton(
                             icon: Stack(
                               children: [
@@ -615,6 +678,15 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
           ),
         ],
       ),
+      // Кнопка массовой печати
+      floatingActionButton: selectedItemIds.isEmpty
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: () => _printSelectedLabels(context),
+              backgroundColor: AppTheme.primaryColor,
+              icon: const Icon(Icons.print),
+              label: Text('Печать (${selectedItemIds.length})'),
+            ),
     );
   }
 
@@ -1016,6 +1088,299 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
         ],
       ),
     );
+  }
+
+  /// Печать этикетки для товара
+  Future<void> _printLabel(BuildContext context, ItemModel item) async {
+    // Показываем диалог выбора количества этикеток
+    int quantity = 1;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Печать этикетки'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Товар: ${item.name ?? 'Без названия'}',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            if (item.sku != null && item.sku!.isNotEmpty)
+              Text('Артикул: ${item.sku}'),
+            const SizedBox(height: 4),
+            Text('Цена: ${item.price?.toStringAsFixed(2) ?? '0.00'} ₸'),
+            const SizedBox(height: 16),
+            const Text('Количество этикеток:'),
+            const SizedBox(height: 8),
+            StatefulBuilder(
+              builder: (context, setQuantity) => Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  IconButton(
+                    onPressed: () {
+                      if (quantity > 1) {
+                        setQuantity(() => quantity--);
+                      }
+                    },
+                    icon: const Icon(Icons.remove_circle_outline),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      '$quantity',
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () {
+                      if (quantity < 99) {
+                        setQuantity(() => quantity++);
+                      }
+                    },
+                    icon: const Icon(Icons.add_circle_outline),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Печать'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    // Показываем индикатор загрузки
+    if (context.mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: Card(
+            child: Padding(
+              padding: EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Подготовка этикетки...'),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    try {
+      final printerService = ThermalPrinterService();
+      
+      final success = await printerService.printLabel(
+        itemName: item.name ?? 'Без названия',
+        sku: item.sku,
+        price: item.price ?? 0.0,
+        warehouseCell: item.warehouseCell,
+        quantity: quantity,
+      );
+
+      if (context.mounted) {
+        Navigator.pop(context); // Закрываем индикатор загрузки
+        
+        if (success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Этикетка открыта в Preview. Нажмите ⌘P для печати на Xprinter'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Ошибка при подготовке этикетки'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.pop(context); // Закрываем индикатор загрузки
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Массовая печать этикеток для выбранных товаров
+  Future<void> _printSelectedLabels(BuildContext context) async {
+    if (selectedItemIds.isEmpty) return;
+
+    // Получаем выбранные товары
+    final selectedItems = items.where((item) => selectedItemIds.contains(item.id)).toList();
+    
+    if (selectedItems.isEmpty) return;
+
+    // Показываем диалог подтверждения
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Печать этикеток'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Будет напечатано этикеток: ${selectedItems.length}',
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+            ),
+            const SizedBox(height: 12),
+            const Text('Товары:', style: TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 200),
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: selectedItems.map((item) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.check_circle, size: 16, color: Colors.green),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              item.name ?? 'Без названия',
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Печать всех'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    // Показываем индикатор загрузки
+    if (context.mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => Center(
+          child: Card(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 16),
+                  Text('Подготовка ${selectedItems.length} этикеток...'),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    try {
+      final printerService = ThermalPrinterService();
+      int successCount = 0;
+
+      // Печатаем по одной этикетке для каждого товара
+      for (var item in selectedItems) {
+        final success = await printerService.printLabel(
+          itemName: item.name ?? 'Без названия',
+          sku: item.sku,
+          price: item.price ?? 0.0,
+          warehouseCell: item.warehouseCell,
+          quantity: 1,
+        );
+        
+        if (success) {
+          successCount++;
+        }
+        
+        // Небольшая задержка между печатью
+        await Future.delayed(const Duration(milliseconds: 100));
+      }
+
+      if (context.mounted) {
+        Navigator.pop(context); // Закрываем индикатор загрузки
+        
+        // Очищаем выбор
+        setState(() {
+          selectedItemIds.clear();
+        });
+
+        if (successCount == selectedItems.length) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Успешно подготовлено $successCount этикеток. PDF открыт в Preview'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Подготовлено $successCount из ${selectedItems.length} этикеток'),
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.pop(context); // Закрываем индикатор загрузки
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _editItem(BuildContext context, ItemModel item) async {
