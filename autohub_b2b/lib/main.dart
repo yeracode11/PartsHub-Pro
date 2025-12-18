@@ -115,6 +115,7 @@ class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
   bool _warehouseMenuExpanded = false;
   int? _warehouseSubMenuIndex; // null = закрыто, 0 = Товары, 1 = Оприходование, 2 = Расположение, 3 = Склады, 4 = Перемещения
+  String? _userRole; // Роль текущего пользователя
 
   final List<Widget> _screens = [
     const DashboardScreen(),
@@ -126,6 +127,41 @@ class _MainScreenState extends State<MainScreen> {
     const WhatsAppScreen(),
     const PlaceholderScreen(title: 'Настройки'),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserRole();
+  }
+
+  // Загрузка роли пользователя
+  Future<void> _loadUserRole() async {
+    final userData = await SecureStorageService().getUserData();
+    if (mounted && userData != null) {
+      setState(() {
+        _userRole = userData['role'] as String?;
+        
+        // Для кладовщика по умолчанию открываем Склад
+        if (_userRole == 'UserRole.storekeeper' && _selectedIndex == 0) {
+          _selectedIndex = 1; // Склад
+          _warehouseSubMenuIndex = 0; // Товары
+        }
+      });
+    }
+  }
+
+  // Проверка доступа к разделу по роли
+  bool _canAccessSection(String section) {
+    if (_userRole == null) return false;
+    
+    // Для кладовщика (storekeeper) только Склад и Настройки
+    if (_userRole == 'UserRole.storekeeper') {
+      return section == 'warehouse' || section == 'settings';
+    }
+    
+    // Остальные роли имеют доступ ко всему
+    return true;
+  }
 
   // Экраны для подменю Склад
   Widget _getWarehouseScreen() {
@@ -275,52 +311,60 @@ class _MainScreenState extends State<MainScreen> {
                     child: ListView(
                       padding: const EdgeInsets.all(12),
                       children: [
-                        _buildNavItem(
-                          icon: Icons.dashboard_outlined,
-                          selectedIcon: Icons.dashboard,
-                          label: 'Дашборд',
-                          index: 0,
-                        ),
-                        _buildWarehouseMenu(),
-                        _buildNavItem(
-                          icon: Icons.shopping_bag_outlined,
-                          selectedIcon: Icons.shopping_bag,
-                          label: 'Продажи',
-                          index: 2,
-                        ),
-                        _buildNavItem(
-                          icon: Icons.people_outline,
-                          selectedIcon: Icons.people,
-                          label: 'CRM',
-                          index: 3,
-                        ),
-                        _buildNavItem(
-                          icon: Icons.directions_car_outlined,
-                          selectedIcon: Icons.directions_car,
+                        if (_canAccessSection('dashboard'))
+                          _buildNavItem(
+                            icon: Icons.dashboard_outlined,
+                            selectedIcon: Icons.dashboard,
+                            label: 'Дашборд',
+                            index: 0,
+                          ),
+                        if (_canAccessSection('warehouse'))
+                          _buildWarehouseMenu(),
+                        if (_canAccessSection('sales'))
+                          _buildNavItem(
+                            icon: Icons.shopping_bag_outlined,
+                            selectedIcon: Icons.shopping_bag,
+                            label: 'Продажи',
+                            index: 2,
+                          ),
+                        if (_canAccessSection('crm'))
+                          _buildNavItem(
+                            icon: Icons.people_outline,
+                            selectedIcon: Icons.people,
+                            label: 'CRM',
+                            index: 3,
+                          ),
+                        if (_canAccessSection('vehicles'))
+                          _buildNavItem(
+                            icon: Icons.directions_car_outlined,
+                            selectedIcon: Icons.directions_car,
                           label: 'Автомобили',
                           index: 4,
                         ),
-                        _buildNavItem(
-                          icon: Icons.analytics_outlined,
-                          selectedIcon: Icons.analytics,
-                          label: 'Аналитика',
-                          index: 5,
-                        ),
-                        _buildNavItem(
-                          icon: Icons.message_outlined,
-                          selectedIcon: Icons.message,
-                          label: 'WhatsApp',
-                          index: 6,
-                        ),
+                        if (_canAccessSection('analytics'))
+                          _buildNavItem(
+                            icon: Icons.analytics_outlined,
+                            selectedIcon: Icons.analytics,
+                            label: 'Аналитика',
+                            index: 5,
+                          ),
+                        if (_canAccessSection('whatsapp'))
+                          _buildNavItem(
+                            icon: Icons.message_outlined,
+                            selectedIcon: Icons.message,
+                            label: 'WhatsApp',
+                            index: 6,
+                          ),
                         const SizedBox(height: 12),
                         const Divider(),
                         const SizedBox(height: 12),
-                        _buildNavItem(
-                          icon: Icons.settings_outlined,
-                          selectedIcon: Icons.settings,
-                          label: 'Настройки',
-                          index: 7,
-                        ),
+                        if (_canAccessSection('settings'))
+                          _buildNavItem(
+                            icon: Icons.settings_outlined,
+                            selectedIcon: Icons.settings,
+                            label: 'Настройки',
+                            index: 7,
+                          ),
                         // Кнопка тестовой печати (для отладки)
                         const SizedBox(height: 8),
                         Container(
@@ -563,59 +607,67 @@ class _MainScreenState extends State<MainScreen> {
             child: ListView(
               padding: const EdgeInsets.all(12),
               children: [
-                _buildDrawerNavItem(
-                  icon: Icons.dashboard_outlined,
-                  selectedIcon: Icons.dashboard,
-                  label: 'Дашборд',
-                  index: 0,
-                  context: context,
-                ),
-                _buildDrawerWarehouseMenu(context),
-                _buildDrawerNavItem(
-                  icon: Icons.shopping_bag_outlined,
-                  selectedIcon: Icons.shopping_bag,
-                  label: 'Продажи',
-                  index: 2,
-                  context: context,
-                ),
-                _buildDrawerNavItem(
-                  icon: Icons.people_outline,
-                  selectedIcon: Icons.people,
-                  label: 'CRM',
-                  index: 3,
-                  context: context,
-                ),
-                _buildDrawerNavItem(
-                  icon: Icons.directions_car_outlined,
-                  selectedIcon: Icons.directions_car,
-                  label: 'Автомобили',
-                  index: 4,
-                  context: context,
-                ),
-                _buildDrawerNavItem(
-                  icon: Icons.analytics_outlined,
-                  selectedIcon: Icons.analytics,
-                  label: 'Аналитика',
-                  index: 5,
-                  context: context,
-                ),
-                _buildDrawerNavItem(
-                  icon: Icons.message_outlined,
-                  selectedIcon: Icons.message,
-                  label: 'WhatsApp',
-                  index: 6,
-                  context: context,
-                ),
+                if (_canAccessSection('dashboard'))
+                  _buildDrawerNavItem(
+                    icon: Icons.dashboard_outlined,
+                    selectedIcon: Icons.dashboard,
+                    label: 'Дашборд',
+                    index: 0,
+                    context: context,
+                  ),
+                if (_canAccessSection('warehouse'))
+                  _buildDrawerWarehouseMenu(context),
+                if (_canAccessSection('sales'))
+                  _buildDrawerNavItem(
+                    icon: Icons.shopping_bag_outlined,
+                    selectedIcon: Icons.shopping_bag,
+                    label: 'Продажи',
+                    index: 2,
+                    context: context,
+                  ),
+                if (_canAccessSection('crm'))
+                  _buildDrawerNavItem(
+                    icon: Icons.people_outline,
+                    selectedIcon: Icons.people,
+                    label: 'CRM',
+                    index: 3,
+                    context: context,
+                  ),
+                if (_canAccessSection('vehicles'))
+                  _buildDrawerNavItem(
+                    icon: Icons.directions_car_outlined,
+                    selectedIcon: Icons.directions_car,
+                    label: 'Автомобили',
+                    index: 4,
+                    context: context,
+                  ),
+                if (_canAccessSection('analytics'))
+                  _buildDrawerNavItem(
+                    icon: Icons.analytics_outlined,
+                    selectedIcon: Icons.analytics,
+                    label: 'Аналитика',
+                    index: 5,
+                    context: context,
+                  ),
+                if (_canAccessSection('whatsapp'))
+                  _buildDrawerNavItem(
+                    icon: Icons.message_outlined,
+                    selectedIcon: Icons.message,
+                    label: 'WhatsApp',
+                    index: 6,
+                    context: context,
+                  ),
                 const SizedBox(height: 12),
                 const Divider(),
                 const SizedBox(height: 12),
-                _buildDrawerNavItem(
-                  icon: Icons.settings_outlined,
-                  selectedIcon: Icons.settings,
-                  label: 'Настройки',
-                  index: 7,
-                  context: context,
-                ),
+                if (_canAccessSection('settings'))
+                  _buildDrawerNavItem(
+                    icon: Icons.settings_outlined,
+                    selectedIcon: Icons.settings,
+                    label: 'Настройки',
+                    index: 7,
+                    context: context,
+                  ),
                 // Кнопка тестовой печати (для отладки)
                 ListTile(
                   leading: const Icon(
@@ -755,13 +807,23 @@ class _MainScreenState extends State<MainScreen> {
 
   Widget _buildBottomNavigationBar() {
     // Показываем только основные разделы в BottomNavigationBar
-    final mainSections = [
-      {'index': 0, 'icon': Icons.dashboard, 'label': 'Дашборд'},
-      {'index': 1, 'icon': Icons.inventory_2, 'label': 'Склад'},
-      {'index': 2, 'icon': Icons.shopping_bag, 'label': 'Продажи'},
-      {'index': 4, 'icon': Icons.directions_car, 'label': 'Авто'},
-      {'index': 5, 'icon': Icons.analytics, 'label': 'Аналитика'},
+    final allSections = [
+      {'index': 0, 'icon': Icons.dashboard, 'label': 'Дашборд', 'section': 'dashboard'},
+      {'index': 1, 'icon': Icons.inventory_2, 'label': 'Склад', 'section': 'warehouse'},
+      {'index': 2, 'icon': Icons.shopping_bag, 'label': 'Продажи', 'section': 'sales'},
+      {'index': 4, 'icon': Icons.directions_car, 'label': 'Авто', 'section': 'vehicles'},
+      {'index': 5, 'icon': Icons.analytics, 'label': 'Аналитика', 'section': 'analytics'},
     ];
+
+    // Фильтруем разделы на основе роли пользователя
+    final mainSections = allSections.where((section) => 
+      _canAccessSection(section['section'] as String)
+    ).toList();
+
+    // Если нет доступных разделов, возвращаем пустой виджет
+    if (mainSections.isEmpty) {
+      return const SizedBox.shrink();
+    }
 
     return BottomNavigationBar(
       currentIndex: mainSections.indexWhere((s) => s['index'] == _selectedIndex).clamp(0, mainSections.length - 1),

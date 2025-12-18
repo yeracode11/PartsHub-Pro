@@ -155,7 +155,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     switch (type) {
       case 'service':
         return BusinessType.service;
-      case 'dismantler':
+      case 'parts': // соответствует backend BusinessType.PARTS
+      case 'dismantler': // совместимость со старым значением
         return BusinessType.dismantler;
       case 'carwash':
         return BusinessType.carwash;
