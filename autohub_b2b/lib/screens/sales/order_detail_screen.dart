@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/models/order_model.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
 import 'package:dio/dio.dart';
 
@@ -467,14 +468,26 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                             if (firstImage != null)
                               ClipRRect(
                                 borderRadius: BorderRadius.circular(8),
-                                child: Image.network(
-                                  firstImage.startsWith('http')
+                                child: CachedNetworkImage(
+                                  imageUrl: firstImage.startsWith('http')
                                       ? firstImage
                                       : 'http://78.140.246.83:3000$firstImage',
                                   width: 80,
                                   height: 80,
                                   fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) {
+                                  maxWidthDiskCache: 200,
+                                  maxHeightDiskCache: 200,
+                                  memCacheWidth: 200,
+                                  memCacheHeight: 200,
+                                  placeholder: (context, url) => Container(
+                                    width: 80,
+                                    height: 80,
+                                    color: Colors.grey.shade200,
+                                    child: const Center(
+                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                    ),
+                                  ),
+                                  errorWidget: (context, url, error) {
                                     return Container(
                                       width: 80,
                                       height: 80,

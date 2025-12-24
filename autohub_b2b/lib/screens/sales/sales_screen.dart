@@ -4,6 +4,7 @@ import 'package:autohub_b2b/services/database/database.dart';
 import 'package:autohub_b2b/models/order_model.dart';
 import 'package:autohub_b2b/screens/sales/order_detail_screen.dart';
 import 'package:autohub_b2b/services/hardware/barcode_scanner_service.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
 import 'package:dio/dio.dart';
 import 'package:autohub_b2b/services/api/api_client.dart';
@@ -966,14 +967,26 @@ class _OrderDialogState extends State<_OrderDialog> {
                                 leading: imageUrl != null
                                     ? ClipRRect(
                                         borderRadius: BorderRadius.circular(8),
-                                        child: Image.network(
-                                          imageUrl.startsWith('http')
+                                        child: CachedNetworkImage(
+                                          imageUrl: imageUrl.startsWith('http')
                                               ? imageUrl
                                               : 'http://78.140.246.83:3000$imageUrl',
                                           width: 48,
                                           height: 48,
                                           fit: BoxFit.cover,
-                                          errorBuilder: (context, error, stackTrace) {
+                                          maxWidthDiskCache: 200,
+                                          maxHeightDiskCache: 200,
+                                          memCacheWidth: 200,
+                                          memCacheHeight: 200,
+                                          placeholder: (context, url) => Container(
+                                            width: 48,
+                                            height: 48,
+                                            color: Colors.grey.shade200,
+                                            child: const Center(
+                                              child: CircularProgressIndicator(strokeWidth: 2),
+                                            ),
+                                          ),
+                                          errorWidget: (context, url, error) {
                                             return Container(
                                               width: 48,
                                               height: 48,

@@ -36,7 +36,7 @@ class _FindPartScreenState extends State<FindPartScreen> with WidgetsBindingObse
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // Проверяем разрешение один раз при инициализации
+    // Проверяем разрешение при инициализации
     Future.delayed(const Duration(milliseconds: 100), () {
       if (mounted) {
         _checkCameraPermission();
@@ -47,8 +47,13 @@ class _FindPartScreenState extends State<FindPartScreen> with WidgetsBindingObse
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Не проверяем разрешение здесь - только при первом запуске
-    // Если разрешение уже есть, не нужно проверять снова
+    // Проверяем разрешение при каждом входе на экран
+    // Это нужно, чтобы обновить состояние, если разрешение было выдано в настройках
+    Future.delayed(const Duration(milliseconds: 200), () {
+      if (mounted && !_isRequestingPermission && !_isCheckingCameraAccess) {
+        _checkCameraPermissionOnly(forceCheck: true);
+      }
+    });
   }
 
   @override
@@ -570,6 +575,16 @@ class _FindPartScreenState extends State<FindPartScreen> with WidgetsBindingObse
   }
 
   Widget _buildBody() {
+    // Проверяем разрешение при каждом построении UI, если оно еще не проверено
+    if (!_hasPermission && !_isRequestingPermission && !_isCheckingCameraAccess) {
+      // Запускаем проверку в фоне
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _checkCameraPermissionOnly(forceCheck: true);
+        }
+      });
+    }
+    
     if (!_hasPermission) {
       return Center(
         child: Padding(

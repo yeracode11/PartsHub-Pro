@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/models/item_model.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:autohub_b2b/services/api/api_client.dart';
 import 'package:intl/intl.dart';
 
 class ItemDetailScreen extends StatelessWidget {
@@ -58,6 +59,19 @@ class ItemDetailScreen extends StatelessWidget {
       imageUrl = item.imageUrl;
     }
 
+    // Преобразуем относительный URL в полный
+    String? fullImageUrl;
+    if (imageUrl != null && imageUrl.isNotEmpty) {
+      if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+        fullImageUrl = imageUrl;
+      } else {
+        // Добавляем базовый URL API
+        final apiClient = ApiClient();
+        final baseUrl = apiClient.baseUrl.replaceAll('/api', '');
+        fullImageUrl = '$baseUrl$imageUrl';
+      }
+    }
+
     return Container(
       width: double.infinity,
       height: 300,
@@ -65,18 +79,25 @@ class ItemDetailScreen extends StatelessWidget {
         color: Colors.grey.shade200,
         borderRadius: BorderRadius.circular(12),
       ),
-      child: imageUrl != null
+      child: fullImageUrl != null
           ? ClipRRect(
               borderRadius: BorderRadius.circular(12),
               child: CachedNetworkImage(
-                imageUrl: imageUrl,
+                imageUrl: fullImageUrl,
                 fit: BoxFit.cover,
+                maxWidthDiskCache: 1000,
+                maxHeightDiskCache: 1000,
+                memCacheWidth: 1000,
+                memCacheHeight: 1000,
                 placeholder: (context, url) => const Center(
                   child: CircularProgressIndicator(),
                 ),
-                errorWidget: (context, url, error) => const Center(
-                  child: Icon(Icons.image_not_supported, size: 64, color: Colors.grey),
-                ),
+                errorWidget: (context, url, error) {
+                  print('❌ Error loading image: $url, error: $error');
+                  return const Center(
+                    child: Icon(Icons.image_not_supported, size: 64, color: Colors.grey),
+                  );
+                },
               ),
             )
           : const Center(
