@@ -26,5 +26,32 @@ class ItemsService {
       throw Exception('Failed to load item: $e');
     }
   }
+
+  // Найти товар ТОЛЬКО по артикулу (SKU)
+  Future<ItemModel?> findItemByCode(String code) async {
+    try {
+      print('ItemsService: Searching for item with SKU: "$code"');
+      
+      // Ищем ТОЛЬКО по SKU (артикулу), не по ID
+      final response = await _apiClient.dio.get('/api/items', queryParameters: {
+        'sku': code.trim(), // Точный поиск по артикулу
+      });
+      final List<dynamic> data = response.data;
+      
+      print('ItemsService: Search by SKU "$code" returned ${data.length} items');
+      
+      if (data.isNotEmpty) {
+        final item = ItemModel.fromJson(data[0]);
+        print('ItemsService: Found item by SKU - ID: ${item.id}, Name: ${item.name}, SKU: ${item.sku}');
+        return item;
+      }
+      
+      print('ItemsService: Item not found for SKU: "$code"');
+      return null;
+    } catch (e) {
+      print('Error in findItemByCode: $e');
+      return null;
+    }
+  }
 }
 

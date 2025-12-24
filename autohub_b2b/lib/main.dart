@@ -13,6 +13,7 @@ import 'package:autohub_b2b/screens/warehouse/incoming_list_screen.dart';
 import 'package:autohub_b2b/screens/warehouse/warehouse_location_screen.dart';
 import 'package:autohub_b2b/screens/warehouse/warehouses_screen.dart';
 import 'package:autohub_b2b/screens/warehouse/warehouse_transfers_screen.dart';
+import 'package:autohub_b2b/screens/warehouse/find_part_screen.dart';
 import 'package:autohub_b2b/screens/sales/sales_screen.dart';
 import 'package:autohub_b2b/screens/crm/crm_screen.dart';
 import 'package:autohub_b2b/screens/analytics/analytics_screen.dart';
@@ -617,6 +618,29 @@ class _MainScreenState extends State<MainScreen> {
                   ),
                 if (_canAccessSection('warehouse'))
                   _buildDrawerWarehouseMenu(context),
+                // Модуль "Найти запчасть"
+                ListTile(
+                  leading: const Icon(
+                    Icons.qr_code_scanner,
+                    color: AppTheme.primaryColor,
+                  ),
+                  title: const Text(
+                    'Найти запчасть',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.pop(context); // Закрыть drawer
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const FindPartScreen(),
+                      ),
+                    );
+                  },
+                ),
                 if (_canAccessSection('sales'))
                   _buildDrawerNavItem(
                     icon: Icons.shopping_bag_outlined,

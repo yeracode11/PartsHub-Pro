@@ -8,6 +8,10 @@ export class FilterItemsDto {
 
   @IsOptional()
   @IsString()
+  sku?: string; // Точный поиск по артикулу (SKU)
+
+  @IsOptional()
+  @IsString()
   category?: string;
 
   @IsOptional()

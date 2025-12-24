@@ -41,8 +41,13 @@ export class ItemsService {
         .createQueryBuilder('item')
         .where('item.organizationId = :organizationId', { organizationId });
 
-      // Фильтр по поиску (название или артикул)
-      if (filters?.search) {
+      // Фильтр по точному поиску по артикулу (SKU) - приоритетный
+      if (filters?.sku) {
+        queryBuilder.andWhere('item.sku = :sku', { sku: filters.sku });
+      }
+      
+      // Фильтр по поиску (название или артикул) - только если не указан точный SKU
+      if (filters?.search && !filters?.sku) {
         queryBuilder.andWhere(
           '(LOWER(item.name) LIKE LOWER(:search) OR LOWER(item.sku) LIKE LOWER(:search))',
           { search: `%${filters.search}%` }
