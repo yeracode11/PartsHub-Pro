@@ -22,9 +22,9 @@ class ThemeBloc extends Bloc<ThemeEvent, ThemeState> {
     Emitter<ThemeState> emit,
   ) async {
     // Всегда используем светлую тему
-    emit(ThemeState(
-      themeMode: ThemeMode.light,
-      themeData: AppTheme.lightTheme,
-    ));
+      emit(ThemeState(
+        themeMode: ThemeMode.light,
+        themeData: AppTheme.lightTheme,
+      ));
   }
 }

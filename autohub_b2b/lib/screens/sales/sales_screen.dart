@@ -79,38 +79,38 @@ class _SalesScreenState extends State<SalesScreen> {
               children: [
                 Expanded(
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Продажи',
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Продажи',
                         style: Theme.of(context).textTheme.displayMedium?.copyWith(
                           fontSize: isMobile ? 24 : 28,
-                        ),
+                    ),
                       ),
                       if (!isMobile) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          'Управление заказами и продажами',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: AppTheme.textSecondary,
-                              ),
-                        ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Управление заказами и продажами',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: AppTheme.textSecondary,
+                          ),
+                    ),
                       ],
-                    ],
-                  ),
+                  ],
+                ),
                 ),
                 if (!isMobile)
-                  FilledButton.icon(
-                    onPressed: () => _showOrderDialog(context),
-                    icon: const Icon(Icons.add),
-                    label: const Text('Новый заказ'),
+                FilledButton.icon(
+                  onPressed: () => _showOrderDialog(context),
+                  icon: const Icon(Icons.add),
+                  label: const Text('Новый заказ'),
                   )
                 else
                   IconButton(
                     icon: const Icon(Icons.add),
                     onPressed: () => _showOrderDialog(context),
                     tooltip: 'Новый заказ',
-                  ),
+                ),
               ],
             ),
           ),
@@ -554,33 +554,33 @@ class _SalesScreenState extends State<SalesScreen> {
     if (order == null) {
       // Создание нового заказа
       final isEdit = false;
-      
-      // Загружаем список товаров
-      List<Map<String, dynamic>> availableItems = [];
-      try {
-        final response = await dio.get('/api/items');
-        availableItems = List<Map<String, dynamic>>.from(response.data);
-      } catch (e) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Ошибка загрузки товаров: $e')),
-          );
-        }
-        return;
+    
+    // Загружаем список товаров
+    List<Map<String, dynamic>> availableItems = [];
+    try {
+      final response = await dio.get('/api/items');
+      availableItems = List<Map<String, dynamic>>.from(response.data);
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка загрузки товаров: $e')),
+        );
       }
+      return;
+    }
 
-      if (!context.mounted) return;
-      
-      showDialog(
-        context: context,
-        builder: (dialogContext) => _OrderDialog(
-          isEdit: isEdit,
-          order: order,
-          availableItems: availableItems,
-          dio: dio,
-          onSuccess: _loadOrders,
-        ),
-      );
+    if (!context.mounted) return;
+    
+    showDialog(
+      context: context,
+      builder: (dialogContext) => _OrderDialog(
+        isEdit: isEdit,
+        order: order,
+        availableItems: availableItems,
+        dio: dio,
+        onSuccess: _loadOrders,
+      ),
+    );
     } else {
       // Просмотр/редактирование существующего заказа
       // Загружаем полную информацию о заказе с товарами
@@ -857,9 +857,9 @@ class _OrderDialogState extends State<_OrderDialog> {
             ? MediaQuery.of(context).size.height * 0.8
             : 600,
         child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
             // Выбор товаров
             if (isMobile) ...[
               Text(
@@ -878,22 +878,22 @@ class _OrderDialogState extends State<_OrderDialog> {
                 ),
               ),
             ] else ...[
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Товары в заказе',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed: _showAddItemDialog,
-                    icon: const Icon(Icons.add, size: 18),
-                    label: const Text('Добавить товар'),
-                  ),
-                ],
-              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Товары в заказе',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _showAddItemDialog,
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('Добавить товар'),
+                ),
+              ],
+            ),
             ],
             const SizedBox(height: 12),
 
@@ -935,35 +935,35 @@ class _OrderDialogState extends State<_OrderDialog> {
                   ),
                   const Divider(height: 1),
                   Expanded(
-                    child: selectedItems.isEmpty
-                        ? Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.shopping_cart_outlined,
-                                  size: 48,
-                                  color: Colors.grey.shade400,
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
+              child: selectedItems.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.shopping_cart_outlined,
+                            size: 48,
+                            color: Colors.grey.shade400,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
                                   'Сканируйте товар или добавьте его вручную',
-                                  style: TextStyle(color: Colors.grey.shade600),
-                                ),
-                              ],
-                            ),
-                          )
-                        : ListView.builder(
-                            itemCount: selectedItems.length,
-                            itemBuilder: (context, index) {
-                              final item = selectedItems[index];
-                              final price = double.tryParse(item['price'].toString()) ?? 0;
-                              final quantity = item['quantity'] as int;
-                              final subtotal = price * quantity;
+                            style: TextStyle(color: Colors.grey.shade600),
+                          ),
+                        ],
+                      ),
+                    )
+                  : ListView.builder(
+                      itemCount: selectedItems.length,
+                      itemBuilder: (context, index) {
+                        final item = selectedItems[index];
+                        final price = double.tryParse(item['price'].toString()) ?? 0;
+                        final quantity = item['quantity'] as int;
+                        final subtotal = price * quantity;
                               final imageUrl = item['imageUrl'] as String?;
                               final sku = item['sku'] as String?;
 
-                              return ListTile(
+                        return ListTile(
                                 leading: imageUrl != null
                                     ? ClipRRect(
                                         borderRadius: BorderRadius.circular(8),
@@ -998,10 +998,10 @@ class _OrderDialogState extends State<_OrderDialog> {
                                         ),
                                       )
                                     : CircleAvatar(
-                                        backgroundColor: AppTheme.primaryColor.withOpacity(0.1),
+                            backgroundColor: AppTheme.primaryColor.withOpacity(0.1),
                                         child: const Icon(Icons.inventory_2,
                                             color: AppTheme.primaryColor),
-                                      ),
+                          ),
                                 title: Text(
                                   item['name'],
                                   overflow: TextOverflow.ellipsis,
@@ -1012,7 +1012,7 @@ class _OrderDialogState extends State<_OrderDialog> {
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Text(
-                                      '${NumberFormat('#,###', 'ru_RU').format(price)} ₸ × $quantity',
+                            '${NumberFormat('#,###', 'ru_RU').format(price)} ₸ × $quantity',
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                     if (sku != null && sku.isNotEmpty)
@@ -1025,10 +1025,10 @@ class _OrderDialogState extends State<_OrderDialog> {
                                         overflow: TextOverflow.ellipsis,
                                       ),
                                   ],
-                                ),
-                                trailing: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
+                          ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
                                     IconButton(
                                       icon: const Icon(Icons.remove_circle_outline),
                                       onPressed: () {
@@ -1048,32 +1048,32 @@ class _OrderDialogState extends State<_OrderDialog> {
                                     ),
                                     Flexible(
                                       child: Text(
-                                        '${NumberFormat('#,###', 'ru_RU').format(subtotal)} ₸',
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 16,
-                                        ),
+                                '${NumberFormat('#,###', 'ru_RU').format(subtotal)} ₸',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
                                         overflow: TextOverflow.ellipsis,
-                                      ),
+                              ),
                                     ),
                                     const SizedBox(width: 4),
-                                    IconButton(
-                                      icon: const Icon(Icons.delete_outline, color: Colors.red),
-                                      onPressed: () {
-                                        setState(() {
-                                          selectedItems.removeAt(index);
-                                        });
-                                      },
-                                      tooltip: 'Удалить',
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline, color: Colors.red),
+                                onPressed: () {
+                                  setState(() {
+                                    selectedItems.removeAt(index);
+                                  });
+                                },
+                                tooltip: 'Удалить',
+                              ),
+                            ],
+                          ),
+                        );
+                      },
                           ),
                   ),
                 ],
-              ),
+                    ),
             ),
 
             const SizedBox(height: 16),
@@ -1157,48 +1157,48 @@ class _OrderDialogState extends State<_OrderDialog> {
                 }
                 
                 return Row(
-                  children: [
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        value: selectedStatus,
-                        decoration: const InputDecoration(
-                          labelText: 'Статус',
-                          border: OutlineInputBorder(),
-                        ),
-                        items: const [
-                          DropdownMenuItem(value: 'pending', child: Text('Ожидание')),
-                          DropdownMenuItem(value: 'processing', child: Text('В работе')),
-                          DropdownMenuItem(value: 'completed', child: Text('Завершен')),
-                          DropdownMenuItem(value: 'cancelled', child: Text('Отменен')),
-                        ],
-                        onChanged: (value) {
-                          setState(() {
-                            selectedStatus = value!;
-                          });
-                        },
-                      ),
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    value: selectedStatus,
+                    decoration: const InputDecoration(
+                      labelText: 'Статус',
+                      border: OutlineInputBorder(),
                     ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        value: selectedPaymentStatus,
-                        decoration: const InputDecoration(
-                          labelText: 'Статус оплаты',
-                          border: OutlineInputBorder(),
-                        ),
-                        items: const [
-                          DropdownMenuItem(value: 'pending', child: Text('Не оплачен')),
-                          DropdownMenuItem(value: 'partially_paid', child: Text('Частично')),
-                          DropdownMenuItem(value: 'paid', child: Text('Оплачен')),
-                        ],
-                        onChanged: (value) {
-                          setState(() {
-                            selectedPaymentStatus = value!;
-                          });
-                        },
-                      ),
+                    items: const [
+                      DropdownMenuItem(value: 'pending', child: Text('Ожидание')),
+                      DropdownMenuItem(value: 'processing', child: Text('В работе')),
+                      DropdownMenuItem(value: 'completed', child: Text('Завершен')),
+                      DropdownMenuItem(value: 'cancelled', child: Text('Отменен')),
+                    ],
+                    onChanged: (value) {
+                      setState(() {
+                        selectedStatus = value!;
+                      });
+                    },
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    value: selectedPaymentStatus,
+                    decoration: const InputDecoration(
+                      labelText: 'Статус оплаты',
+                      border: OutlineInputBorder(),
                     ),
-                  ],
+                    items: const [
+                      DropdownMenuItem(value: 'pending', child: Text('Не оплачен')),
+                      DropdownMenuItem(value: 'partially_paid', child: Text('Частично')),
+                      DropdownMenuItem(value: 'paid', child: Text('Оплачен')),
+                    ],
+                    onChanged: (value) {
+                      setState(() {
+                        selectedPaymentStatus = value!;
+                      });
+                    },
+                  ),
+                ),
+              ],
                 );
               },
             ),
@@ -1251,10 +1251,10 @@ class _OrderDialogState extends State<_OrderDialog> {
           final isMobile = MediaQuery.of(context).size.width < 768;
           
           return AlertDialog(
-            title: const Text('Добавить товар'),
-            content: SizedBox(
+          title: const Text('Добавить товар'),
+          content: SizedBox(
               width: isMobile ? MediaQuery.of(context).size.width * 0.8 : 400,
-              child: Column(
+            child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 DropdownButtonFormField<Map<String, dynamic>>(

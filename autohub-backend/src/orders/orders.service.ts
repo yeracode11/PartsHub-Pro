@@ -40,9 +40,9 @@ export class OrdersService {
     
     // Проверяем, есть ли вообще заказы в базе
     const allOrders = await this.orderRepository.find({
-      relations: ['customer', 'items', 'items.item'],
+        relations: ['customer', 'items', 'items.item'],
       take: 10,
-    });
+      });
     console.log(`   Total orders in DB: ${allOrders.length}`);
     if (allOrders.length > 0) {
       console.log('   Sample order organizationIds:', allOrders.map(o => o.organizationId));

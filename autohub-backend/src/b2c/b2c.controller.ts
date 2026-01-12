@@ -283,7 +283,7 @@ export class B2CController {
       if (items.length === 0) {
         throw new Error('Order must contain at least one item');
       }
-
+      
       // Если указан organizationId в запросе, используем его (для авторизованных пользователей)
       // Иначе группируем по организациям продавцов товаров
       const targetOrganizationId = data.organizationId;
@@ -374,27 +374,27 @@ export class B2CController {
       const createdOrders: Order[] = [];
       
       for (const [organizationId, sellerItems] of itemsBySeller.entries()) {
-        const orderData = {
+      const orderData = {
           items: sellerItems as Array<{ itemId: number; quantity: number }>,
-          customerId: data.customerId || null,
+        customerId: data.customerId || null,
           notes: data.notes ? `${data.notes} (Заказ из B2C)` : 'Заказ из B2C маркетплейса',
           shippingAddress: data.shippingAddress || null, // Адрес доставки
-          status: 'pending',
-          paymentStatus: 'pending',
-          isB2C: true, // Помечаем что это заказ из B2C магазина
+        status: 'pending',
+        paymentStatus: 'pending',
+        isB2C: true, // Помечаем что это заказ из B2C магазина
         } as Partial<Order> & { items?: Array<{ itemId: number; quantity: number }>; shippingAddress?: string };
 
         console.log(`📦 Creating order for seller org: ${organizationId}`);
         console.log(`📦 Order items:`, JSON.stringify(sellerItems, null, 2));
-        
-        // Создаем заказ без проверки количества для B2C
+      
+      // Создаем заказ без проверки количества для B2C
         const order = await this.ordersService.create(organizationId, orderData, { skipQuantityCheck: true });
-        
-        if (!order) {
+      
+      if (!order) {
           console.error(`❌ Failed to create order for org: ${organizationId}`);
           throw new Error(`Failed to create order for seller ${organizationId}`);
-        }
-        
+      }
+      
         console.log(`✅ Order created for seller ${organizationId}:`, order.id);
         createdOrders.push(order);
       }
@@ -405,10 +405,10 @@ export class B2CController {
           data: createdOrders[0],
         };
       } else {
-        return {
+      return {
           data: createdOrders,
           message: `Created ${createdOrders.length} orders for different sellers`,
-        };
+      };
       }
     } catch (error) {
       console.error('❌ Error creating B2C order:', error);

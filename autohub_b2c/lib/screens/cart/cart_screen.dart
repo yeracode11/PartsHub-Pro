@@ -375,12 +375,12 @@ class _CartScreenState extends State<CartScreen> {
 
                   // Очищаем корзину после создания заказа
                   if (mounted) {
-                    context.read<CartBloc>().add(CartCleared());
+                  context.read<CartBloc>().add(CartCleared());
                   }
                   
                   // Закрываем диалог
                   if (Navigator.of(dialogContext).canPop()) {
-                    Navigator.of(dialogContext).pop();
+                  Navigator.of(dialogContext).pop();
                   }
                   
                   // Добавляем задержку для предотвращения ошибки навигации
@@ -396,34 +396,34 @@ class _CartScreenState extends State<CartScreen> {
                   
                   // Используем сохраненный scaffoldMessenger
                   scaffoldMessenger.showSnackBar(
-                    SnackBar(
-                      content: Text('Заказ ${order.orderNumber} успешно оформлен!'),
-                      backgroundColor: Colors.green,
-                      duration: const Duration(seconds: 3),
-                      action: SnackBarAction(
-                        label: 'Посмотреть',
-                        textColor: Colors.white,
-                        onPressed: () {
+                      SnackBar(
+                        content: Text('Заказ ${order.orderNumber} успешно оформлен!'),
+                        backgroundColor: Colors.green,
+                        duration: const Duration(seconds: 3),
+                        action: SnackBarAction(
+                          label: 'Посмотреть',
+                          textColor: Colors.white,
+                          onPressed: () {
                           if (mounted) {
                             context.go('/orders');
                           }
-                        },
+                          },
+                        ),
                       ),
-                    ),
-                  );
+                    );
                 } catch (e) {
                   // Сбрасываем локальное состояние диалога только если он еще открыт
                   if (Navigator.of(dialogContext).canPop()) {
                     dialogSetState(() {
                       isCreatingOrder = false;
                     });
-                    
-                    ScaffoldMessenger.of(dialogContext).showSnackBar(
-                      SnackBar(
-                        content: Text('Ошибка создания заказа: $e'),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
+                  
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    SnackBar(
+                      content: Text('Ошибка создания заказа: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
                   } else {
                     // Если диалог закрыт, показываем в основном контексте
                     scaffoldMessenger.showSnackBar(
