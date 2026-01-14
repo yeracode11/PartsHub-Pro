@@ -27,6 +27,13 @@ export class UsersController {
     return this.usersService.findByFirebaseUid(uid);
   }
 
+  @Get()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.OWNER)
+  findAll() {
+    return this.usersService.findAll();
+  }
+
   @Get('organization/:organizationId')
   findByOrganization(@Param('organizationId') organizationId: string) {
     return this.usersService.findByOrganization(organizationId);
