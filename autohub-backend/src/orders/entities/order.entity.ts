@@ -75,6 +75,9 @@ export class Order {
   @Column({ type: 'boolean', default: false })
   isB2C: boolean; // Флаг: заказ из B2C магазина
 
+  @Column({ type: 'jsonb', nullable: true })
+  workStages: OrderWorkStage[] | null; // Этапы заказ-наряда (для автосервисов)
+
   @OneToMany(() => OrderItem, (orderItem) => orderItem.order, { cascade: true })
   items: OrderItem[];
 
@@ -85,3 +88,15 @@ export class Order {
   updatedAt: Date;
 }
 
+export interface OrderWorkStageItem {
+  id: string;
+  title: string;
+  done: boolean;
+  doneAt?: string | null;
+}
+
+export interface OrderWorkStage {
+  id: string;
+  title: string;
+  items: OrderWorkStageItem[];
+}

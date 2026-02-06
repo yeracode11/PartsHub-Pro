@@ -23,12 +23,20 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   String selectedStatus = 'pending';
   String selectedPaymentStatus = 'pending';
   bool isSaving = false;
+  List<WorkStageModel> workStages = [];
 
   @override
   void initState() {
     super.initState();
     selectedStatus = widget.order.status;
     selectedPaymentStatus = widget.order.paymentStatus;
+    if (widget.order.workStages != null) {
+      workStages = widget.order.workStages!;
+    } else if (widget.order.isB2C) {
+      workStages = _getDefaultWorkStages();
+    } else {
+      workStages = [];
+    }
   }
 
   Future<void> _saveOrder() async {
@@ -42,6 +50,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         data: {
           'status': selectedStatus,
           'paymentStatus': selectedPaymentStatus,
+          if (workStages.isNotEmpty)
+            'workStages': workStages.map((stage) => stage.toJson()).toList(),
         },
       );
 
@@ -144,6 +154,109 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         ),
       ),
     );
+  }
+
+  List<WorkStageModel> _getDefaultWorkStages() {
+    return [
+      WorkStageModel(id: 'disassembly', title: 'Разбор', items: []),
+      WorkStageModel(id: 'repair', title: 'Ремонт', items: []),
+      WorkStageModel(id: 'prep', title: 'Подготовка', items: []),
+      WorkStageModel(id: 'paint', title: 'Покраска', items: []),
+      WorkStageModel(id: 'assembly', title: 'Сбор', items: []),
+      WorkStageModel(id: 'polish', title: 'Полировка/Мойка', items: []),
+      WorkStageModel(id: 'done', title: 'Готово', items: []),
+    ];
+  }
+
+  int _stageDoneCount(WorkStageModel stage) {
+    return stage.items.where((item) => item.done).length;
+  }
+
+  double _stageProgress(WorkStageModel stage) {
+    if (stage.items.isEmpty) return 0;
+    return _stageDoneCount(stage) / stage.items.length;
+  }
+
+  double _overallProgress() {
+    final total = workStages.fold<int>(0, (sum, s) => sum + s.items.length);
+    if (total == 0) return 0;
+    final done = workStages.fold<int>(0, (sum, s) => sum + _stageDoneCount(s));
+    return done / total;
+  }
+
+  void _toggleStageItem(String stageId, String itemId, bool value) {
+    setState(() {
+      workStages = workStages.map((stage) {
+        if (stage.id != stageId) return stage;
+        final updatedItems = stage.items.map((item) {
+          if (item.id != itemId) return item;
+          return WorkStageItemModel(
+            id: item.id,
+            title: item.title,
+            done: value,
+            doneAt: value ? DateTime.now().toIso8601String() : null,
+          );
+        }).toList();
+        return WorkStageModel(
+          id: stage.id,
+          title: stage.title,
+          items: updatedItems,
+        );
+      }).toList();
+    });
+  }
+
+  void _addStageItem(String stageId, String title) {
+    setState(() {
+      workStages = workStages.map((stage) {
+        if (stage.id != stageId) return stage;
+        final newItem = WorkStageItemModel(
+          id: '${stage.id}-${DateTime.now().millisecondsSinceEpoch}',
+          title: title,
+          done: false,
+        );
+        return WorkStageModel(
+          id: stage.id,
+          title: stage.title,
+          items: [...stage.items, newItem],
+        );
+      }).toList();
+    });
+  }
+
+  Future<void> _showAddItemDialog(WorkStageModel stage) async {
+    final controller = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Добавить операцию: ${stage.title}'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            hintText: 'Название операции',
+            border: OutlineInputBorder(),
+          ),
+          autofocus: true,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (value) => Navigator.pop(context, value),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text),
+            child: const Text('Добавить'),
+          ),
+        ],
+      ),
+    );
+
+    final trimmed = result?.trim();
+    if (trimmed != null && trimmed.isNotEmpty) {
+      _addStageItem(stage.id, trimmed);
+    }
   }
 
   @override
@@ -341,6 +454,133 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             ),
 
             const SizedBox(height: 24),
+
+            // Заказ-наряд по этапам работ
+            if (workStages.isNotEmpty)
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            'Заказ-наряд',
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                          ),
+                          const Spacer(),
+                          Text(
+                            'Выполнено: ${(100 * _overallProgress()).toStringAsFixed(0)}%',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: AppTheme.textSecondary,
+                                ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      LinearProgressIndicator(
+                        value: _overallProgress(),
+                        minHeight: 8,
+                        backgroundColor: AppTheme.borderColor,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          AppTheme.primaryColor,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      ...workStages.map((stage) {
+                        final done = _stageDoneCount(stage);
+                        final total = stage.items.length;
+                        final stageProgress = _stageProgress(stage);
+                        final isComplete = total > 0 && done == total;
+
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: AppTheme.borderColor),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: ExpansionTile(
+                            tilePadding: const EdgeInsets.symmetric(horizontal: 16),
+                            childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                            leading: Icon(
+                              isComplete
+                                  ? Icons.check_circle
+                                  : Icons.radio_button_unchecked,
+                              color: isComplete
+                                  ? AppTheme.successGradient.colors[0]
+                                  : AppTheme.textSecondary,
+                            ),
+                            title: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    stage.title,
+                                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                  ),
+                                ),
+                                Text(
+                                  '($done/$total)',
+                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                        color: AppTheme.textSecondary,
+                                      ),
+                                ),
+                              ],
+                            ),
+                            trailing: SizedBox(
+                              width: 80,
+                              child: LinearProgressIndicator(
+                                value: stageProgress,
+                                backgroundColor: AppTheme.borderColor,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  AppTheme.primaryColor,
+                                ),
+                              ),
+                            ),
+                            children: [
+                              if (stage.items.isEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 8),
+                                  child: Text(
+                                    'Операций пока нет.',
+                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                          color: AppTheme.textSecondary,
+                                        ),
+                                  ),
+                                )
+                              else
+                                ...stage.items.map((item) {
+                                  return CheckboxListTile(
+                                    value: item.done,
+                                    contentPadding: EdgeInsets.zero,
+                                    controlAffinity: ListTileControlAffinity.leading,
+                                    title: Text(item.title),
+                                    onChanged: (value) {
+                                      if (value == null) return;
+                                      _toggleStageItem(stage.id, item.id, value);
+                                    },
+                                  );
+                                }),
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: TextButton.icon(
+                                  onPressed: () => _showAddItemDialog(stage),
+                                  icon: const Icon(Icons.add),
+                                  label: const Text('Добавить операцию'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                    ],
+                  ),
+                ),
+              ),
 
             // Информация о клиенте
             if (widget.order.customer != null)

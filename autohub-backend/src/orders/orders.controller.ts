@@ -143,7 +143,7 @@ export class OrdersController {
     if (!organizationId) {
       return { error: 'No active organization' } as any;
     }
-    return this.ordersService.update(+id, organizationId, data);
+    return this.ordersService.update(+id, organizationId, data, user);
   }
 
   @Delete(':id')

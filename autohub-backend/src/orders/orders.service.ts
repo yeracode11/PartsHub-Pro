@@ -1,8 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Order } from './entities/order.entity';
+import { Order, OrderWorkStage } from './entities/order.entity';
 import { OrderItemsService } from '../order-items/order-items.service';
+import { CustomersService } from '../customers/customers.service';
+import { WhatsAppService } from '../whatsapp/whatsapp.service';
 
 @Injectable()
 export class OrdersService {
@@ -10,6 +12,8 @@ export class OrdersService {
     @InjectRepository(Order)
     private readonly orderRepository: Repository<Order>,
     private readonly orderItemsService: OrderItemsService,
+    private readonly customersService: CustomersService,
+    private readonly whatsAppService: WhatsAppService,
   ) {}
 
   async getRecentOrders(organizationId: string, limit: number) {
@@ -77,7 +81,10 @@ export class OrdersService {
 
   async create(
     organizationId: string,
-    data: Partial<Order> & { items?: Array<{ itemId: number; quantity: number }> },
+    data: Partial<Order> & {
+      items?: Array<{ itemId: number; quantity: number }>;
+      workStages?: OrderWorkStage[];
+    },
     options?: { skipQuantityCheck?: boolean },
   ) {
     console.log('📦 OrdersService.create called');
@@ -110,6 +117,7 @@ export class OrdersService {
     }
 
     // Создаем заказ
+    const isB2C = (data as any).isB2C || false;
     const order = this.orderRepository.create({
       orderNumber: data.orderNumber,
       organizationId,
@@ -118,8 +126,14 @@ export class OrdersService {
       paymentStatus: data.paymentStatus || 'pending',
       notes: data.notes,
       shippingAddress: (data as any).shippingAddress || null, // Адрес доставки для B2C
-      isB2C: (data as any).isB2C || false, // Помечаем заказ из B2C
+      isB2C,
       totalAmount: 0, // Пока 0, посчитаем после добавления товаров
+      workStages:
+        data.workStages && data.workStages.length > 0
+          ? this.normalizeWorkStages(data.workStages)
+          : isB2C
+            ? this.getDefaultWorkStages()
+            : null,
     });
     
     console.log('   Creating order with data:', JSON.stringify({
@@ -166,16 +180,29 @@ export class OrdersService {
   async update(
     id: number,
     organizationId: string,
-    data: Partial<Order> & { items?: Array<{ itemId: number; quantity: number }> },
+    data: Partial<Order> & {
+      items?: Array<{ itemId: number; quantity: number }>;
+      workStages?: OrderWorkStage[];
+    },
+    actor?: { userId?: string; id?: string },
   ) {
-    await this.findOne(id, organizationId); // Проверка существования
+    const existingOrder = await this.findOne(id, organizationId); // Проверка существования
 
     // Извлекаем items из data, чтобы не пытаться обновить relation
-    const { items, ...orderData } = data;
+    const { items, workStages, ...orderData } = data;
 
     // Обновляем основные поля заказа
     if (Object.keys(orderData).length > 0) {
       await this.orderRepository.update({ id, organizationId }, orderData);
+    }
+
+    let normalizedWorkStages: OrderWorkStage[] | null = null;
+    if (workStages) {
+      normalizedWorkStages = this.normalizeWorkStages(workStages);
+      await this.orderRepository.update(
+        { id, organizationId },
+        { workStages: normalizedWorkStages },
+      );
     }
 
     // Если передали новые items, обновляем их
@@ -191,7 +218,22 @@ export class OrdersService {
       await this.orderRepository.update({ id, organizationId }, { totalAmount: total });
     }
 
-    return await this.findOne(id, organizationId);
+    const updatedOrder = await this.findOne(id, organizationId);
+
+    if (
+      normalizedWorkStages &&
+      updatedOrder.isB2C &&
+      updatedOrder.customerId
+    ) {
+      await this.notifyB2CWorkStageUpdate(
+        updatedOrder,
+        existingOrder.workStages || [],
+        normalizedWorkStages,
+        actor,
+      );
+    }
+
+    return updatedOrder;
   }
 
   async remove(id: number, organizationId: string) {
@@ -207,6 +249,145 @@ export class OrdersService {
       order: { createdAt: 'DESC' },
       take: 50,
     });
+  }
+
+  private getDefaultWorkStages(): OrderWorkStage[] {
+    return [
+      { id: 'disassembly', title: 'Разбор', items: [] },
+      { id: 'repair', title: 'Ремонт', items: [] },
+      { id: 'prep', title: 'Подготовка', items: [] },
+      { id: 'paint', title: 'Покраска', items: [] },
+      { id: 'assembly', title: 'Сбор', items: [] },
+      { id: 'polish', title: 'Полировка/Мойка', items: [] },
+      { id: 'done', title: 'Готово', items: [] },
+    ];
+  }
+
+  private normalizeWorkStages(stages: OrderWorkStage[]): OrderWorkStage[] {
+    return stages.map((stage) => ({
+      id: stage.id || this.slugify(stage.title),
+      title: stage.title,
+      items: (stage.items || []).map((item) => ({
+        id: item.id || this.slugify(item.title),
+        title: item.title,
+        done: Boolean(item.done),
+        doneAt: item.doneAt || null,
+      })),
+    }));
+  }
+
+  private async notifyB2CWorkStageUpdate(
+    order: Order,
+    previousStages: OrderWorkStage[],
+    nextStages: OrderWorkStage[],
+    actor?: { userId?: string; id?: string },
+  ) {
+    const actorUserId = actor?.userId || actor?.id;
+    if (!actorUserId) {
+      return;
+    }
+
+    const changes = this.getWorkStageChanges(previousStages, nextStages);
+    if (changes.length === 0) {
+      return;
+    }
+
+    try {
+      const customer =
+        order.customer ||
+        (await this.customersService.findOne(
+          order.customerId,
+          order.organizationId,
+        ));
+
+      if (!customer?.phone) {
+        return;
+      }
+
+      if (!this.whatsAppService.isClientReady(actorUserId)) {
+        return;
+      }
+
+      const stageLines = changes.map(
+        (change) => `- ${change.stageTitle}: ${change.done}/${change.total}`,
+      );
+
+      const completedItems = changes
+        .flatMap((change) =>
+          change.completedItems.map((title) => `${change.stageTitle}: ${title}`),
+        )
+        .slice(0, 6);
+
+      const messageLines = [
+        `Обновление заказ-наряда ${order.orderNumber || `#${order.id}`}.`,
+        'Этапы работ:',
+        ...stageLines,
+      ];
+
+      if (completedItems.length > 0) {
+        messageLines.push('Завершено:');
+        messageLines.push(...completedItems.map((item) => `- ${item}`));
+      }
+
+      await this.whatsAppService.sendMessage(
+        actorUserId,
+        customer.phone,
+        messageLines.join('\n'),
+      );
+    } catch (error) {
+      console.error('❌ Ошибка отправки уведомления B2C:', error.message);
+    }
+  }
+
+  private getWorkStageChanges(
+    previousStages: OrderWorkStage[],
+    nextStages: OrderWorkStage[],
+  ) {
+    const previousByStage = new Map(
+      previousStages.map((stage) => [stage.id, stage]),
+    );
+
+    const changes: Array<{
+      stageTitle: string;
+      done: number;
+      total: number;
+      completedItems: string[];
+    }> = [];
+
+    for (const stage of nextStages) {
+      const prevStage = previousByStage.get(stage.id);
+      const prevItems = new Map(
+        (prevStage?.items || []).map((item) => [item.id, item]),
+      );
+
+      const completedItems: string[] = [];
+      for (const item of stage.items || []) {
+        const prevItem = prevItems.get(item.id);
+        if (!prevItem?.done && item.done) {
+          completedItems.push(item.title);
+        }
+      }
+
+      if (completedItems.length > 0) {
+        const done = stage.items.filter((item) => item.done).length;
+        const total = stage.items.length;
+        changes.push({
+          stageTitle: stage.title,
+          done,
+          total,
+          completedItems,
+        });
+      }
+    }
+
+    return changes;
+  }
+
+  private slugify(value: string): string {
+    return value
+      .toLowerCase()
+      .replace(/[^a-z0-9а-яё]+/gi, '-')
+      .replace(/^-+|-+$/g, '');
   }
 }
 

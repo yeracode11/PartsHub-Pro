@@ -50,6 +50,70 @@ class OrderItemModel {
   }
 }
 
+class WorkStageItemModel {
+  final String id;
+  final String title;
+  final bool done;
+  final String? doneAt;
+
+  WorkStageItemModel({
+    required this.id,
+    required this.title,
+    required this.done,
+    this.doneAt,
+  });
+
+  factory WorkStageItemModel.fromJson(Map<String, dynamic> json) {
+    return WorkStageItemModel(
+      id: json['id']?.toString() ?? '',
+      title: json['title']?.toString() ?? '',
+      done: json['done'] == true,
+      doneAt: json['doneAt']?.toString(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'done': done,
+      'doneAt': doneAt,
+    };
+  }
+}
+
+class WorkStageModel {
+  final String id;
+  final String title;
+  final List<WorkStageItemModel> items;
+
+  WorkStageModel({
+    required this.id,
+    required this.title,
+    required this.items,
+  });
+
+  factory WorkStageModel.fromJson(Map<String, dynamic> json) {
+    final itemsJson = json['items'] as List? ?? [];
+    return WorkStageModel(
+      id: json['id']?.toString() ?? '',
+      title: json['title']?.toString() ?? '',
+      items: itemsJson
+          .map((item) =>
+              WorkStageItemModel.fromJson(item as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'items': items.map((item) => item.toJson()).toList(),
+    };
+  }
+}
+
 class OrderModel extends Equatable {
   final int? id;
   final String? orderNumber;
@@ -63,6 +127,7 @@ class OrderModel extends Equatable {
   final bool isB2C;
   final List<OrderItemModel>? items;
   final Map<String, dynamic>? customer;
+  final List<WorkStageModel>? workStages;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -79,6 +144,7 @@ class OrderModel extends Equatable {
     this.isB2C = false,
     this.items,
     this.customer,
+    this.workStages,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -96,6 +162,7 @@ class OrderModel extends Equatable {
     bool? isB2C,
     List<OrderItemModel>? items,
     Map<String, dynamic>? customer,
+    List<WorkStageModel>? workStages,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -112,6 +179,7 @@ class OrderModel extends Equatable {
       isB2C: isB2C ?? this.isB2C,
       items: items ?? this.items,
       customer: customer ?? this.customer,
+      workStages: workStages ?? this.workStages,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -138,6 +206,7 @@ class OrderModel extends Equatable {
         'item': item.item,
       }).toList(),
       'customer': customer,
+      'workStages': workStages?.map((stage) => stage.toJson()).toList(),
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
     };
@@ -163,6 +232,14 @@ class OrderModel extends Equatable {
           .toList();
     }
 
+    List<WorkStageModel>? workStages;
+    if (json['workStages'] != null) {
+      workStages = (json['workStages'] as List)
+          .map((stage) =>
+              WorkStageModel.fromJson(stage as Map<String, dynamic>))
+          .toList();
+    }
+
     return OrderModel(
       id: json['id'] as int?,
       orderNumber: json['orderNumber'] as String?,
@@ -176,6 +253,7 @@ class OrderModel extends Equatable {
       isB2C: json['isB2C'] as bool? ?? false,
       items: items,
       customer: json['customer'] as Map<String, dynamic>?,
+      workStages: workStages,
       createdAt: DateTime.parse(json['createdAt'] as String),
       updatedAt: DateTime.parse(json['updatedAt'] as String),
     );
@@ -195,6 +273,7 @@ class OrderModel extends Equatable {
         isB2C,
         items,
         customer,
+        workStages,
         createdAt,
         updatedAt,
       ];

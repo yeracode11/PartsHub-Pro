@@ -5,9 +5,17 @@ import { OrdersService } from './orders.service';
 import { Order } from './entities/order.entity';
 import { OrderItemsModule } from '../order-items/order-items.module';
 import { OrganizationsModule } from '../organizations/organizations.module';
+import { CustomersModule } from '../customers/customers.module';
+import { WhatsAppModule } from '../whatsapp/whatsapp.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Order]), OrderItemsModule, OrganizationsModule],
+  imports: [
+    TypeOrmModule.forFeature([Order]),
+    OrderItemsModule,
+    OrganizationsModule,
+    CustomersModule,
+    WhatsAppModule,
+  ],
   controllers: [OrdersController],
   providers: [OrdersService],
   exports: [OrdersService],
