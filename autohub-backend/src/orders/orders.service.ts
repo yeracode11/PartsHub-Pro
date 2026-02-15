@@ -5,6 +5,8 @@ import { Order, OrderWorkStage } from './entities/order.entity';
 import { OrderItemsService } from '../order-items/order-items.service';
 import { CustomersService } from '../customers/customers.service';
 import { WhatsAppService } from '../whatsapp/whatsapp.service';
+import { OrganizationsService } from '../organizations/organizations.service';
+import { BusinessType } from '../common/enums/business-type.enum';
 
 @Injectable()
 export class OrdersService {
@@ -14,6 +16,7 @@ export class OrdersService {
     private readonly orderItemsService: OrderItemsService,
     private readonly customersService: CustomersService,
     private readonly whatsAppService: WhatsAppService,
+    private readonly organizationsService: OrganizationsService,
   ) {}
 
   async getRecentOrders(organizationId: string, limit: number) {
@@ -118,6 +121,7 @@ export class OrdersService {
 
     // Создаем заказ
     const isB2C = (data as any).isB2C || false;
+    const isServiceOrg = await this.isServiceOrganization(organizationId);
     const order = this.orderRepository.create({
       orderNumber: data.orderNumber,
       organizationId,
@@ -128,12 +132,13 @@ export class OrdersService {
       shippingAddress: (data as any).shippingAddress || null, // Адрес доставки для B2C
       isB2C,
       totalAmount: 0, // Пока 0, посчитаем после добавления товаров
-      workStages:
-        data.workStages && data.workStages.length > 0
+      workStages: isServiceOrg
+        ? data.workStages && data.workStages.length > 0
           ? this.normalizeWorkStages(data.workStages)
           : isB2C
             ? this.getDefaultWorkStages()
-            : null,
+            : null
+        : null,
     });
     
     console.log('   Creating order with data:', JSON.stringify({
@@ -198,11 +203,14 @@ export class OrdersService {
 
     let normalizedWorkStages: OrderWorkStage[] | null = null;
     if (workStages) {
-      normalizedWorkStages = this.normalizeWorkStages(workStages);
-      await this.orderRepository.update(
-        { id, organizationId },
-        { workStages: normalizedWorkStages },
-      );
+      const isServiceOrg = await this.isServiceOrganization(organizationId);
+      if (isServiceOrg) {
+        normalizedWorkStages = this.normalizeWorkStages(workStages);
+        await this.orderRepository.update(
+          { id, organizationId },
+          { workStages: normalizedWorkStages },
+        );
+      }
     }
 
     // Если передали новые items, обновляем их
@@ -388,6 +396,15 @@ export class OrdersService {
       .toLowerCase()
       .replace(/[^a-z0-9а-яё]+/gi, '-')
       .replace(/^-+|-+$/g, '');
+  }
+
+  private async isServiceOrganization(organizationId: string): Promise<boolean> {
+    try {
+      const organization = await this.organizationsService.findOne(organizationId);
+      return organization.businessType === BusinessType.SERVICE;
+    } catch (error) {
+      return false;
+    }
   }
 }
 

@@ -6,6 +6,8 @@ import 'package:autohub_b2b/services/warehouse_service.dart';
 import 'package:autohub_b2b/widgets/items_filter_widget.dart';
 import 'package:intl/intl.dart';
 import 'package:dio/dio.dart';
+import 'package:excel/excel.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:autohub_b2b/services/api/api_client.dart';
 import 'package:autohub_b2b/screens/warehouse/item_edit_screen.dart';
 import 'package:autohub_b2b/screens/warehouse/printer_settings_screen.dart';
@@ -35,6 +37,37 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
   
   // Выбранные товары для массовой печати
   Set<int> selectedItemIds = {};
+
+  static const Map<String, String> _headerAliases = {
+    'name': 'name',
+    'название': 'name',
+    'наименование': 'name',
+    'товар': 'name',
+    'sku': 'sku',
+    'артикул': 'sku',
+    'код': 'sku',
+    'штрихкод': 'sku',
+    'barcode': 'sku',
+    'category': 'category',
+    'категория': 'category',
+    'price': 'price',
+    'цена': 'price',
+    'стоимость': 'price',
+    'quantity': 'quantity',
+    'количество': 'quantity',
+    'остаток': 'quantity',
+    'description': 'description',
+    'описание': 'description',
+    'примечание': 'description',
+    'warehousecell': 'warehouseCell',
+    'ячейка': 'warehouseCell',
+    'ячейкасклада': 'warehouseCell',
+    'складскаяячейка': 'warehouseCell',
+    'condition': 'condition',
+    'состояние': 'condition',
+    'warehouse': 'warehouse',
+    'склад': 'warehouse',
+  };
 
   @override
   void initState() {
@@ -149,6 +182,385 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
       activeFiltersCount = filters.values.where((v) => v != null).length;
     });
     _loadItems();
+  }
+
+  Future<void> _importFromExcel() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['xlsx'],
+      withData: true,
+    );
+
+    if (result == null || result.files.isEmpty) return;
+
+    final file = result.files.single;
+    if (file.bytes == null || file.bytes!.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Не удалось прочитать файл')),
+        );
+      }
+      return;
+    }
+
+    try {
+      final excel = Excel.decodeBytes(file.bytes!);
+      if (excel.tables.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Файл Excel пуст')),
+          );
+        }
+        return;
+      }
+
+      final table = excel.tables.values.first;
+      if (table.rows.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Файл Excel не содержит строк')),
+          );
+        }
+        return;
+      }
+
+      final parseResult = _parseExcelRows(table.rows);
+      if (parseResult.items.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                parseResult.errors.isNotEmpty
+                    ? 'Импорт невозможен: ${parseResult.errors.first}'
+                    : 'Не найдено товаров для импорта',
+              ),
+            ),
+          );
+        }
+        return;
+      }
+
+      final confirmed = await _confirmExcelImport(
+        fileName: file.name,
+        parseResult: parseResult,
+      );
+      if (confirmed != true) return;
+
+      final importResult = await _runExcelImport(parseResult.items);
+      if (!mounted) return;
+
+      if (importResult == null) return;
+
+      await _loadItems();
+
+      if (importResult.errors.isNotEmpty) {
+        await _showImportErrors(importResult);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Импортировано товаров: ${importResult.successCount}'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка импорта: $e')),
+        );
+      }
+    }
+  }
+
+  Future<bool?> _confirmExcelImport({
+    required String fileName,
+    required _ImportParseResult parseResult,
+  }) {
+    return showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Импорт из Excel'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Файл: $fileName'),
+            const SizedBox(height: 12),
+            Text('Найдено товаров: ${parseResult.items.length}'),
+            if (parseResult.warnings.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              const Text(
+                'Предупреждения:',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 6),
+              ...parseResult.warnings.take(3).map((w) => Text('• $w')),
+              if (parseResult.warnings.length > 3)
+                Text('• ...и ещё ${parseResult.warnings.length - 3}'),
+            ],
+            const SizedBox(height: 12),
+            const Text(
+              'Ожидаемые колонки:',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 6),
+            const Text('Название*, Артикул, Категория, Цена, Количество'),
+            const Text('Описание, Ячейка, Состояние, Склад'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Импортировать'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<_ImportResult?> _runExcelImport(
+    List<Map<String, dynamic>> itemsToImport,
+  ) async {
+    return showDialog<_ImportResult>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        int processed = 0;
+        int successCount = 0;
+        final errors = <String>[];
+        bool started = false;
+
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            if (!started) {
+              started = true;
+              Future.microtask(() async {
+                for (final itemData in itemsToImport) {
+                  try {
+                    await dio.post('/api/items', data: itemData);
+                    successCount++;
+                  } catch (e) {
+                    final name = itemData['name'] ?? 'Без названия';
+                    errors.add('$name: $e');
+                  } finally {
+                    processed++;
+                    if (context.mounted) {
+                      setDialogState(() {});
+                    }
+                  }
+                }
+
+                if (context.mounted) {
+                  Navigator.pop(
+                    context,
+                    _ImportResult(
+                      successCount: successCount,
+                      errors: errors,
+                    ),
+                  );
+                }
+              });
+            }
+
+            return AlertDialog(
+              title: const Text('Импорт товаров'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 16),
+                  Text('Импортировано: $processed из ${itemsToImport.length}'),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _showImportErrors(_ImportResult result) {
+    return showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Импорт завершен с ошибками'),
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Успешно: ${result.successCount}'),
+              Text('Ошибок: ${result.errors.length}'),
+              const SizedBox(height: 12),
+              const Text(
+                'Первые ошибки:',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 6),
+              ...result.errors.take(8).map((e) => Text('• $e')),
+              if (result.errors.length > 8)
+                Text('• ...и ещё ${result.errors.length - 8}'),
+            ],
+          ),
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Ок'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  _ImportParseResult _parseExcelRows(List<List<Data?>> rows) {
+    final errors = <String>[];
+    final warnings = <String>[];
+    final itemsToImport = <Map<String, dynamic>>[];
+
+    if (rows.isEmpty) {
+      errors.add('Нет строк для импорта');
+      return _ImportParseResult(items: itemsToImport, warnings: warnings, errors: errors);
+    }
+
+    final headerRow = rows.first;
+    final headerMap = _mapHeaderRow(headerRow);
+    if (!headerMap.values.contains('name')) {
+      errors.add('Не найдена колонка "Название"');
+      return _ImportParseResult(items: itemsToImport, warnings: warnings, errors: errors);
+    }
+
+    for (var i = 1; i < rows.length; i++) {
+      final row = rows[i];
+      final data = <String, dynamic>{};
+
+      for (var col = 0; col < row.length; col++) {
+        final key = headerMap[col];
+        if (key == null) continue;
+
+        final value = _cellToString(row[col]);
+        if (value == null) continue;
+
+        switch (key) {
+          case 'name':
+            data['name'] = value;
+            break;
+          case 'sku':
+            data['sku'] = value;
+            break;
+          case 'category':
+            data['category'] = value;
+            break;
+          case 'price':
+            data['price'] = _parseDouble(value) ?? 0;
+            break;
+          case 'quantity':
+            data['quantity'] = _parseInt(value) ?? 0;
+            break;
+          case 'description':
+            data['description'] = value;
+            break;
+          case 'warehouseCell':
+            data['warehouseCell'] = value;
+            break;
+          case 'condition':
+            data['condition'] = _normalizeCondition(value);
+            break;
+          case 'warehouse':
+            final warehouseId = _mapWarehouseNameToId(value);
+            if (warehouseId != null) {
+              data['warehouseId'] = warehouseId;
+            } else {
+              warnings.add('Строка ${i + 1}: склад "$value" не найден');
+            }
+            break;
+        }
+      }
+
+      if ((data['name'] as String?)?.isEmpty ?? true) {
+        warnings.add('Строка ${i + 1}: пропущено название товара');
+        continue;
+      }
+
+      data['price'] ??= 0;
+      data['quantity'] ??= 0;
+      data['condition'] ??= 'new';
+
+      itemsToImport.add(data);
+    }
+
+    return _ImportParseResult(
+      items: itemsToImport,
+      warnings: warnings,
+      errors: errors,
+    );
+  }
+
+  Map<int, String> _mapHeaderRow(List<Data?> headerRow) {
+    final headerMap = <int, String>{};
+    for (var i = 0; i < headerRow.length; i++) {
+      final header = _cellToString(headerRow[i]);
+      if (header == null) continue;
+      final normalized = _normalizeHeader(header);
+      final fieldKey = _headerAliases[normalized];
+      if (fieldKey != null) {
+        headerMap[i] = fieldKey;
+      }
+    }
+    return headerMap;
+  }
+
+  String? _cellToString(Data? cell) {
+    if (cell == null || cell.value == null) return null;
+    final value = cell.value.toString().trim();
+    return value.isEmpty ? null : value;
+  }
+
+  String _normalizeHeader(String value) {
+    return value
+        .toLowerCase()
+        .replaceAll(RegExp(r'\s+'), '')
+        .replaceAll(RegExp(r'[_\-]'), '');
+  }
+
+  double? _parseDouble(String value) {
+    final cleaned = value
+        .replaceAll('₸', '')
+        .replaceAll('KZT', '')
+        .replaceAll(' ', '')
+        .replaceAll(',', '.')
+        .trim();
+    return double.tryParse(cleaned);
+  }
+
+  int? _parseInt(String value) {
+    final cleaned = value.replaceAll(' ', '').trim();
+    final parsed = int.tryParse(cleaned);
+    if (parsed != null) return parsed;
+    final asDouble = double.tryParse(cleaned.replaceAll(',', '.'));
+    return asDouble?.round();
+  }
+
+  String _normalizeCondition(String value) {
+    final normalized = value.toLowerCase();
+    if (normalized.contains('used') || normalized.contains('бу')) return 'used';
+    if (normalized.contains('refurb')) return 'refurbished';
+    return 'new';
+  }
+
+  String? _mapWarehouseNameToId(String warehouseName) {
+    final normalized = warehouseName.trim().toLowerCase();
+    for (final warehouse in warehouses) {
+      if (warehouse.name.trim().toLowerCase() == normalized) {
+        return warehouse.id;
+      }
+    }
+    return null;
   }
 
   Widget _buildItemsList({bool isMobile = false}) {
@@ -522,6 +934,12 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                           ),
                           const SizedBox(width: 8),
                           FilledButton.icon(
+                            onPressed: _importFromExcel,
+                            icon: const Icon(Icons.upload_file),
+                            label: const Text('Импорт Excel'),
+                          ),
+                          const SizedBox(width: 8),
+                          FilledButton.icon(
                             onPressed: () => _showItemDialog(context),
                             icon: const Icon(Icons.add),
                             label: const Text('Добавить товар'),
@@ -570,6 +988,11 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                               );
                             },
                             tooltip: 'Настройки принтера',
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.upload_file),
+                            onPressed: _importFromExcel,
+                            tooltip: 'Импорт Excel',
                           ),
                           IconButton(
                             icon: const Icon(Icons.add),
@@ -1428,4 +1851,26 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
     _searchController.dispose();
     super.dispose();
   }
+}
+
+class _ImportParseResult {
+  final List<Map<String, dynamic>> items;
+  final List<String> warnings;
+  final List<String> errors;
+
+  const _ImportParseResult({
+    required this.items,
+    required this.warnings,
+    required this.errors,
+  });
+}
+
+class _ImportResult {
+  final int successCount;
+  final List<String> errors;
+
+  const _ImportResult({
+    required this.successCount,
+    required this.errors,
+  });
 }

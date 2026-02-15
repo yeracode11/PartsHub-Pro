@@ -4,6 +4,7 @@ import 'package:autohub_b2b/models/order_model.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
 import 'package:dio/dio.dart';
+import 'package:autohub_b2b/services/auth/secure_storage_service.dart';
 
 class OrderDetailScreen extends StatefulWidget {
   final OrderModel order;
@@ -24,6 +25,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   String selectedPaymentStatus = 'pending';
   bool isSaving = false;
   List<WorkStageModel> workStages = [];
+  bool _canSeeWorkOrder = false;
 
   @override
   void initState() {
@@ -37,6 +39,25 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     } else {
       workStages = [];
     }
+    _loadBusinessType();
+  }
+
+  Future<void> _loadBusinessType() async {
+    final userData = await SecureStorageService().getUserData();
+    final rawType = userData?['businessType']?.toString();
+    final normalized = _normalizeBusinessType(rawType);
+    final canSee = normalized == 'service';
+
+    if (!mounted) return;
+
+    setState(() {
+      _canSeeWorkOrder = canSee;
+      if (!canSee) {
+        workStages = [];
+      } else if (workStages.isEmpty && widget.order.workStages == null) {
+        workStages = _getDefaultWorkStages();
+      }
+    });
   }
 
   Future<void> _saveOrder() async {
@@ -50,7 +71,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         data: {
           'status': selectedStatus,
           'paymentStatus': selectedPaymentStatus,
-          if (workStages.isNotEmpty)
+          if (_canSeeWorkOrder && workStages.isNotEmpty)
             'workStages': workStages.map((stage) => stage.toJson()).toList(),
         },
       );
@@ -259,6 +280,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     }
   }
 
+  String _normalizeBusinessType(String? rawType) {
+    if (rawType == null || rawType.isEmpty) return '';
+    final parts = rawType.split('.');
+    return parts.isNotEmpty ? parts.last.toLowerCase() : rawType.toLowerCase();
+  }
+
   @override
   Widget build(BuildContext context) {
     final numberFormat = NumberFormat('#,###', 'ru_RU');
@@ -456,7 +483,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             const SizedBox(height: 24),
 
             // Заказ-наряд по этапам работ
-            if (workStages.isNotEmpty)
+            if (_canSeeWorkOrder && workStages.isNotEmpty)
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(20),

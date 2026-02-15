@@ -66,6 +66,8 @@ dependencies:
   fl_chart: ^0.69.2
   image_picker: ^1.1.2
   cached_network_image: ^3.4.1
+  excel: ^4.0.6
+  file_picker: ^10.3.10
 
 dev_dependencies:
   flutter_test:
