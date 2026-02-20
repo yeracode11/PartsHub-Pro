@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/models/item_model.dart';
 import 'package:autohub_b2b/models/warehouse_model.dart';
@@ -6,7 +7,7 @@ import 'package:autohub_b2b/services/warehouse_service.dart';
 import 'package:autohub_b2b/widgets/items_filter_widget.dart';
 import 'package:intl/intl.dart';
 import 'package:dio/dio.dart';
-import 'package:excel/excel.dart';
+import 'package:excel/excel.dart' as excel;
 import 'package:file_picker/file_picker.dart';
 import 'package:autohub_b2b/services/api/api_client.dart';
 import 'package:autohub_b2b/screens/warehouse/item_edit_screen.dart';
@@ -85,7 +86,6 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
         });
       }
     } catch (e) {
-      print('Error loading warehouses: $e');
     }
   }
 
@@ -109,11 +109,6 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
       final response = await dio.get('/api/items', queryParameters: queryParams);
       final List<dynamic> data = response.data;
 
-      print('📦 Loaded ${data.length} items from API');
-      if (data.isNotEmpty) {
-        print('📦 First item sample: ${data[0]}');
-      }
-
       if (!mounted) return;
       
       try {
@@ -121,8 +116,6 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
           try {
             return ItemModel.fromJson(json);
           } catch (e) {
-            print('❌ Error parsing item: $e');
-            print('❌ Item data: $json');
             rethrow;
           }
         }).toList();
@@ -132,10 +125,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
           filteredItems = items;
           isLoading = false;
         });
-        
-        print('✅ Successfully parsed ${items.length} items');
       } catch (parseError) {
-        print('❌ Error parsing items: $parseError');
         if (!mounted) return;
         setState(() {
           error = 'Ошибка обработки данных: $parseError';
@@ -143,7 +133,6 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
         });
       }
     } catch (e) {
-      print('❌ Error loading items: $e');
       if (!mounted) return;
       
       setState(() {
@@ -185,11 +174,23 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
   }
 
   Future<void> _importFromExcel() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['xlsx'],
-      withData: true,
-    );
+    FilePickerResult? result;
+    try {
+      result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['xlsx'],
+        withData: true,
+      );
+    } on MissingPluginException {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('FilePicker не инициализирован. Перезапустите приложение.'),
+          ),
+        );
+      }
+      return;
+    }
 
     if (result == null || result.files.isEmpty) return;
 
@@ -204,8 +205,8 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
     }
 
     try {
-      final excel = Excel.decodeBytes(file.bytes!);
-      if (excel.tables.isEmpty) {
+      final workbook = excel.Excel.decodeBytes(file.bytes!);
+      if (workbook.tables.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Файл Excel пуст')),
@@ -214,7 +215,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
         return;
       }
 
-      final table = excel.tables.values.first;
+      final table = workbook.tables.values.first;
       if (table.rows.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -418,7 +419,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
     );
   }
 
-  _ImportParseResult _parseExcelRows(List<List<Data?>> rows) {
+  _ImportParseResult _parseExcelRows(List<List<excel.Data?>> rows) {
     final errors = <String>[];
     final warnings = <String>[];
     final itemsToImport = <Map<String, dynamic>>[];
@@ -501,7 +502,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
     );
   }
 
-  Map<int, String> _mapHeaderRow(List<Data?> headerRow) {
+  Map<int, String> _mapHeaderRow(List<excel.Data?> headerRow) {
     final headerMap = <int, String>{};
     for (var i = 0; i < headerRow.length; i++) {
       final header = _cellToString(headerRow[i]);
@@ -515,7 +516,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
     return headerMap;
   }
 
-  String? _cellToString(Data? cell) {
+  String? _cellToString(excel.Data? cell) {
     if (cell == null || cell.value == null) return null;
     final value = cell.value.toString().trim();
     return value.isEmpty ? null : value;

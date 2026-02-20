@@ -10,6 +10,8 @@ import 'dart:async';
 import 'package:blue_thermal_printer/blue_thermal_printer.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+void print(Object? object) {}
+
 /// Сервис для работы с термопринтером
 /// 
 /// Использует библиотеку `printing` для реальной печати на Windows

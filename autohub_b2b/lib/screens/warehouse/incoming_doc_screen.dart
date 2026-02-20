@@ -98,7 +98,6 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
             .toList();
       });
     } catch (e) {
-      print('Error loading customers: $e');
     }
   }
 

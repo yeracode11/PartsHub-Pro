@@ -158,10 +158,6 @@ export class TemplatesService {
   ): string {
     let result = template;
 
-    console.log('🔧 fillTemplate вызван:');
-    console.log('   Шаблон:', template);
-    console.log('   Переменные:', JSON.stringify(variables));
-
     for (const [key, value] of Object.entries(variables)) {
       // Регистронезависимая замена: {name}, {Name}, {NAME} и т.д.
       // Экранируем специальные символы в ключе для регулярного выражения
@@ -172,19 +168,15 @@ export class TemplatesService {
       result = result.replace(regex, value);
       
       if (beforeReplace !== result) {
-        console.log(`   ✅ Заменено {${key}} на: "${value}"`);
       } else {
-        console.log(`   ⚠️ Переменная {${key}} не найдена в шаблоне`);
         // Проверяем, есть ли переменная в другом регистре
         const testRegex = /\{[^}]+\}/gi;
         const matches = template.match(testRegex);
         if (matches) {
-          console.log(`   Найденные переменные в шаблоне: ${matches.join(', ')}`);
         }
       }
     }
 
-    console.log('   Результат:', result);
     return result;
   }
 }

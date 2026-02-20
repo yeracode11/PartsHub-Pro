@@ -23,8 +23,6 @@ export class AuthService {
    * Логин пользователя через email (для Firebase auth)
    */
   async login(loginDto: LoginDto) {
-    console.log('🔐 Login attempt for email:', loginDto.email);
-    
     // Ищем пользователя по email
     const user = await this.userRepository.findOne({
       where: { email: loginDto.email },
@@ -32,28 +30,22 @@ export class AuthService {
     });
 
     if (!user) {
-      console.log('❌ User not found:', loginDto.email);
       throw new UnauthorizedException('Неверный email или пароль');
     }
 
     if (!user.isActive) {
-      console.log('❌ User inactive:', user.id);
       throw new UnauthorizedException('Пользователь деактивирован');
     }
 
     // Проверяем пароль - обязательно должен быть
     if (!user.password) {
-      console.log('❌ User has no password set:', user.id);
       throw new UnauthorizedException('Пароль не установлен. Обратитесь к администратору.');
     }
 
     const isPasswordValid = await bcrypt.compare(loginDto.password, user.password);
     if (!isPasswordValid) {
-      console.log('❌ Invalid password for user:', user.id);
       throw new UnauthorizedException('Неверный email или пароль');
     }
-
-    console.log('✅ User authenticated:', user.id);
 
     // Генерируем JWT токены
     const payload = {
@@ -63,13 +55,8 @@ export class AuthService {
       role: user.role,
     };
 
-    console.log('🔐 Generating JWT with payload:', JSON.stringify(payload));
-    console.log('🔐 JWT_SECRET from env:', process.env.JWT_SECRET ? 'SET' : 'NOT SET');
-    
     const accessToken = this.jwtService.sign(payload);
     const refreshToken = this.jwtService.sign(payload, { expiresIn: '30d' });
-    
-    console.log('✅ Generated accessToken:', accessToken.substring(0, 50) + '...');
 
     return {
       accessToken,
@@ -130,15 +117,12 @@ export class AuthService {
    * Регистрация нового пользователя с созданием организации
    */
   async register(registerDto: RegisterDto) {
-    console.log('📝 Registration attempt for email:', registerDto.email);
-
     // Проверяем, не существует ли уже пользователь с таким email
     const existingUser = await this.userRepository.findOne({
       where: { email: registerDto.email },
     });
 
     if (existingUser) {
-      console.log('❌ User already exists:', registerDto.email);
       throw new ConflictException('Пользователь с таким email уже существует');
     }
 
@@ -146,14 +130,11 @@ export class AuthService {
     const organizationName = registerDto.organizationName || `${registerDto.name} - Организация`;
     const businessType = (registerDto.businessType as BusinessType) || BusinessType.SERVICE;
 
-    console.log('🏢 Creating organization:', organizationName);
     const organization = await this.organizationsService.create({
       name: organizationName,
       businessType: businessType,
       isActive: true,
     } as any);
-
-    console.log('✅ Organization created:', organization.id);
 
     // Хешируем пароль
     const hashedPassword = await bcrypt.hash(registerDto.password, 10);
@@ -169,7 +150,6 @@ export class AuthService {
     });
 
     const savedUser = await this.userRepository.save(user);
-    console.log('✅ User created:', savedUser.id);
 
     // Загружаем пользователя с организацией для ответа
     const userWithOrg = await this.userRepository.findOne({
@@ -178,7 +158,6 @@ export class AuthService {
     });
 
     if (!userWithOrg) {
-      console.error('❌ User not found after creation:', savedUser.id);
       throw new Error('Ошибка при создании пользователя');
     }
 
@@ -192,8 +171,6 @@ export class AuthService {
 
     const accessToken = this.jwtService.sign(payload);
     const refreshToken = this.jwtService.sign(payload, { expiresIn: '30d' });
-
-    console.log('✅ Registration successful for:', registerDto.email);
 
     return {
       accessToken,

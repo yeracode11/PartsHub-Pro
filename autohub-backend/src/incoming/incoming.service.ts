@@ -32,18 +32,12 @@ export class IncomingService {
   // Создание приходной накладной
   async create(organizationId: string, userId: string, dto: CreateIncomingDocDto): Promise<IncomingDoc> {
     try {
-      console.log('📦 IncomingService.create - Starting');
-      console.log('   organizationId:', organizationId);
-      console.log('   userId:', userId);
-      console.log('   dto.type:', dto.type);
-
       // Валидация типа
       if (!Object.values(IncomingDocType).includes(dto.type)) {
         throw new Error(`Invalid type: ${dto.type}. Must be one of: ${Object.values(IncomingDocType).join(', ')}`);
       }
 
       const docNumber = await this.generateDocNumber(organizationId);
-      console.log('   Generated docNumber:', docNumber);
 
       // Валидация userId
       if (!userId || userId.trim() === '') {
@@ -59,12 +53,7 @@ export class IncomingService {
 
       // Обработка supplierId - если пустая строка, то null
       const supplierId = dto.supplierId && dto.supplierId.trim() !== '' ? dto.supplierId : null;
-      
-      console.log('   Creating doc with userId:', userId);
-      console.log('   userId type:', typeof userId);
-      console.log('   userId length:', userId?.length);
-      console.log('   userId value (stringified):', JSON.stringify(userId));
-      
+
       // Проверяем, что userId действительно строка UUID
       if (typeof userId !== 'string' || userId.trim() === '') {
         throw new HttpException(
@@ -91,27 +80,9 @@ export class IncomingService {
       doc.docPhotos = dto.docPhotos || null;
       doc.status = IncomingDocStatus.DRAFT;
       doc.totalAmount = 0;
-      
-      console.log('   Doc object created:');
-      console.log('     organizationId:', doc.organizationId);
-      console.log('     createdById:', doc.createdById);
-      console.log('     createdById type:', typeof doc.createdById);
-      console.log('     createdById length:', doc.createdById?.length);
-      console.log('     docNumber:', doc.docNumber);
 
-      console.log('   Created doc entity, saving...');
-      console.log('   Doc object before save:');
-      console.log('     organizationId:', doc.organizationId);
-      console.log('     createdById:', doc.createdById);
-      console.log('     docNumber:', doc.docNumber);
-      console.log('     type:', doc.type);
-      console.log('     status:', doc.status);
-      
       // Проверяем, что createdById установлен перед сохранением
       if (!doc.createdById) {
-        console.error('   ❌ ERROR: createdById is not set!');
-        console.error('   userId parameter:', userId);
-        console.error('   userId type:', typeof userId);
         throw new HttpException(
           {
             statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
@@ -129,10 +100,6 @@ export class IncomingService {
       await queryRunner.startTransaction();
       
       try {
-        console.log('   Executing direct SQL insert...');
-        console.log('   createdById value for SQL:', doc.createdById);
-        console.log('   createdById type:', typeof doc.createdById);
-        
         // Используем прямой SQL запрос для гарантии передачи всех полей
         const insertResult = await queryRunner.query(
           `INSERT INTO "incoming_docs" (
@@ -170,9 +137,7 @@ export class IncomingService {
         );
         
         await queryRunner.commitTransaction();
-        
-        console.log('   Insert result:', JSON.stringify(insertResult, null, 2));
-        
+
         if (!insertResult || insertResult.length === 0) {
           await queryRunner.rollbackTransaction();
           throw new HttpException(
@@ -201,8 +166,6 @@ export class IncomingService {
           );
         }
         
-        console.log('✅ IncomingService.create - Success, doc ID:', createdDoc.id);
-        
         return createdDoc;
       } catch (error) {
         await queryRunner.rollbackTransaction();
@@ -211,13 +174,6 @@ export class IncomingService {
         await queryRunner.release();
       }
     } catch (error) {
-      console.error('❌ IncomingService.create - Error:', error);
-      console.error('   Error name:', error?.constructor?.name);
-      console.error('   Error message:', error?.message);
-      console.error('   Error code:', (error as any)?.code);
-      console.error('   Error detail:', (error as any)?.detail);
-      console.error('   Error stack:', error?.stack);
-      
       // Проверяем специфичные ошибки БД
       if ((error as any)?.code === '23505') {
         // Unique constraint violation

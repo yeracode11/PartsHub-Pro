@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Logger, Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
@@ -19,6 +19,8 @@ import { B2CModule } from './b2c/b2c.module';
 import { AutoDataModule } from './auto-data/auto-data.module';
 import { IncomingModule } from './incoming/incoming.module';
 import { WarehousesModule } from './warehouses/warehouses.module';
+
+const logger = new Logger('AppModule');
 
 @Module({
   imports: [
@@ -58,7 +60,7 @@ import { WarehousesModule } from './warehouses/warehouses.module';
             config.password = url.password ? String(decodeURIComponent(url.password)) : '';
             config.database = url.pathname.slice(1); // Убираем первый /
           } catch (error) {
-            console.error('❌ Error parsing DATABASE_URL:', error);
+            logger.error('Error parsing DATABASE_URL', error.stack);
             // Продолжаем с отдельными переменными
           }
         }
@@ -68,21 +70,9 @@ import { WarehousesModule } from './warehouses/warehouses.module';
           config.ssl = { rejectUnauthorized: false };
         }
 
-        // Логирование для диагностики
-        console.log('🔌 Database config:', {
-          host: config.host,
-          port: config.port,
-          username: config.username,
-          database: config.database,
-          passwordType: typeof config.password,
-          passwordLength: config.password ? config.password.length : 0,
-          passwordSet: !!config.password,
-          hasDatabaseUrl: !!process.env.DATABASE_URL,
-        });
-
         // Критическая проверка: пароль должен быть строкой
         if (typeof config.password !== 'string') {
-          console.error('❌ CRITICAL: password is not a string!', typeof config.password);
+          logger.error(`CRITICAL: password is not a string (${typeof config.password})`);
           config.password = String(config.password || '');
         }
 

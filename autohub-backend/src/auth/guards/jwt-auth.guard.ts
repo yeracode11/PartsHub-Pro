@@ -20,19 +20,14 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     ];
 
     if (publicRoutes.some(route => url.startsWith(route))) {
-      console.log('🔓 Public route, skipping auth:', url);
       return true;
     }
 
     // Проверяем есть ли токен
     const authHeader = request.headers.authorization;
     if (!authHeader) {
-      console.log('❌ JwtAuthGuard: No Authorization header for:', url);
       return false;
     }
-
-    console.log('🔐 JwtAuthGuard: Checking request to:', url);
-    console.log('🔐 JwtAuthGuard: Token present, calling Passport...');
 
     try {
       // Вызываем родительский метод для проверки токена
@@ -41,19 +36,14 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       // Обрабатываем результат (может быть boolean или Observable<boolean>)
       if (result instanceof Observable) {
         const value = await firstValueFrom(result);
-        console.log('🔐 JwtAuthGuard: Observable result:', value);
         return value === true;
       } else if (result instanceof Promise) {
         const value = await result;
-        console.log('🔐 JwtAuthGuard: Promise result:', value);
         return value === true;
       } else {
-        console.log('🔐 JwtAuthGuard: Direct result:', result);
         return result === true;
       }
     } catch (error) {
-      console.log('❌ JwtAuthGuard: Passport error:', error.message);
-      console.log('❌ JwtAuthGuard: Error stack:', error.stack);
       return false;
     }
   }

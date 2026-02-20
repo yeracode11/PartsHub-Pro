@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between } from 'typeorm';
 import { Order } from '../orders/entities/order.entity';
@@ -8,6 +8,8 @@ import { IncomingDoc, IncomingDocStatus } from '../incoming/entities/incoming-do
 
 @Injectable()
 export class DashboardService {
+  private readonly logger = new Logger(DashboardService.name);
+
   constructor(
     @InjectRepository(Order)
     private readonly orderRepository: Repository<Order>,
@@ -282,7 +284,7 @@ export class DashboardService {
 
       return { items: topItems };
     } catch (error) {
-      console.error('Error in getTopSellingItems:', error);
+      this.logger.error('Error in getTopSellingItems', error.stack);
       // Возвращаем пустой массив при ошибке
       return { items: [] };
     }
@@ -310,7 +312,7 @@ export class DashboardService {
         })),
       };
     } catch (error) {
-      console.error('Error in getLowStockItems:', error);
+      this.logger.error('Error in getLowStockItems', error.stack);
       return { items: [] };
     }
   }
@@ -355,7 +357,7 @@ export class DashboardService {
 
       return { categories };
     } catch (error) {
-      console.error('Error in getSalesByCategory:', error);
+      this.logger.error('Error in getSalesByCategory', error.stack);
       return { categories: [] };
     }
   }

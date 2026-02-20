@@ -29,7 +29,6 @@ export async function seedDatabase(dataSource: DataSource) {
       phone: '+77771234567',
       address: 'г. Алматы, ул. Тестовая 1',
     });
-    console.log('✅ Создана организация:', org.name);
   }
 
   // Создаем реального пользователя ersul143@gmail.com если не существует
@@ -46,7 +45,6 @@ export async function seedDatabase(dataSource: DataSource) {
       organizationId: org.id,
       isActive: true,
     });
-    console.log('✅ Создан пользователь:', realUser.email);
   }
 
   // Создаем тестового пользователя если не существует
@@ -63,10 +61,8 @@ export async function seedDatabase(dataSource: DataSource) {
       organizationId: org.id,
       isActive: true,
     });
-    console.log('✅ Создан тестовый пользователь:', testUser.email);
   }
 
-  console.log(`Заполняем данные для организации: ${org.name}`);
 
   // Создаем клиентов
   const customers = await customerRepo.save([
@@ -268,6 +264,5 @@ export async function seedDatabase(dataSource: DataSource) {
     await vehicleRepo.save(vehicleData);
   }
 
-  console.log('✅ База данных заполнена тестовыми данными!');
 }
 

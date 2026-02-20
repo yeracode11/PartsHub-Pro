@@ -1,4 +1,4 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards, Logger } from '@nestjs/common';
 import { DashboardService } from './dashboard.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -8,6 +8,8 @@ import { OrganizationsService } from '../organizations/organizations.service';
 @Controller('api/dashboard')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class DashboardController {
+  private readonly logger = new Logger(DashboardController.name);
+
   constructor(
     private readonly dashboardService: DashboardService,
     private readonly organizationsService: OrganizationsService,
@@ -72,7 +74,7 @@ export class DashboardController {
       }
       return await this.dashboardService.getTopSellingItems(organizationId, parseInt(limit) || 10);
     } catch (error) {
-      console.error('Error in getTopSellingItems controller:', error);
+      this.logger.error('Error in getTopSellingItems controller', error.stack);
       return { items: [] } as any;
     }
   }
@@ -89,7 +91,7 @@ export class DashboardController {
       }
       return await this.dashboardService.getLowStockItems(organizationId, parseInt(threshold) || 5);
     } catch (error) {
-      console.error('Error in getLowStockItems controller:', error);
+      this.logger.error('Error in getLowStockItems controller', error.stack);
       return { items: [] } as any;
     }
   }
@@ -103,7 +105,7 @@ export class DashboardController {
       }
       return await this.dashboardService.getSalesByCategory(organizationId);
     } catch (error) {
-      console.error('Error in getSalesByCategory controller:', error);
+      this.logger.error('Error in getSalesByCategory controller', error.stack);
       return { categories: [] } as any;
     }
   }

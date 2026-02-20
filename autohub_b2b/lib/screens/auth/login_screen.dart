@@ -23,10 +23,8 @@ class _LoginScreenState extends State<LoginScreen> {
     return Scaffold(
       body: BlocConsumer<AuthBloc, AuthState>(
         listener: (context, state) {
-          print('📱 LoginScreen listener: state = ${state.runtimeType}');
           
           if (state is AuthError) {
-            print('❌ LoginScreen ERROR: ${state.message}');
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(state.message),
@@ -35,7 +33,6 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             );
           } else if (state is AuthAuthenticated) {
-            print('✅ LoginScreen: User authenticated! Navigation should happen now');
           }
         },
         builder: (context, state) {

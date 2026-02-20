@@ -34,45 +34,12 @@ class BaseApiService {
             options.headers['Authorization'] = 'Bearer $token';
           }
           
-          if (Environment.enableApiLogs) {
-            print('🌐 REQUEST: ${options.method} ${options.path}');
-            print('   Headers: ${options.headers}');
-            if (options.data != null) {
-              print('   Data: ${options.data}');
-            }
-          }
-          
           return handler.next(options);
         },
         onResponse: (response, handler) {
-          if (Environment.enableApiLogs) {
-            print('✅ RESPONSE: ${response.statusCode} ${response.requestOptions.path}');
-            print('   Data: ${response.data}');
-          }
           return handler.next(response);
         },
         onError: (error, handler) async {
-          if (Environment.enableApiLogs) {
-            print('❌ ERROR: ${error.response?.statusCode} ${error.requestOptions.path}');
-            print('   Message: ${error.message}');
-            print('   Data: ${error.response?.data}');
-          }
-
-          // Обработка ошибок подключения
-          if (error.type == DioExceptionType.connectionError || 
-              error.type == DioExceptionType.connectionTimeout) {
-            if (Environment.enableApiLogs) {
-              print('⚠️ Connection Error - Backend server may be down');
-              print('   Check if backend is running on: ${error.requestOptions.baseUrl}');
-            }
-          }
-
-          // Обработка 401 - токен истек
-          if (error.response?.statusCode == 401) {
-            // Токен истек - пользователю нужно перелогиниться
-            print('⚠️ Token expired - user needs to re-login');
-          }
-
           return handler.next(error);
         },
       ),

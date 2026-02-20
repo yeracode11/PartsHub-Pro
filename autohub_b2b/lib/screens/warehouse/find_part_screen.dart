@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/models/item_model.dart';
@@ -31,6 +32,12 @@ class _FindPartScreenState extends State<FindPartScreen> with WidgetsBindingObse
   
   // Защита от повторных проверок доступа к камере
   bool _isCheckingCameraAccess = false;
+
+  void _log(String message) {
+    if (kDebugMode) {
+      debugPrint(message);
+    }
+  }
 
   @override
   void initState() {
@@ -68,7 +75,7 @@ class _FindPartScreenState extends State<FindPartScreen> with WidgetsBindingObse
     super.didChangeAppLifecycleState(state);
     // Проверяем разрешение при возврате приложения из фона (например, из настроек)
     if (state == AppLifecycleState.resumed) {
-      debugPrint('FindPartScreen: App resumed, checking permission...');
+      _log('FindPartScreen: App resumed, checking permission...');
       Future.delayed(const Duration(milliseconds: 500), () {
         if (mounted) {
           _checkCameraPermissionOnly(forceCheck: true);
@@ -84,11 +91,11 @@ class _FindPartScreenState extends State<FindPartScreen> with WidgetsBindingObse
     
     // Если уже проверяем и не форсируем, пропускаем
     if ((_isRequestingPermission || _isCheckingCameraAccess) && !forceCheck) {
-      debugPrint('FindPartScreen: Already checking permission, skipping...');
+      _log('FindPartScreen: Already checking permission, skipping...');
       return;
     }
     
-    debugPrint('FindPartScreen: _checkCameraPermissionOnly called (forceCheck: $forceCheck)');
+    _log('FindPartScreen: _checkCameraPermissionOnly called (forceCheck: $forceCheck)');
     
     setState(() {
       _isRequestingPermission = true;
@@ -99,11 +106,11 @@ class _FindPartScreenState extends State<FindPartScreen> with WidgetsBindingObse
     try {
       // Сначала проверяем статус через permission_handler
       PermissionStatus status = await Permission.camera.status;
-      debugPrint('FindPartScreen: Permission status: $status (isGranted: ${status.isGranted}, isDenied: ${status.isDenied}, isPermanentlyDenied: ${status.isPermanentlyDenied})');
+      _log('FindPartScreen: Permission status: $status (isGranted: ${status.isGranted}, isDenied: ${status.isDenied}, isPermanentlyDenied: ${status.isPermanentlyDenied})');
       
       // Если статус показывает granted, сразу запускаем камеру
       if (status.isGranted) {
-        debugPrint('FindPartScreen: Permission granted! Starting camera...');
+        _log('FindPartScreen: Permission granted! Starting camera...');
         if (!mounted) return;
         setState(() {
           _hasPermission = true;
@@ -113,7 +120,7 @@ class _FindPartScreenState extends State<FindPartScreen> with WidgetsBindingObse
         });
         Future.delayed(const Duration(milliseconds: 500), () {
           if (mounted && _hasPermission) {
-            debugPrint('FindPartScreen: Starting camera after permission check...');
+            _log('FindPartScreen: Starting camera after permission check...');
             _startScanning();
           }
         });
@@ -122,7 +129,7 @@ class _FindPartScreenState extends State<FindPartScreen> with WidgetsBindingObse
       
       // Если статус показывает denied, но пользователь говорит, что разрешил в настройках,
       // пробуем запустить камеру напрямую - это более надежный способ проверки
-      debugPrint('FindPartScreen: Permission status shows denied, but trying to start camera directly to verify...');
+      _log('FindPartScreen: Permission status shows denied, but trying to start camera directly to verify...');
       
       // Пробуем запустить камеру для проверки реального доступа
       try {
@@ -134,7 +141,7 @@ class _FindPartScreenState extends State<FindPartScreen> with WidgetsBindingObse
         
         // Пробуем запустить камеру
         await _scannerController.start();
-        debugPrint('FindPartScreen: Camera started successfully! Permission is actually granted.');
+        _log('FindPartScreen: Camera started successfully! Permission is actually granted.');
         
         // Если камера запустилась, значит разрешение есть
         if (!mounted) return;
@@ -147,12 +154,12 @@ class _FindPartScreenState extends State<FindPartScreen> with WidgetsBindingObse
         });
         return;
       } catch (e) {
-        debugPrint('FindPartScreen: Camera failed to start: $e');
+        _log('FindPartScreen: Camera failed to start: $e');
         // Если камера не запустилась, проверяем причину
         final errorStr = e.toString().toLowerCase();
         if (errorStr.contains('permission') || errorStr.contains('denied') || errorStr.contains('authorized')) {
           // Это ошибка разрешения
-          debugPrint('FindPartScreen: Camera access denied');
+          _log('FindPartScreen: Camera access denied');
           if (!mounted) return;
           setState(() {
             _hasPermission = false;
@@ -167,11 +174,11 @@ class _FindPartScreenState extends State<FindPartScreen> with WidgetsBindingObse
           return;
         } else {
           // Другая ошибка - возможно, камера занята или недоступна
-          debugPrint('FindPartScreen: Camera error (not permission-related): $e');
+          _log('FindPartScreen: Camera error (not permission-related): $e');
           // Пробуем еще раз проверить статус
           final newStatus = await Permission.camera.status;
           if (newStatus.isGranted) {
-            debugPrint('FindPartScreen: Permission status updated to granted!');
+            _log('FindPartScreen: Permission status updated to granted!');
             if (!mounted) return;
             setState(() {
               _hasPermission = true;
@@ -196,7 +203,7 @@ class _FindPartScreenState extends State<FindPartScreen> with WidgetsBindingObse
         }
       }
     } catch (e) {
-      debugPrint('FindPartScreen: Error checking permission: $e');
+      _log('FindPartScreen: Error checking permission: $e');
       if (!mounted) return;
       setState(() {
         _hasPermission = false;
@@ -217,7 +224,7 @@ class _FindPartScreenState extends State<FindPartScreen> with WidgetsBindingObse
       return;
     }
     
-    debugPrint('FindPartScreen: Checking camera permission status...');
+    _log('FindPartScreen: Checking camera permission status...');
     
     setState(() {
       _isRequestingPermission = true;
@@ -228,13 +235,13 @@ class _FindPartScreenState extends State<FindPartScreen> with WidgetsBindingObse
     try {
       // Проверяем статус разрешения
       PermissionStatus status = await Permission.camera.status;
-      debugPrint('FindPartScreen: Permission status: $status (isGranted: ${status.isGranted}, isDenied: ${status.isDenied}, isPermanentlyDenied: ${status.isPermanentlyDenied})');
+      _log('FindPartScreen: Permission status: $status (isGranted: ${status.isGranted}, isDenied: ${status.isDenied}, isPermanentlyDenied: ${status.isPermanentlyDenied})');
       
       if (!mounted) return;
       
       if (status.isGranted) {
         // Разрешение есть - запускаем камеру
-        debugPrint('FindPartScreen: Permission granted, starting camera...');
+        _log('FindPartScreen: Permission granted, starting camera...');
         setState(() {
           _hasPermission = true;
           _errorMessage = null;
@@ -253,9 +260,9 @@ class _FindPartScreenState extends State<FindPartScreen> with WidgetsBindingObse
       } else if (status.isDenied) {
         // Разрешение еще не запрашивалось - запрашиваем через системный диалог iOS
         // Это нужно, чтобы iOS зарегистрировал запрос и добавил раздел "Камера" в настройки
-        debugPrint('FindPartScreen: Permission denied, requesting...');
+        _log('FindPartScreen: Permission denied, requesting...');
         status = await Permission.camera.request();
-        debugPrint('FindPartScreen: Permission request result: $status');
+        _log('FindPartScreen: Permission request result: $status');
         
         if (!mounted) return;
         
@@ -285,7 +292,7 @@ class _FindPartScreenState extends State<FindPartScreen> with WidgetsBindingObse
         }
       } else {
         // Разрешение окончательно отклонено - показываем сообщение
-        debugPrint('FindPartScreen: Permission permanently denied');
+        _log('FindPartScreen: Permission permanently denied');
         setState(() {
           _hasPermission = false;
           _errorMessage = 'Необходимо разрешить доступ к камере в настройках приложения';
@@ -294,7 +301,7 @@ class _FindPartScreenState extends State<FindPartScreen> with WidgetsBindingObse
         });
       }
     } catch (e) {
-      debugPrint('FindPartScreen: Error checking permission: $e');
+      _log('FindPartScreen: Error checking permission: $e');
       if (!mounted) return;
       
       setState(() {
@@ -324,7 +331,7 @@ class _FindPartScreenState extends State<FindPartScreen> with WidgetsBindingObse
     if (_lastScannedCode == code && 
         _lastScanTime != null && 
         now.difference(_lastScanTime!) < const Duration(seconds: 1)) {
-      debugPrint('FindPartScreen: Ignoring duplicate scan of same code: $code');
+      _log('FindPartScreen: Ignoring duplicate scan of same code: $code');
       return;
     }
     
@@ -332,7 +339,7 @@ class _FindPartScreenState extends State<FindPartScreen> with WidgetsBindingObse
     _lastScannedCode = code;
     _lastScanTime = now;
     
-    debugPrint('FindPartScreen: Processing scan of code: "$code"');
+    _log('FindPartScreen: Processing scan of code: "$code"');
     
     // Останавливаем сканирование, чтобы не обрабатывать повторно
     _stopScanning();
@@ -351,13 +358,13 @@ class _FindPartScreenState extends State<FindPartScreen> with WidgetsBindingObse
 
   Future<void> _findItemByCode(String code) async {
     try {
-      debugPrint('FindPartScreen: Searching for item with code: "$code"');
+      _log('FindPartScreen: Searching for item with code: "$code"');
       final item = await _itemsService.findItemByCode(code);
       
       if (!mounted) return;
       
       if (item != null) {
-        debugPrint('FindPartScreen: Found item - ID: ${item.id}, Name: ${item.name}, SKU: ${item.sku}');
+        _log('FindPartScreen: Found item - ID: ${item.id}, Name: ${item.name}, SKU: ${item.sku}');
         setState(() {
           _foundItem = item;
           _isLoading = false;
@@ -366,7 +373,7 @@ class _FindPartScreenState extends State<FindPartScreen> with WidgetsBindingObse
         // Показываем информацию о найденном товаре
         _showItemDetail(item);
       } else {
-        debugPrint('FindPartScreen: Item not found for code: "$code"');
+        _log('FindPartScreen: Item not found for code: "$code"');
         setState(() {
           _isLoading = false;
           _errorMessage = 'Запчасть с кодом "$code" не найдена';
@@ -452,21 +459,21 @@ class _FindPartScreenState extends State<FindPartScreen> with WidgetsBindingObse
 
   void _startScanning() async {
     if (!mounted) {
-      debugPrint('FindPartScreen: _startScanning skipped - not mounted');
+      _log('FindPartScreen: _startScanning skipped - not mounted');
       return;
     }
     
     // Проверяем разрешение перед запуском
     if (!_hasPermission) {
-      debugPrint('FindPartScreen: No permission, checking...');
+      _log('FindPartScreen: No permission, checking...');
       final status = await Permission.camera.status;
       if (status.isGranted) {
-        debugPrint('FindPartScreen: Permission granted, updating state...');
+        _log('FindPartScreen: Permission granted, updating state...');
         setState(() {
           _hasPermission = true;
         });
       } else {
-        debugPrint('FindPartScreen: Permission not granted, requesting...');
+        _log('FindPartScreen: Permission not granted, requesting...');
         _checkCameraPermission();
         return;
       }
@@ -474,11 +481,11 @@ class _FindPartScreenState extends State<FindPartScreen> with WidgetsBindingObse
     
     // Если уже сканируем, не запускаем повторно
     if (_isScanning) {
-      debugPrint('FindPartScreen: Already scanning, skipping start');
+      _log('FindPartScreen: Already scanning, skipping start');
       return;
     }
     
-    debugPrint('FindPartScreen: Starting camera...');
+    _log('FindPartScreen: Starting camera...');
     
     // Сбрасываем последний отсканированный код при начале нового сканирования
     _lastScannedCode = null;
@@ -504,7 +511,7 @@ class _FindPartScreenState extends State<FindPartScreen> with WidgetsBindingObse
       }
       
       await _scannerController.start();
-      debugPrint('FindPartScreen: Camera started successfully');
+      _log('FindPartScreen: Camera started successfully');
       
       // Убеждаемся, что состояние обновлено
       if (mounted) {
@@ -513,12 +520,12 @@ class _FindPartScreenState extends State<FindPartScreen> with WidgetsBindingObse
         });
       }
     } catch (e) {
-      debugPrint('FindPartScreen: Error starting camera: $e');
+      _log('FindPartScreen: Error starting camera: $e');
       
       // Если ошибка "already started", камера уже работает - это нормально
       final errorStr = e.toString().toLowerCase();
       if (errorStr.contains('already started')) {
-        debugPrint('FindPartScreen: Camera already started, continuing...');
+        _log('FindPartScreen: Camera already started, continuing...');
         if (mounted) {
           setState(() {
             _isScanning = true;
@@ -621,7 +628,7 @@ class _FindPartScreenState extends State<FindPartScreen> with WidgetsBindingObse
               const SizedBox(height: 24),
               ElevatedButton.icon(
                 onPressed: () async {
-                  debugPrint('FindPartScreen: Requesting camera permission via mobile_scanner...');
+                  _log('FindPartScreen: Requesting camera permission via mobile_scanner...');
                   
                   // Пробуем запустить камеру через mobile_scanner - это может показать системный диалог iOS
                   try {
@@ -635,7 +642,7 @@ class _FindPartScreenState extends State<FindPartScreen> with WidgetsBindingObse
                     
                     // Проверяем статус разрешения после попытки запуска
                     final status = await Permission.camera.status;
-                    debugPrint('FindPartScreen: Permission status after scanner start: $status');
+                    _log('FindPartScreen: Permission status after scanner start: $status');
                     
                     if (status.isGranted) {
                       if (mounted) {
@@ -661,14 +668,14 @@ class _FindPartScreenState extends State<FindPartScreen> with WidgetsBindingObse
                       }
                     }
                   } catch (e) {
-                    debugPrint('FindPartScreen: Error requesting permission: $e');
+                    _log('FindPartScreen: Error requesting permission: $e');
                     try {
                       await _scannerController.stop();
                     } catch (_) {}
                     
                     // Проверяем статус разрешения
                     final status = await Permission.camera.status;
-                    debugPrint('FindPartScreen: Permission status after error: $status');
+                    _log('FindPartScreen: Permission status after error: $status');
                     
                     if (mounted) {
                       if (status.isGranted) {
@@ -704,13 +711,13 @@ class _FindPartScreenState extends State<FindPartScreen> with WidgetsBindingObse
               const SizedBox(height: 16),
               ElevatedButton.icon(
                 onPressed: () async {
-                  debugPrint('FindPartScreen: Opening app settings...');
+                  _log('FindPartScreen: Opening app settings...');
                   await openAppSettings();
                   // Проверяем разрешение после возврата из настроек
                   // Используем более длительную задержку, чтобы дать время iOS обновить статус
                   Future.delayed(const Duration(seconds: 2), () {
                     if (mounted) {
-                      debugPrint('FindPartScreen: Rechecking permission after returning from settings...');
+                      _log('FindPartScreen: Rechecking permission after returning from settings...');
                       _checkCameraPermissionOnly(forceCheck: true);
                     }
                   });
@@ -752,7 +759,7 @@ class _FindPartScreenState extends State<FindPartScreen> with WidgetsBindingObse
           controller: _scannerController,
           onDetect: _onBarcodeDetect,
           errorBuilder: (context, error, child) {
-            debugPrint('FindPartScreen: MobileScanner error: $error');
+            _log('FindPartScreen: MobileScanner error: $error');
             return Container(
               color: Colors.black,
               child: Center(

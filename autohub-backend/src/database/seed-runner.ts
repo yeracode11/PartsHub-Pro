@@ -15,15 +15,12 @@ const dataSource = new DataSource({
 async function run() {
   try {
     await dataSource.initialize();
-    console.log('✅ Подключение к БД установлено');
     
     await seedDatabase(dataSource);
     
     await dataSource.destroy();
-    console.log('✅ Готово!');
     process.exit(0);
   } catch (error) {
-    console.error('❌ Ошибка:', error);
     process.exit(1);
   }
 }

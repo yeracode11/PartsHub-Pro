@@ -87,7 +87,6 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
       final ready = response.data['ready'] ?? false;
       final needsAuth = response.data['needsAuth'] ?? false;
       
-      print('📱 WhatsApp Status: ready=$ready, needsAuth=$needsAuth');
       
       setState(() {
         isWhatsAppReady = ready;
@@ -98,7 +97,6 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
       if (!ready && needsAuth) {
         final qrResponse = await dio.get('/api/whatsapp/qr');
         final qrData = qrResponse.data['qrCode'];
-        print('📲 QR Code received: ${qrData != null ? "Yes" : "No"}');
         setState(() {
           qrCode = qrData;
         });
@@ -108,7 +106,6 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
         });
       }
     } catch (e) {
-      print('❌ Error checking WhatsApp status: $e');
     }
   }
 
@@ -261,7 +258,6 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
         templates = List<Map<String, dynamic>>.from(response.data);
       });
     } catch (e) {
-      print('Error loading templates: $e');
     }
   }
 
@@ -273,9 +269,7 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
             .where((c) => c['phone'] != null && c['phone'].toString().isNotEmpty)
             .toList();
       });
-      print('✅ Loaded ${customers.length} customers with phone numbers');
     } catch (e) {
-      print('❌ Error loading customers: $e');
     }
   }
 
@@ -293,7 +287,6 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
         historyStats = statsResponse.data;
       });
     } catch (e) {
-      print('Error loading history: $e');
     }
   }
 
@@ -676,7 +669,6 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
                                 child: ElevatedButton(
                                   onPressed: canSend
                                       ? () {
-                                          print('🚀 Sending bulk: ready=$isWhatsAppReady, selected=${selectedCustomers.length}');
                                           _sendBulkMessages(template['content']);
                                         }
                                       : null,

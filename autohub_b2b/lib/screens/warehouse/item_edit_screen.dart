@@ -87,7 +87,6 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
         _warehouses = warehouses;
       });
     } catch (e) {
-      print('Error loading warehouses: $e');
     }
   }
 

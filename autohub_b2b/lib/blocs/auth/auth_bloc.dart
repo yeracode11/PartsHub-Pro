@@ -24,7 +24,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       final token = await _storage.getAuthToken();
 
       if (userData != null && token != null) {
-        print('✅ AuthBloc: Found saved user data, restoring session');
         // Восстанавливаем пользователя из сохраненных данных
         try {
           final userModel = UserModel(
@@ -36,18 +35,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             createdAt: DateTime.parse(userData['createdAt'] ?? DateTime.now().toIso8601String()),
           );
           emit(AuthAuthenticated(userModel));
-          print('✅ AuthBloc: User session restored');
         } catch (e) {
-          print('❌ AuthBloc: Error restoring user session: $e');
           await _storage.clearAll();
           emit(AuthUnauthenticated());
         }
       } else {
-        print('ℹ️ AuthBloc: No saved user data found');
         emit(AuthUnauthenticated());
       }
     } catch (e) {
-      print('❌ AuthBloc: Error checking auth - $e');
       emit(AuthError(e.toString()));
     }
   }
@@ -55,12 +50,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   Future<void> _onSignInRequested(
       AuthSignInRequested event, Emitter<AuthState> emit) async {
     try {
-      print('🔐 AuthBloc: Starting sign in...');
-      
       // Очищаем старые токены перед входом
       await _storage.clearAll();
-      print('🧹 Cleared old tokens');
-      
       emit(AuthLoading());
       
       // Шаг 1: Прямая авторизация через наш бэкенд
@@ -71,10 +62,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       });
 
       final jwtData = jwtResponse.data;
-      print('✅ AuthBloc: JWT auth successful!');
-      print('   User: ${jwtData['user']['name']}');
-      print('   Role: ${jwtData['user']['role']}');
-      print('   Organization: ${jwtData['user']['organization']['name']}');
 
       // Шаг 3: Создаем UserModel из данных бэкенда
       final userModel = UserModel(
@@ -103,16 +90,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         refreshToken: jwtData['refreshToken'],
       );
       
-      print('✅ AuthBloc: JWT tokens and user data saved');
       emit(AuthAuthenticated(userModel));
-      print('✅ AuthBloc: AuthAuthenticated state emitted');
     } on DioException catch (e) {
-      print('❌ AuthBloc: DioException');
-      print('   Type: ${e.type}');
-      print('   Message: ${e.message}');
-      print('   Response: ${e.response?.data}');
-      print('   Status Code: ${e.response?.statusCode}');
-      
       // Обработка ошибок подключения
       if (e.type == DioExceptionType.connectionError || 
           e.type == DioExceptionType.connectionTimeout ||
@@ -131,7 +110,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         emit(AuthError('Ошибка подключения к серверу'));
       }
     } catch (e) {
-      print('❌ AuthBloc: Generic error - $e');
       emit(AuthError('Произошла ошибка: $e'));
     }
   }
@@ -168,12 +146,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   Future<void> _onSignUpRequested(
       AuthSignUpRequested event, Emitter<AuthState> emit) async {
     try {
-      print('📝 AuthBloc: Starting registration...');
-      
       // Очищаем старые токены перед регистрацией
       await _storage.clearAll();
-      print('🧹 Cleared old tokens');
-      
       emit(AuthLoading());
       
       // Регистрация через наш бэкенд
@@ -187,10 +161,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       });
 
       final registerData = registerResponse.data;
-      print('✅ AuthBloc: Registration successful!');
-      print('   User: ${registerData['user']['name']}');
-      print('   Role: ${registerData['user']['role']}');
-      print('   Organization: ${registerData['user']['organization']['name']}');
 
       // Создаем UserModel из данных бэкенда
       final userModel = UserModel(
@@ -219,16 +189,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         refreshToken: registerData['refreshToken'],
       );
       
-      print('✅ AuthBloc: JWT tokens and user data saved');
       emit(AuthAuthenticated(userModel));
-      print('✅ AuthBloc: AuthAuthenticated state emitted');
     } on DioException catch (e) {
-      print('❌ AuthBloc: DioException');
-      print('   Type: ${e.type}');
-      print('   Message: ${e.message}');
-      print('   Response: ${e.response?.data}');
-      print('   Status Code: ${e.response?.statusCode}');
-      
       // Обработка ошибок подключения
       if (e.type == DioExceptionType.connectionError || 
           e.type == DioExceptionType.connectionTimeout ||
@@ -247,7 +209,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         emit(AuthError('Ошибка подключения к серверу'));
       }
     } catch (e) {
-      print('❌ AuthBloc: Generic error - $e');
       emit(AuthError('Произошла ошибка: $e'));
     }
   }
@@ -255,13 +216,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   Future<void> _onSignOutRequested(
       AuthSignOutRequested event, Emitter<AuthState> emit) async {
     try {
-      print('🚪 AuthBloc: Signing out...');
       await _storage.clearAll();
-      print('✅ AuthBloc: Storage cleared');
       emit(AuthUnauthenticated());
-      print('✅ AuthBloc: AuthUnauthenticated state emitted');
     } catch (e) {
-      print('❌ AuthBloc: Error signing out: $e');
       emit(AuthError(e.toString()));
     }
   }
@@ -269,8 +226,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   Future<void> _onProfileUpdated(
       AuthProfileUpdated event, Emitter<AuthState> emit) async {
     try {
-      print('📝 AuthBloc: Updating profile...');
-      
       // Обновляем сохраненные данные пользователя
       await _storage.saveUserData({
         'uid': event.user.uid,
@@ -283,9 +238,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       
       // Обновляем состояние
       emit(AuthAuthenticated(event.user));
-      print('✅ AuthBloc: Profile updated');
     } catch (e) {
-      print('❌ AuthBloc: Error updating profile: $e');
       emit(AuthError(e.toString()));
     }
   }

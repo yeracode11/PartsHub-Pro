@@ -6,6 +6,7 @@ import {
   UseGuards,
   HttpException,
   HttpStatus,
+  Logger,
 } from '@nestjs/common';
 import { WhatsAppService } from './whatsapp.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -17,6 +18,8 @@ import { UserRole } from '../common/enums/user-role.enum';
 @Controller('api/whatsapp')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class WhatsAppController {
+  private readonly logger = new Logger(WhatsAppController.name);
+
   constructor(private readonly whatsappService: WhatsAppService) {}
 
   /**
@@ -48,7 +51,7 @@ export class WhatsAppController {
     
     // Инициализируем сессию, если её еще нет
     this.whatsappService.initializeUserSession(userId).catch(err => {
-      console.error('Ошибка инициализации сессии:', err);
+      this.logger.error('Ошибка инициализации сессии', err.stack);
     });
     
     const qrCode = this.whatsappService.getQRCode(userId);
@@ -162,13 +165,10 @@ export class WhatsAppController {
         total: recipients.length,
       };
     } catch (error) {
-      // Детальное логирование ошибки
-      console.error('❌ Ошибка массовой рассылки:', {
-        message: error.message,
-        stack: error.stack,
-        recipientsCount: recipients.length,
-        organizationId: user.organizationId,
-      });
+      this.logger.error(
+        'Ошибка массовой рассылки',
+        error.stack,
+      );
 
       throw new HttpException(
         error.message || 'Ошибка массовой рассылки',

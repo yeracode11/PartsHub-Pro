@@ -11,7 +11,6 @@ class WarehouseService {
       final List<dynamic> data = response.data;
       return data.map((json) => Warehouse.fromJson(json)).toList();
     } catch (e) {
-      print('Error in getWarehouses: $e');
       throw Exception('Failed to load warehouses: $e');
     }
   }
@@ -22,7 +21,6 @@ class WarehouseService {
       final response = await _apiClient.dio.get('/api/warehouses/$id');
       return Warehouse.fromJson(response.data);
     } catch (e) {
-      print('Error in getWarehouse: $e');
       throw Exception('Failed to load warehouse: $e');
     }
   }
@@ -45,7 +43,6 @@ class WarehouseService {
       });
       return Warehouse.fromJson(response.data);
     } catch (e) {
-      print('Error in createWarehouse: $e');
       throw Exception('Failed to create warehouse: $e');
     }
   }
@@ -69,7 +66,6 @@ class WarehouseService {
       });
       return Warehouse.fromJson(response.data);
     } catch (e) {
-      print('Error in updateWarehouse: $e');
       throw Exception('Failed to update warehouse: $e');
     }
   }
@@ -79,7 +75,6 @@ class WarehouseService {
     try {
       await _apiClient.dio.delete('/api/warehouses/$id');
     } catch (e) {
-      print('Error in deleteWarehouse: $e');
       throw Exception('Failed to delete warehouse: $e');
     }
   }
@@ -90,7 +85,6 @@ class WarehouseService {
       final response = await _apiClient.dio.get('/api/warehouses/$warehouseId/items-count');
       return response.data['count'] ?? 0;
     } catch (e) {
-      print('Error in getItemsCount: $e');
       return 0;
     }
   }
@@ -104,7 +98,6 @@ class WarehouseService {
       final List<dynamic> data = response.data;
       return data.map((json) => WarehouseTransfer.fromJson(json)).toList();
     } catch (e) {
-      print('Error in getTransfers: $e');
       throw Exception('Failed to load transfers: $e');
     }
   }
@@ -127,7 +120,6 @@ class WarehouseService {
       });
       return WarehouseTransfer.fromJson(response.data);
     } catch (e) {
-      print('Error in createTransfer: $e');
       throw Exception('Failed to create transfer: $e');
     }
   }
@@ -143,7 +135,6 @@ class WarehouseService {
       });
       return WarehouseTransfer.fromJson(response.data);
     } catch (e) {
-      print('Error in updateTransferStatus: $e');
       throw Exception('Failed to update transfer status: $e');
     }
   }
@@ -153,7 +144,6 @@ class WarehouseService {
     try {
       await _apiClient.dio.delete('/api/warehouse-transfers/$id');
     } catch (e) {
-      print('Error in deleteTransfer: $e');
       throw Exception('Failed to delete transfer: $e');
     }
   }

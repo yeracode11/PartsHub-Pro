@@ -93,7 +93,6 @@ class ItemDetailScreen extends StatelessWidget {
                   child: CircularProgressIndicator(),
                 ),
                 errorWidget: (context, url, error) {
-                  print('❌ Error loading image: $url, error: $error');
                   return const Center(
                     child: Icon(Icons.image_not_supported, size: 64, color: Colors.grey),
                   );

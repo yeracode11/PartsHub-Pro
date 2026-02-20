@@ -23,7 +23,6 @@ import 'package:autohub_b2b/screens/profile/profile_screen.dart';
 import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/models/user_model.dart';
 import 'package:autohub_b2b/services/auth/secure_storage_service.dart';
-import 'package:autohub_b2b/test_print_simple.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -58,12 +57,7 @@ class AutoHubApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
         builder: (context, child) {
-          return BlocListener<AuthBloc, AuthState>(
-            listener: (context, state) {
-              print('🎯 App BlocListener: state changed to ${state.runtimeType}');
-            },
-            child: child!,
-          );
+          return child!;
         },
         home: const AuthWrapper(),
       ),
@@ -79,11 +73,8 @@ class AuthWrapper extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocBuilder<AuthBloc, AuthState>(
       builder: (context, state) {
-        print('🏠 AuthWrapper BlocBuilder: Current state = ${state.runtimeType}');
-        
         // Загрузка
         if (state is AuthInitial || state is AuthLoading) {
-          print('🏠 AuthWrapper: Showing loading screen');
           return const Scaffold(
             body: Center(
               child: CircularProgressIndicator(),
@@ -93,12 +84,10 @@ class AuthWrapper extends StatelessWidget {
         
         // Авторизован - показываем главный экран
         if (state is AuthAuthenticated) {
-          print('🏠 AuthWrapper: User authenticated, showing MainScreen');
           return const MainScreen();
         }
         
         // Не авторизован или ошибка - показываем экран входа
-        print('🏠 AuthWrapper: Showing LoginScreen');
         return const LoginScreen();
       },
     );
@@ -366,40 +355,6 @@ class _MainScreenState extends State<MainScreen> {
                             label: 'Настройки',
                             index: 7,
                           ),
-                        // Кнопка тестовой печати (для отладки)
-                        const SizedBox(height: 8),
-                        Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 8),
-                          decoration: BoxDecoration(
-                            color: Colors.orange.shade50,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.orange.shade200),
-                          ),
-                          child: ListTile(
-                            dense: true,
-                            leading: const Icon(
-                              Icons.bug_report,
-                              color: Colors.orange,
-                              size: 20,
-                            ),
-                            title: const Text(
-                              '🧪 Тест печати',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.orange,
-                              ),
-                            ),
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => const TestPrintSimple(),
-                                ),
-                              );
-                            },
-                          ),
-                        ),
                       ],
                     ),
                   ),
@@ -692,29 +647,6 @@ class _MainScreenState extends State<MainScreen> {
                     index: 7,
                     context: context,
                   ),
-                // Кнопка тестовой печати (для отладки)
-                ListTile(
-                  leading: const Icon(
-                    Icons.bug_report,
-                    color: Colors.orange,
-                  ),
-                  title: const Text(
-                    '🧪 Тест печати',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  onTap: () {
-                    Navigator.pop(context); // Закрыть drawer
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const TestPrintSimple(),
-                      ),
-                    );
-                  },
-                ),
               ],
             ),
           ),

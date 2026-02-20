@@ -52,7 +52,6 @@ export class UsersController {
     @CurrentUser() user: any,
     @Body() updateDto: UpdateUserDto,
   ) {
-    console.log('📝 Updating profile for user:', user.id);
     const updatedUser = await this.usersService.updateProfile(user.id, updateDto);
     
     // Загружаем с организацией для ответа

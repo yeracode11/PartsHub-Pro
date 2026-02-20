@@ -41,7 +41,6 @@ class _ServiceRemindersWidgetState extends State<ServiceRemindersWidget> {
       if (!mounted) return;
       
       setState(() => isLoading = false);
-      print('Error loading upcoming service: $e');
     }
   }
 

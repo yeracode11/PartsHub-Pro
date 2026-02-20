@@ -719,7 +719,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       final itemSku = item != null ? item['sku'] as String? : null;
                       
                       // Debug
-                      debugPrint('📦 Rendering item: $itemName, image: $firstImage, sku: $itemSku');
 
                       return Container(
                         margin: const EdgeInsets.only(bottom: 16),

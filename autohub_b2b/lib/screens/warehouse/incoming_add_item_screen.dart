@@ -163,7 +163,6 @@ class _IncomingAddItemScreenState extends State<IncomingAddItemScreen> {
         }
       }
     } catch (e) {
-      print('Ошибка поиска товара по штрих-коду: $e');
       _skuController.text = barcode;
     } finally {
       if (mounted) {

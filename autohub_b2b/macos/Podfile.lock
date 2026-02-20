@@ -1,6 +1,8 @@
 PODS:
   - blue_thermal_printer (0.0.1):
     - FlutterMacOS
+  - file_picker (0.0.1):
+    - FlutterMacOS
   - file_selector_macos (0.0.1):
     - FlutterMacOS
   - FlutterMacOS (1.0.0)
@@ -45,6 +47,7 @@ PODS:
 
 DEPENDENCIES:
   - blue_thermal_printer (from `Flutter/ephemeral/.symlinks/plugins/blue_thermal_printer/macos`)
+  - file_picker (from `Flutter/ephemeral/.symlinks/plugins/file_picker/macos`)
   - file_selector_macos (from `Flutter/ephemeral/.symlinks/plugins/file_selector_macos/macos`)
   - FlutterMacOS (from `Flutter/ephemeral`)
   - mobile_scanner (from `Flutter/ephemeral/.symlinks/plugins/mobile_scanner/macos`)
@@ -61,6 +64,8 @@ SPEC REPOS:
 EXTERNAL SOURCES:
   blue_thermal_printer:
     :path: Flutter/ephemeral/.symlinks/plugins/blue_thermal_printer/macos
+  file_picker:
+    :path: Flutter/ephemeral/.symlinks/plugins/file_picker/macos
   file_selector_macos:
     :path: Flutter/ephemeral/.symlinks/plugins/file_selector_macos/macos
   FlutterMacOS:
@@ -80,6 +85,7 @@ EXTERNAL SOURCES:
 
 SPEC CHECKSUMS:
   blue_thermal_printer: f2dde78e2fb9be6a5c6741376622a5d548648b37
+  file_picker: 7584aae6fa07a041af2b36a2655122d42f578c1a
   file_selector_macos: 6280b52b459ae6c590af5d78fc35c7267a3c4b31
   FlutterMacOS: d0db08ddef1a9af05a5ec4b724367152bb0500b1
   mobile_scanner: bd1e7cd9b67b442f4d903747f4778e040513f860

@@ -9,7 +9,7 @@ class Environment {
   // Флаг разработки
   static const bool isDevelopment = bool.fromEnvironment(
     'DEVELOPMENT',
-    defaultValue: true,
+    defaultValue: false,
   );
   
   // Таймауты

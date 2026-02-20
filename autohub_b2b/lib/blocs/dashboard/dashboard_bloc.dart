@@ -18,7 +18,6 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
     Emitter<DashboardState> emit,
   ) async {
     try {
-      print('📊 DashboardBloc: Loading data...');
       emit(DashboardLoading());
 
       // Загружаем все данные параллельно
@@ -34,12 +33,6 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       final recentOrders = results[2] as List;
       final popularItems = results[3] as List;
 
-      print('✅ DashboardBloc: Data loaded successfully');
-      print('   Stats: Revenue=${stats.totalRevenue}, Items=${stats.inventoryCount}');
-      print('   Chart: ${chartData.data.length} points');
-      print('   Orders: ${recentOrders.length} recent');
-      print('   Popular: ${popularItems.length} items');
-
       emit(DashboardLoaded(
         stats: stats,
         chartData: chartData,
@@ -48,7 +41,6 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
         currentPeriod: '7d',
       ));
     } catch (e) {
-      print('❌ DashboardBloc: Error loading data - $e');
       emit(DashboardError('Ошибка загрузки данных: $e'));
     }
   }
@@ -58,8 +50,6 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
     Emitter<DashboardState> emit,
   ) async {
     try {
-      print('🔄 DashboardBloc: Refreshing data...');
-      
       // Сохраняем текущее состояние
       final currentState = state;
       if (currentState is DashboardLoaded) {
@@ -83,8 +73,6 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       final recentOrders = results[2] as List;
       final popularItems = results[3] as List;
 
-      print('✅ DashboardBloc: Data refreshed');
-
       emit(DashboardLoaded(
         stats: stats,
         chartData: chartData,
@@ -95,7 +83,6 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
             : '7d',
       ));
     } catch (e) {
-      print('❌ DashboardBloc: Error refreshing data - $e');
       emit(DashboardError('Ошибка обновления данных: $e'));
     }
   }
@@ -108,8 +95,6 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       final currentState = state;
       if (currentState is! DashboardLoaded) return;
 
-      print('📈 DashboardBloc: Changing chart period to ${event.period}');
-
       // Загружаем данные графика для нового периода
       final chartData = await _apiService.getSalesChart(period: event.period);
 
@@ -117,10 +102,7 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
         chartData: chartData,
         currentPeriod: event.period,
       ));
-
-      print('✅ DashboardBloc: Chart period changed, ${chartData.data.length} points');
     } catch (e) {
-      print('❌ DashboardBloc: Error changing chart period - $e');
       // Не показываем ошибку, просто оставляем текущие данные
     }
   }

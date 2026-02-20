@@ -23,11 +23,5 @@ async function bootstrap() {
   const host = process.env.HOST || '0.0.0.0'; // Слушаем на всех интерфейсах для доступа извне
   
   await app.listen(port, host);
-  
-  console.log(`🚀 AutoHub Backend запущен на http://${host}:${port}`);
-  console.log(`📊 Dashboard API: http://${host}:${port}/api/dashboard/stats`);
-  console.log(`📦 Items API: http://${host}:${port}/api/items/popular`);
-  console.log(`🛒 Orders API: http://${host}:${port}/api/orders/recent`);
-  console.log(`📁 Uploads: http://${host}:${port}/uploads/`);
 }
 bootstrap();

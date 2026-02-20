@@ -139,8 +139,6 @@ class ItemModel extends Equatable {
         updatedAt: parseDate(json['updatedAt']) ?? DateTime.now(),
       );
     } catch (e) {
-      print('❌ Error parsing ItemModel: $e');
-      print('❌ JSON data: $json');
       rethrow;
     }
   }

@@ -563,7 +563,6 @@ class _VehicleDialogState extends State<_VehicleDialog> {
           } else {
             brands = [];
             if (data != null) {
-              print('⚠️ Unexpected brands data format: ${data.runtimeType}');
             }
           }
           
@@ -580,7 +579,6 @@ class _VehicleDialogState extends State<_VehicleDialog> {
                 _loadModels(selectedBrandSlug!);
               }
             } catch (e) {
-              print('⚠️ Error finding brand in list: $e');
             }
           }
         });
@@ -596,7 +594,6 @@ class _VehicleDialogState extends State<_VehicleDialog> {
         }
       }
     } catch (e) {
-      print('❌ Error loading brands: $e');
       if (mounted) {
         setState(() {
           brands = [];

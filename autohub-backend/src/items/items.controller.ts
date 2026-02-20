@@ -11,6 +11,7 @@ import {
   UseInterceptors,
   UploadedFiles,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { ItemsService } from './items.service';
@@ -25,6 +26,8 @@ import { FileUploadService } from '../common/services/file-upload.service';
 @Controller('api/items')
 @UseGuards(JwtAuthGuard, RolesGuard) // Все методы требуют авторизации
 export class ItemsController {
+  private readonly logger = new Logger(ItemsController.name);
+
   constructor(private readonly itemsService: ItemsService) {}
 
   @Get('popular')
@@ -40,13 +43,12 @@ export class ItemsController {
   async findAll(@CurrentUser() user: any, @Query() filters: FilterItemsDto) {
     try {
       if (!user || !user.organizationId) {
-        console.error('❌ No organizationId in user:', user);
+        this.logger.error('No organizationId in user');
         return [];
       }
       return await this.itemsService.findAll(user.organizationId, filters);
     } catch (error) {
-      console.error('❌ Error in findAll controller:', error);
-      console.error('Error stack:', error?.stack);
+      this.logger.error('Error in findAll controller', error.stack);
       // Возвращаем пустой массив только если это не критическая ошибка
       // Но логируем детали для отладки
       return [];
@@ -101,29 +103,16 @@ export class ItemsController {
     @UploadedFiles() files: Express.Multer.File[],
     @CurrentUser() user: any,
   ) {
-    console.log('📸 Upload images called:', { itemId: id, filesCount: files?.length });
-    
     if (!files || files.length === 0) {
-      console.error('❌ No files uploaded');
       throw new BadRequestException('No files uploaded');
     }
 
-    console.log('📸 Files received:', files.map(f => ({ 
-      filename: f.filename, 
-      mimetype: f.mimetype, 
-      size: f.size 
-    })));
-
     // Генерируем URLs для загруженных файлов
     const imageUrls = files.map(file => FileUploadService.generateFileUrl(file.filename));
-    
-    console.log('📸 Generated URLs:', imageUrls);
-    
+
     // Обновляем товар с новыми изображениями
     const result = await this.itemsService.addImages(+id, user.organizationId, imageUrls);
-    
-    console.log('✅ Images added successfully:', result);
-    
+
     return result;
   }
 
@@ -141,7 +130,6 @@ export class ItemsController {
     @Body() body: { imageUrl: string },
     @CurrentUser() user: any,
   ) {
-    console.log('🗑️ Removing image:', body.imageUrl);
     return this.itemsService.removeImage(+id, user.organizationId, body.imageUrl);
   }
 }

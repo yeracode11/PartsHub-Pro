@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Item } from './entities/item.entity';
@@ -6,6 +6,8 @@ import { FilterItemsDto } from './dto/filter-items.dto';
 
 @Injectable()
 export class ItemsService {
+  private readonly logger = new Logger(ItemsService.name);
+
   constructor(
     @InjectRepository(Item)
     private readonly itemRepository: Repository<Item>,
@@ -34,8 +36,6 @@ export class ItemsService {
   // CRUD методы для управления товарами с фильтрацией
   async findAll(organizationId: string, filters?: FilterItemsDto) {
     try {
-      console.log('🔍 findAll items called for organizationId:', organizationId);
-      console.log('📋 Filters:', filters);
       
       const queryBuilder = this.itemRepository
         .createQueryBuilder('item')
@@ -109,11 +109,9 @@ export class ItemsService {
 
       const items = await queryBuilder.getMany();
       
-      console.log(`✅ Found ${items.length} items after filtering`);
       return items;
     } catch (error) {
-      console.error('❌ Error in findAll items:', error);
-      console.error('Error message:', error?.message);
+      this.logger.error('Error in findAll items', error.stack);
       // Возвращаем пустой массив при ошибке
       return [];
     }
@@ -157,7 +155,6 @@ export class ItemsService {
     limit?: number;
     offset?: number;
   }) {
-    console.log('🔍 findAllForB2C called with options:', options);
     
     const queryBuilder = this.itemRepository
       .createQueryBuilder('item')
@@ -188,11 +185,8 @@ export class ItemsService {
 
     const sql = queryBuilder.getSql();
     const params = queryBuilder.getParameters();
-    console.log('🔍 SQL Query:', sql);
-    console.log('🔍 Query Params:', params);
     
     const items = await queryBuilder.getMany();
-    console.log(`✅ findAllForB2C found ${items.length} items`);
     
     return items;
   }
@@ -285,7 +279,6 @@ export class ItemsService {
     item.syncedToB2C = true;
     const updatedItem = await this.itemRepository.save(item);
     
-    console.log(`✅ Item ${item.id} (${item.name}) synced to B2C marketplace`);
     return updatedItem;
   }
 
@@ -304,7 +297,6 @@ export class ItemsService {
       }
     }
     
-    console.log(`✅ Synced ${syncedCount} items to B2C marketplace`);
     return { 
       synced: syncedCount, 
       total: items.length,

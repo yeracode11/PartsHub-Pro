@@ -5,6 +5,7 @@ import {
   Query,
   Param,
   Body,
+  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -15,6 +16,8 @@ import { Order } from '../orders/entities/order.entity';
 
 @Controller('api/b2c')
 export class B2CController {
+  private readonly logger = new Logger(B2CController.name);
+
   constructor(
     @InjectRepository(Order)
     private readonly orderRepository: Repository<Order>,
@@ -31,7 +34,6 @@ export class B2CController {
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
   ) {
-    console.log('📦 B2C getParts called with:', { category, search, limit, offset });
     // Получаем все товары из всех организаций для B2C
     const items = await this.itemsService.findAllForB2C({
       category,
@@ -39,7 +41,6 @@ export class B2CController {
       limit: limit ? parseInt(limit) : undefined,
       offset: offset ? parseInt(offset) : undefined,
     });
-    console.log(`📦 Found ${items.length} items for B2C`);
 
     // Преобразуем в формат для B2C
     const baseUrl = process.env.API_BASE_URL || 'http://78.140.246.83:3000';
@@ -48,7 +49,6 @@ export class B2CController {
       data: items.map(item => {
         // Обрабатываем изображения - конвертируем относительные пути в полные URL
         let images = item.images && item.images.length > 0 ? item.images : (item.imageUrl ? [item.imageUrl] : []);
-        console.log('🔍 Processing images for item', item.id, 'original:', images);
         images = images.map(img => {
           // Если URL уже полный (начинается с http), возвращаем как есть
           if (img.startsWith('http')) {
@@ -56,10 +56,8 @@ export class B2CController {
           }
           // Иначе добавляем базовый URL из переменной окружения
           const fullUrl = `${baseUrl}${img}`;
-          console.log('📸 Converting image URL:', img, '->', fullUrl);
           return fullUrl;
         });
-        console.log('✅ Final images for item', item.id, ':', images);
 
         return {
           id: item.id,
@@ -222,14 +220,12 @@ export class B2CController {
     try {
       // Получаем все заказы из B2C (isB2C = true) из всех организаций
       // В будущем можно добавить фильтрацию по customerId, когда будет авторизация
-      console.log('📦 Fetching all B2C orders');
       const orders = await this.orderRepository.find({
         where: { isB2C: true },
         relations: ['customer', 'items', 'items.item', 'organization'],
         order: { createdAt: 'DESC' },
       });
       
-      console.log(`✅ Found ${orders.length} B2C orders`);
       
       // Преобразуем заказы в формат для B2C
       const b2cOrders = orders.map(order => ({
@@ -264,7 +260,7 @@ export class B2CController {
         total: b2cOrders.length,
       };
     } catch (error) {
-      console.error('❌ Error fetching B2C orders:', error);
+      this.logger.error('Error fetching B2C orders', error.stack);
       return {
         data: [],
         total: 0,
@@ -276,8 +272,6 @@ export class B2CController {
   @Post('orders')
   async createOrder(@Body() data: any) {
     try {
-      console.log('📦 ========== Creating B2C order ==========');
-      console.log('📦 Request data:', JSON.stringify(data, null, 2));
       
       const items = data.items || [];
       if (items.length === 0) {
@@ -287,10 +281,8 @@ export class B2CController {
       // Если указан organizationId в запросе, используем его (для авторизованных пользователей)
       // Иначе группируем по организациям продавцов товаров
       const targetOrganizationId = data.organizationId;
-      console.log('📦 Target organizationId from request:', targetOrganizationId || 'NOT PROVIDED (will group by sellers)');
       
       if (targetOrganizationId) {
-        console.log(`📦 Using provided organizationId: ${targetOrganizationId}`);
         
         // Проверяем, что организация существует
         const org = await this.organizationsService.findOne(targetOrganizationId);
@@ -312,32 +304,26 @@ export class B2CController {
           isB2C: true,
         } as Partial<Order> & { items?: Array<{ itemId: number; quantity: number }>; shippingAddress?: string };
 
-        console.log(`📦 Creating order for organization: ${targetOrganizationId}`);
         const order = await this.ordersService.create(targetOrganizationId, orderData, { skipQuantityCheck: true });
         
         if (!order) {
           throw new Error(`Failed to create order for organization ${targetOrganizationId}`);
         }
         
-        console.log(`✅ Order created for organization ${targetOrganizationId}:`, order.id);
         return {
           data: order,
         };
       }
 
       // Если organizationId не указан, группируем по организациям продавцов
-      console.log('📦 No organizationId provided, grouping by seller organizations');
       
       // Получаем информацию о товарах и их организациях-продавцах
       const itemIds = items.map((item: any) => item.itemId);
-      console.log(`📦 Fetching items with IDs:`, itemIds);
       
       const itemsWithOrgs = await this.itemsService.findItemsByIds(itemIds);
-      console.log(`📦 Found ${itemsWithOrgs.length} items with organization info`);
       
       // Логируем organizationId каждого товара
       itemsWithOrgs.forEach(item => {
-        console.log(`   Item ${item.id} (${item.name}): organizationId = ${item.organizationId}`);
       });
       
       if (itemsWithOrgs.length !== itemIds.length) {
@@ -354,7 +340,6 @@ export class B2CController {
         }
         
         const orgId = item.organizationId;
-        console.log(`   Item ${orderItem.itemId} belongs to organization: ${orgId}`);
         
         if (!itemsBySeller.has(orgId)) {
           itemsBySeller.set(orgId, []);
@@ -365,9 +350,7 @@ export class B2CController {
         });
       }
 
-      console.log(`📦 Grouped items into ${itemsBySeller.size} seller(s)`);
       itemsBySeller.forEach((sellerItems, orgId) => {
-        console.log(`   Seller ${orgId}: ${sellerItems.length} items`);
       });
 
       // Создаем отдельный заказ для каждой организации-продавца
@@ -384,18 +367,15 @@ export class B2CController {
         isB2C: true, // Помечаем что это заказ из B2C магазина
         } as Partial<Order> & { items?: Array<{ itemId: number; quantity: number }>; shippingAddress?: string };
 
-        console.log(`📦 Creating order for seller org: ${organizationId}`);
-        console.log(`📦 Order items:`, JSON.stringify(sellerItems, null, 2));
       
       // Создаем заказ без проверки количества для B2C
         const order = await this.ordersService.create(organizationId, orderData, { skipQuantityCheck: true });
       
       if (!order) {
-          console.error(`❌ Failed to create order for org: ${organizationId}`);
+          this.logger.error(`Failed to create order for org: ${organizationId}`);
           throw new Error(`Failed to create order for seller ${organizationId}`);
       }
       
-        console.log(`✅ Order created for seller ${organizationId}:`, order.id);
         createdOrders.push(order);
       }
 
@@ -411,7 +391,7 @@ export class B2CController {
       };
       }
     } catch (error) {
-      console.error('❌ Error creating B2C order:', error);
+      this.logger.error('Error creating B2C order', error.stack);
       throw error;
     }
   }

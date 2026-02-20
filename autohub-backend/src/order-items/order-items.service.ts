@@ -37,7 +37,6 @@ export class OrderItemsService {
       if (!options?.skipQuantityCheck) {
         if (item.quantity < itemData.quantity) {
           // Для B2C создаем заказ даже если товара нет на складе
-          console.log(`⚠️ Insufficient quantity for item "${item.name}". Available: ${item.quantity}, requested: ${itemData.quantity}`);
         }
         
         // Списываем со склада (если есть товар)

@@ -26,7 +26,6 @@ class DashboardApiService extends BaseApiService {
       final response = await get<Map<String, dynamic>>('/dashboard/stats');
       return DashboardStats.fromJson(response);
     } catch (e) {
-      print('Error getting dashboard stats: $e');
       // Возвращаем пустую статистику при ошибке
       return DashboardStats.empty();
     }
@@ -59,7 +58,6 @@ class DashboardApiService extends BaseApiService {
       );
       return SalesChartData.fromJson(response);
     } catch (e) {
-      print('Error getting sales chart: $e');
       // Возвращаем пустой график при ошибке
       return SalesChartData.empty();
     }
@@ -100,7 +98,6 @@ class DashboardApiService extends BaseApiService {
       
       return orders;
     } catch (e) {
-      print('Error getting recent orders: $e');
       // Возвращаем пустой список при ошибке
       return [];
     }
@@ -136,7 +133,6 @@ class DashboardApiService extends BaseApiService {
       
       return items;
     } catch (e) {
-      print('Error getting popular items: $e');
       // Возвращаем пустой список при ошибке
       return [];
     }
