@@ -125,6 +125,7 @@ class OrderModel extends Equatable {
   final String? shippingAddress;
   final bool synced;
   final bool isB2C;
+  final DateTime? reservedUntil;
   final List<OrderItemModel>? items;
   final Map<String, dynamic>? customer;
   final List<WorkStageModel>? workStages;
@@ -142,6 +143,7 @@ class OrderModel extends Equatable {
     this.shippingAddress,
     this.synced = false,
     this.isB2C = false,
+    this.reservedUntil,
     this.items,
     this.customer,
     this.workStages,
@@ -160,6 +162,7 @@ class OrderModel extends Equatable {
     String? shippingAddress,
     bool? synced,
     bool? isB2C,
+    DateTime? reservedUntil,
     List<OrderItemModel>? items,
     Map<String, dynamic>? customer,
     List<WorkStageModel>? workStages,
@@ -177,6 +180,7 @@ class OrderModel extends Equatable {
       shippingAddress: shippingAddress ?? this.shippingAddress,
       synced: synced ?? this.synced,
       isB2C: isB2C ?? this.isB2C,
+      reservedUntil: reservedUntil ?? this.reservedUntil,
       items: items ?? this.items,
       customer: customer ?? this.customer,
       workStages: workStages ?? this.workStages,
@@ -197,6 +201,7 @@ class OrderModel extends Equatable {
       'shippingAddress': shippingAddress,
       'synced': synced,
       'isB2C': isB2C,
+      'reservedUntil': reservedUntil?.toIso8601String(),
       'items': items?.map((item) => {
         'id': item.id,
         'itemId': item.itemId,
@@ -251,6 +256,9 @@ class OrderModel extends Equatable {
       shippingAddress: json['shippingAddress'] as String?,
       synced: json['synced'] as bool? ?? false,
       isB2C: json['isB2C'] as bool? ?? false,
+      reservedUntil: json['reservedUntil'] != null
+          ? DateTime.tryParse(json['reservedUntil'].toString())
+          : null,
       items: items,
       customer: json['customer'] as Map<String, dynamic>?,
       workStages: workStages,
@@ -271,6 +279,7 @@ class OrderModel extends Equatable {
         shippingAddress,
         synced,
         isB2C,
+        reservedUntil,
         items,
         customer,
         workStages,

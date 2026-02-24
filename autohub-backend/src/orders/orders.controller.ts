@@ -85,7 +85,7 @@ export class OrdersController {
     if (!organizationId) {
       return { error: 'No active organization' } as any;
     }
-    return this.ordersService.create(organizationId, data);
+    return this.ordersService.create(organizationId, data, undefined, user);
   }
 
   @Put(':id')

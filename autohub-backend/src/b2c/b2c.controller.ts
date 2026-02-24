@@ -304,7 +304,11 @@ export class B2CController {
           isB2C: true,
         } as Partial<Order> & { items?: Array<{ itemId: number; quantity: number }>; shippingAddress?: string };
 
-        const order = await this.ordersService.create(targetOrganizationId, orderData, { skipQuantityCheck: true });
+        const order = await this.ordersService.create(
+          targetOrganizationId,
+          orderData,
+          { skipQuantityCheck: true },
+        );
         
         if (!order) {
           throw new Error(`Failed to create order for organization ${targetOrganizationId}`);
@@ -369,7 +373,11 @@ export class B2CController {
 
       
       // Создаем заказ без проверки количества для B2C
-        const order = await this.ordersService.create(organizationId, orderData, { skipQuantityCheck: true });
+        const order = await this.ordersService.create(
+          organizationId,
+          orderData,
+          { skipQuantityCheck: true },
+        );
       
       if (!order) {
           this.logger.error(`Failed to create order for org: ${organizationId}`);

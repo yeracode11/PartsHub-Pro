@@ -230,6 +230,202 @@ export class DashboardService {
     };
   }
 
+  // ABC/XYZ анализ товаров
+  async getAbcXyz(organizationId: string) {
+    const now = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 90);
+    startDate.setHours(0, 0, 0, 0);
+
+    const orderItems = await this.orderItemRepository
+      .createQueryBuilder('orderItem')
+      .leftJoinAndSelect('orderItem.item', 'item')
+      .leftJoin('orderItem.order', 'order')
+      .where('order.organizationId = :organizationId', { organizationId })
+      .andWhere('order.status != :cancelled', { cancelled: 'cancelled' })
+      .andWhere('orderItem.createdAt >= :startDate', { startDate })
+      .getMany();
+
+    const weekMs = 7 * 24 * 60 * 60 * 1000;
+    const totalWeeks = Math.max(
+      1,
+      Math.ceil((now.getTime() - startDate.getTime()) / weekMs),
+    );
+
+    const itemsMap = new Map<
+      number,
+      {
+        id: number;
+        name: string;
+        sku: string | null;
+        revenue: number;
+        quantity: number;
+        weekly: number[];
+      }
+    >();
+
+    for (const orderItem of orderItems) {
+      const item = orderItem.item;
+      if (!item) continue;
+
+      const entry =
+        itemsMap.get(item.id) ||
+        {
+          id: item.id,
+          name: item.name,
+          sku: item.sku,
+          revenue: 0,
+          quantity: 0,
+          weekly: Array(totalWeeks).fill(0),
+        };
+
+      const quantity = Number(orderItem.quantity) || 0;
+      const price = Number(orderItem.priceAtTime) || 0;
+      const subtotal = quantity * price;
+
+      entry.revenue += subtotal;
+      entry.quantity += quantity;
+
+      const createdAt = orderItem.createdAt || now;
+      const weekIndex = Math.min(
+        totalWeeks - 1,
+        Math.max(
+          0,
+          Math.floor((createdAt.getTime() - startDate.getTime()) / weekMs),
+        ),
+      );
+      entry.weekly[weekIndex] += quantity;
+
+      itemsMap.set(item.id, entry);
+    }
+
+    const items = Array.from(itemsMap.values());
+    const totalRevenue = items.reduce((sum, item) => sum + item.revenue, 0);
+
+    // ABC классификация
+    const sortedByRevenue = [...items].sort((a, b) => b.revenue - a.revenue);
+    let cumulative = 0;
+    const abcMap = new Map<number, 'A' | 'B' | 'C'>();
+    for (const item of sortedByRevenue) {
+      const share = totalRevenue > 0 ? item.revenue / totalRevenue : 0;
+      cumulative += share;
+      if (cumulative <= 0.8) {
+        abcMap.set(item.id, 'A');
+      } else if (cumulative <= 0.95) {
+        abcMap.set(item.id, 'B');
+      } else {
+        abcMap.set(item.id, 'C');
+      }
+    }
+
+    // XYZ классификация
+    const xyzMap = new Map<number, 'X' | 'Y' | 'Z'>();
+    for (const item of items) {
+      const mean =
+        item.weekly.reduce((sum, value) => sum + value, 0) / totalWeeks;
+      const variance =
+        item.weekly.reduce((sum, value) => {
+          const diff = value - mean;
+          return sum + diff * diff;
+        }, 0) / totalWeeks;
+      const std = Math.sqrt(variance);
+      const cv = mean > 0 ? std / mean : Number.POSITIVE_INFINITY;
+
+      if (cv <= 0.5) {
+        xyzMap.set(item.id, 'X');
+      } else if (cv <= 1) {
+        xyzMap.set(item.id, 'Y');
+      } else {
+        xyzMap.set(item.id, 'Z');
+      }
+    }
+
+    const summary = {
+      A: 0,
+      B: 0,
+      C: 0,
+      X: 0,
+      Y: 0,
+      Z: 0,
+    };
+
+    const resultItems = items
+      .map((item) => {
+        const abc = abcMap.get(item.id) || 'C';
+        const xyz = xyzMap.get(item.id) || 'Z';
+        summary[abc] += 1;
+        summary[xyz] += 1;
+        return {
+          id: item.id,
+          name: item.name,
+          sku: item.sku,
+          revenue: item.revenue,
+          quantity: item.quantity,
+          abc,
+          xyz,
+        };
+      })
+      .sort((a, b) => b.revenue - a.revenue);
+
+    return {
+      summary,
+      items: resultItems.slice(0, 25),
+      periodDays: 90,
+    };
+  }
+
+  async getStaffReport(organizationId: string, period: string) {
+    const days = period === '7d' ? 7 : period === '30d' ? 30 : 90;
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+
+    const rows = await this.orderRepository
+      .createQueryBuilder('order')
+      .leftJoin('order.createdBy', 'user')
+      .select('user.id', 'userId')
+      .addSelect('user.name', 'name')
+      .addSelect('user.role', 'role')
+      .addSelect('COUNT(order.id)', 'ordersCount')
+      .addSelect('SUM(order.totalAmount)', 'revenue')
+      .addSelect(
+        `SUM(CASE WHEN order.paymentStatus = :paid THEN 1 ELSE 0 END)`,
+        'paidCount',
+      )
+      .where('order.organizationId = :organizationId', { organizationId })
+      .andWhere('order.createdByUserId IS NOT NULL')
+      .andWhere('order.createdAt BETWEEN :startDate AND :endDate', {
+        startDate,
+        endDate,
+      })
+      .setParameters({ paid: 'paid' })
+      .groupBy('user.id')
+      .addGroupBy('user.name')
+      .addGroupBy('user.role')
+      .orderBy('revenue', 'DESC')
+      .getRawMany();
+
+    const items = rows.map((row) => {
+      const ordersCount = Number(row.ordersCount) || 0;
+      const revenue = Number(row.revenue) || 0;
+      const paidCount = Number(row.paidCount) || 0;
+      return {
+        userId: row.userId,
+        name: row.name,
+        role: row.role,
+        ordersCount,
+        revenue,
+        avgCheck: ordersCount > 0 ? revenue / ordersCount : 0,
+        conversion: ordersCount > 0 ? paidCount / ordersCount : 0,
+      };
+    });
+
+    return {
+      period,
+      items,
+    };
+  }
+
   // Топ продаваемых товаров (реально проданных)
   async getTopSellingItems(organizationId: string, limit: number = 10) {
     try {

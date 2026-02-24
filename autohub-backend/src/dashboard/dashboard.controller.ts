@@ -109,5 +109,36 @@ export class DashboardController {
       return { categories: [] } as any;
     }
   }
+
+  @Get('abc-xyz')
+  async getAbcXyz(@CurrentUser() user: any) {
+    try {
+      const organizationId = await this.resolveOrganizationId(user);
+      if (!organizationId) {
+        return { summary: {}, items: [] } as any;
+      }
+      return await this.dashboardService.getAbcXyz(organizationId);
+    } catch (error) {
+      this.logger.error('Error in getAbcXyz controller', error.stack);
+      return { summary: {}, items: [] } as any;
+    }
+  }
+
+  @Get('staff-report')
+  async getStaffReport(
+    @Query('period') period: string = '30d',
+    @CurrentUser() user: any,
+  ) {
+    try {
+      const organizationId = await this.resolveOrganizationId(user);
+      if (!organizationId) {
+        return { items: [] } as any;
+      }
+      return await this.dashboardService.getStaffReport(organizationId, period);
+    } catch (error) {
+      this.logger.error('Error in getStaffReport controller', error.stack);
+      return { items: [] } as any;
+    }
+  }
 }
 

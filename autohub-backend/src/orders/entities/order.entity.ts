@@ -12,6 +12,7 @@ import {
 import { Organization } from '../../organizations/entities/organization.entity';
 import { Customer } from '../../customers/entities/customer.entity';
 import { OrderItem } from '../../order-items/entities/order-item.entity';
+import { User } from '../../users/entities/user.entity';
 import { Vehicle } from '../../vehicles/entities/vehicle.entity';
 
 @Entity('orders')
@@ -74,6 +75,16 @@ export class Order {
 
   @Column({ type: 'boolean', default: false })
   isB2C: boolean; // Флаг: заказ из B2C магазина
+
+  @Column({ type: 'uuid', nullable: true })
+  createdByUserId: string | null;
+
+  @ManyToOne(() => User, { nullable: true })
+  @JoinColumn({ name: 'createdByUserId' })
+  createdBy: User | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  reservedUntil: Date | null; // Срок резерва (для запчастей)
 
   @Column({ type: 'jsonb', nullable: true })
   workStages: OrderWorkStage[] | null; // Этапы заказ-наряда (для автосервисов)

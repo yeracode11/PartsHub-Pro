@@ -489,6 +489,14 @@ class _SalesScreenState extends State<SalesScreen> {
         color = Colors.blue.shade400;
         label = 'В работе';
         break;
+      case 'reserved':
+        color = Colors.deepPurple;
+        label = 'Забронирован';
+        break;
+      case 'ready':
+        color = Colors.teal;
+        label = 'Готов к выдаче';
+        break;
       case 'cancelled':
         color = Colors.red;
         label = 'Отменен';
@@ -710,6 +718,10 @@ class _OrderDialogState extends State<_OrderDialog> {
   String selectedStatus = 'pending';
   String selectedPaymentStatus = 'pending';
   List<Map<String, dynamic>> selectedItems = [];
+  List<Map<String, dynamic>> suggestedItems = [];
+  bool reserveEnabled = false;
+  int reserveDays = 3;
+  DateTime? reserveUntil;
   final TextEditingController _barcodeController = TextEditingController();
   final FocusNode _barcodeFocusNode = FocusNode();
   final BarcodeScannerService _barcodeScanner = BarcodeScannerService();
@@ -721,6 +733,14 @@ class _OrderDialogState extends State<_OrderDialog> {
       notesController.text = widget.order!.notes ?? '';
       selectedStatus = widget.order!.status;
       selectedPaymentStatus = widget.order!.paymentStatus;
+      reserveUntil = widget.order!.reservedUntil;
+      reserveEnabled = selectedStatus == 'reserved' || reserveUntil != null;
+      if (reserveUntil != null) {
+        final diffDays = reserveUntil!.difference(DateTime.now()).inDays;
+        if (diffDays > 0) {
+          reserveDays = diffDays;
+        }
+      }
       // Если заказ уже имеет позиции, заполняем selectedItems для редактирования
       if (widget.order!.items != null && widget.order!.items!.isNotEmpty) {
         selectedItems = widget.order!.items!
@@ -739,6 +759,8 @@ class _OrderDialogState extends State<_OrderDialog> {
             .toList();
       }
     }
+
+    _refreshSuggestions();
 
     // Настроить сканер штрих‑кодов для режима кассы
     _barcodeScanner.onBarcodeScanned = _onBarcodeScanned;
@@ -769,8 +791,7 @@ class _OrderDialogState extends State<_OrderDialog> {
     final matchedItem = widget.availableItems.firstWhere(
       (it) {
         final sku = (it['sku'] ?? '').toString().toLowerCase();
-        final idStr = (it['id'] ?? '').toString();
-        return sku == lower || idStr == lower;
+        return sku == lower;
       },
       orElse: () => {},
     );
@@ -821,6 +842,7 @@ class _OrderDialogState extends State<_OrderDialog> {
         });
       });
     }
+    _refreshSuggestions();
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -833,6 +855,217 @@ class _OrderDialogState extends State<_OrderDialog> {
     // Очистить поле ввода и снова сфокусировать его
     _barcodeController.clear();
     _barcodeFocusNode.requestFocus();
+  }
+
+  void _refreshSuggestions() {
+    if (selectedItems.isEmpty) {
+      setState(() {
+        suggestedItems = [];
+      });
+      return;
+    }
+
+    final lastItem = selectedItems.last;
+    final lastItemId = lastItem['itemId'] ?? lastItem['id'];
+    final sourceItem = widget.availableItems.firstWhere(
+      (item) => item['id'] == lastItemId,
+      orElse: () => {},
+    );
+    final category = sourceItem['category']?.toString();
+
+    final selectedIds = selectedItems
+        .map((item) => item['itemId'] ?? item['id'])
+        .where((id) => id != null)
+        .toSet();
+
+    final candidates = widget.availableItems.where((item) {
+      final itemId = item['id'];
+      if (selectedIds.contains(itemId)) return false;
+      final quantity = item['quantity'] as int? ?? 0;
+      if (quantity <= 0) return false;
+      if (category == null || category.isEmpty) return true;
+      return (item['category']?.toString() ?? '') == category;
+    }).toList();
+
+    candidates.sort((a, b) {
+      final qa = a['quantity'] as int? ?? 0;
+      final qb = b['quantity'] as int? ?? 0;
+      return qb.compareTo(qa);
+    });
+
+    setState(() {
+      suggestedItems = candidates.take(5).toList();
+    });
+  }
+
+  void _setReserveUntilFromDays() {
+    reserveUntil = DateTime.now().add(Duration(days: reserveDays));
+  }
+
+  Widget _buildSuggestedItems() {
+    if (suggestedItems.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final currencyFormatter = NumberFormat.currency(
+      locale: 'ru_RU',
+      symbol: '₸',
+      decimalDigits: 0,
+    );
+
+    return Card(
+      elevation: 0,
+      color: AppTheme.primaryColor.withOpacity(0.04),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Рекомендуемые товары',
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+            const SizedBox(height: 8),
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: suggestedItems.length,
+              separatorBuilder: (_, __) => const Divider(height: 16),
+              itemBuilder: (context, index) {
+                final item = suggestedItems[index];
+                final priceRaw = item['price'];
+                final double price = priceRaw is String
+                    ? double.tryParse(priceRaw) ?? 0
+                    : (priceRaw is num ? priceRaw.toDouble() : 0);
+                final sku = item['sku']?.toString();
+                return Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item['name']?.toString() ?? 'Товар',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontWeight: FontWeight.w500),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            currencyFormatter.format(price),
+                            style: const TextStyle(
+                              color: AppTheme.textSecondary,
+                              fontSize: 12,
+                            ),
+                          ),
+                          if (sku != null && sku.isNotEmpty)
+                            Text(
+                              'Артикул: $sku',
+                              style: const TextStyle(
+                                color: AppTheme.textSecondary,
+                                fontSize: 11,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        setState(() {
+                          selectedItems.add({
+                            'id': item['id'],
+                            'itemId': item['id'],
+                            'name': item['name'],
+                            'price': price,
+                            'quantity': 1,
+                            'imageUrl': (item['images'] != null &&
+                                    (item['images'] as List).isNotEmpty)
+                                ? (item['images'] as List).first.toString()
+                                : item['imageUrl'],
+                            'sku': item['sku'],
+                          });
+                        });
+                        _refreshSuggestions();
+                      },
+                      icon: const Icon(Icons.add, size: 16),
+                      label: const Text('Добавить'),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildReserveSection() {
+    final dateFormat = DateFormat('dd.MM.yyyy HH:mm');
+    final reserveLabel = reserveUntil != null
+        ? 'Резерв до ${dateFormat.format(reserveUntil!)}'
+        : 'Резервирование выключено';
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppTheme.borderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SwitchListTile(
+            value: reserveEnabled,
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Резерв запчасти'),
+            subtitle: Text(
+              reserveLabel,
+              style: const TextStyle(fontSize: 12),
+            ),
+            onChanged: (value) {
+              setState(() {
+                reserveEnabled = value;
+                if (reserveEnabled) {
+                  selectedStatus = 'reserved';
+                  _setReserveUntilFromDays();
+                } else {
+                  reserveUntil = null;
+                  if (selectedStatus == 'reserved') {
+                    selectedStatus = 'pending';
+                  }
+                }
+              });
+            },
+          ),
+          if (reserveEnabled) ...[
+            const SizedBox(height: 8),
+            DropdownButtonFormField<int>(
+              value: reserveDays,
+              decoration: const InputDecoration(
+                labelText: 'Срок резерва',
+                border: OutlineInputBorder(),
+              ),
+              items: const [
+                DropdownMenuItem(value: 1, child: Text('1 день')),
+                DropdownMenuItem(value: 3, child: Text('3 дня')),
+                DropdownMenuItem(value: 7, child: Text('7 дней')),
+              ],
+              onChanged: (value) {
+                if (value == null) return;
+                setState(() {
+                  reserveDays = value;
+                  _setReserveUntilFromDays();
+                });
+              },
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   double get totalAmount {
@@ -1043,6 +1276,7 @@ class _OrderDialogState extends State<_OrderDialog> {
                                             };
                                           }
                                         });
+                                        _refreshSuggestions();
                                       },
                                       tooltip: 'Уменьшить количество',
                                     ),
@@ -1063,6 +1297,7 @@ class _OrderDialogState extends State<_OrderDialog> {
                                   setState(() {
                                     selectedItems.removeAt(index);
                                   });
+                                  _refreshSuggestions();
                                 },
                                 tooltip: 'Удалить',
                               ),
@@ -1077,6 +1312,8 @@ class _OrderDialogState extends State<_OrderDialog> {
             ),
 
             const SizedBox(height: 16),
+            _buildSuggestedItems(),
+            if (suggestedItems.isNotEmpty) const SizedBox(height: 16),
 
             // Общая сумма
             Container(
@@ -1106,6 +1343,8 @@ class _OrderDialogState extends State<_OrderDialog> {
               ),
             ),
 
+            const SizedBox(height: 16),
+            _buildReserveSection(),
             const SizedBox(height: 24),
 
             // Статусы и примечания
@@ -1125,12 +1364,21 @@ class _OrderDialogState extends State<_OrderDialog> {
                         items: const [
                           DropdownMenuItem(value: 'pending', child: Text('Ожидание')),
                           DropdownMenuItem(value: 'processing', child: Text('В работе')),
+                          DropdownMenuItem(value: 'reserved', child: Text('Забронирован')),
+                          DropdownMenuItem(value: 'ready', child: Text('Готов к выдаче')),
                           DropdownMenuItem(value: 'completed', child: Text('Завершен')),
                           DropdownMenuItem(value: 'cancelled', child: Text('Отменен')),
                         ],
                         onChanged: (value) {
                           setState(() {
                             selectedStatus = value!;
+                            if (selectedStatus == 'reserved') {
+                              reserveEnabled = true;
+                              _setReserveUntilFromDays();
+                            } else {
+                              reserveEnabled = false;
+                              reserveUntil = null;
+                            }
                           });
                         },
                       ),
@@ -1168,12 +1416,21 @@ class _OrderDialogState extends State<_OrderDialog> {
                     items: const [
                       DropdownMenuItem(value: 'pending', child: Text('Ожидание')),
                       DropdownMenuItem(value: 'processing', child: Text('В работе')),
+                      DropdownMenuItem(value: 'reserved', child: Text('Забронирован')),
+                      DropdownMenuItem(value: 'ready', child: Text('Готов к выдаче')),
                       DropdownMenuItem(value: 'completed', child: Text('Завершен')),
                       DropdownMenuItem(value: 'cancelled', child: Text('Отменен')),
                     ],
                     onChanged: (value) {
                       setState(() {
                         selectedStatus = value!;
+                        if (selectedStatus == 'reserved') {
+                          reserveEnabled = true;
+                          _setReserveUntilFromDays();
+                        } else {
+                          reserveEnabled = false;
+                          reserveUntil = null;
+                        }
                       });
                     },
                   ),
@@ -1334,6 +1591,7 @@ class _OrderDialogState extends State<_OrderDialog> {
                           'quantity': quantity,
                         });
                       });
+                      _refreshSuggestions();
 
                       Navigator.pop(dialogContext);
                     },
@@ -1347,10 +1605,15 @@ class _OrderDialogState extends State<_OrderDialog> {
   }
 
   Future<void> _createOrder() async {
+    if (reserveEnabled && reserveUntil == null) {
+      _setReserveUntilFromDays();
+    }
+
     final data = {
-      'status': selectedStatus,
+      'status': reserveEnabled ? 'reserved' : selectedStatus,
       'paymentStatus': selectedPaymentStatus,
       'notes': notesController.text.isEmpty ? null : notesController.text,
+      'reservedUntil': reserveEnabled ? reserveUntil?.toIso8601String() : null,
       'items': selectedItems.map((item) => {
         'itemId': item['id'],
         'quantity': item['quantity'],

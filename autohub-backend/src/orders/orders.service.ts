@@ -5,6 +5,7 @@ import { Order, OrderWorkStage } from './entities/order.entity';
 import { OrderItemsService } from '../order-items/order-items.service';
 import { CustomersService } from '../customers/customers.service';
 import { WhatsAppService } from '../whatsapp/whatsapp.service';
+import { TemplatesService } from '../whatsapp/templates.service';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { BusinessType } from '../common/enums/business-type.enum';
 
@@ -18,6 +19,7 @@ export class OrdersService {
     private readonly orderItemsService: OrderItemsService,
     private readonly customersService: CustomersService,
     private readonly whatsAppService: WhatsAppService,
+    private readonly templatesService: TemplatesService,
     private readonly organizationsService: OrganizationsService,
   ) {}
 
@@ -69,6 +71,7 @@ export class OrdersService {
       workStages?: OrderWorkStage[];
     },
     options?: { skipQuantityCheck?: boolean },
+    actor?: { userId?: string; id?: string },
   ) {
     // Генерируем номер заказа если не указан
     if (!data.orderNumber) {
@@ -96,16 +99,19 @@ export class OrdersService {
 
     // Создаем заказ
     const isB2C = (data as any).isB2C || false;
+    const actorUserId = actor?.userId || actor?.id || null;
     const isServiceOrg = await this.isServiceOrganization(organizationId);
     const order = this.orderRepository.create({
       orderNumber: data.orderNumber,
       organizationId,
+      createdByUserId: actorUserId,
       customerId: data.customerId,
       status: data.status || 'pending',
       paymentStatus: data.paymentStatus || 'pending',
       notes: data.notes,
       shippingAddress: (data as any).shippingAddress || null, // Адрес доставки для B2C
       isB2C,
+      reservedUntil: data.reservedUntil ? new Date(data.reservedUntil as any) : null,
       totalAmount: 0, // Пока 0, посчитаем после добавления товаров
       workStages: isServiceOrg
         ? data.workStages && data.workStages.length > 0
@@ -127,11 +133,22 @@ export class OrdersService {
       await this.orderRepository.save(savedOrder);
     }
 
-    // Возвращаем заказ с items
-    return await this.orderRepository.findOne({
+    const createdOrder = await this.orderRepository.findOne({
       where: { id: savedOrder.id },
       relations: ['customer', 'items', 'items.item'],
     });
+
+    if (
+      createdOrder &&
+      createdOrder.status === 'reserved' &&
+      createdOrder.isB2C &&
+      createdOrder.customerId
+    ) {
+      await this.notifyB2CReservation(createdOrder, actor);
+    }
+
+    // Возвращаем заказ с items
+    return createdOrder;
   }
 
 
@@ -148,6 +165,12 @@ export class OrdersService {
 
     // Извлекаем items из data, чтобы не пытаться обновить relation
     const { items, workStages, ...orderData } = data;
+    const previousStatus = existingOrder.status;
+    const previousReservedUntil = existingOrder.reservedUntil;
+
+    if (orderData.reservedUntil) {
+      orderData.reservedUntil = new Date(orderData.reservedUntil as any);
+    }
 
     // Обновляем основные поля заказа
     if (Object.keys(orderData).length > 0) {
@@ -192,6 +215,27 @@ export class OrdersService {
         normalizedWorkStages,
         actor,
       );
+    }
+
+    if (
+      updatedOrder.isB2C &&
+      updatedOrder.customerId &&
+      updatedOrder.status !== previousStatus
+    ) {
+      await this.notifyB2CStatusUpdate(updatedOrder, actor);
+    }
+
+    const becameReserved =
+      updatedOrder.status === 'reserved' && previousStatus !== 'reserved';
+    const addedReserveDate =
+      !previousReservedUntil && Boolean(updatedOrder.reservedUntil);
+
+    if (
+      updatedOrder.isB2C &&
+      updatedOrder.customerId &&
+      (becameReserved || addedReserveDate)
+    ) {
+      await this.notifyB2CReservation(updatedOrder, actor);
     }
 
     return updatedOrder;
@@ -294,6 +338,144 @@ export class OrdersService {
     }
   }
 
+  private async notifyB2CStatusUpdate(
+    order: Order,
+    actor?: { userId?: string; id?: string },
+  ) {
+    const actorUserId = actor?.userId || actor?.id;
+    if (!actorUserId) {
+      return;
+    }
+
+    if (!this.whatsAppService.isClientReady(actorUserId)) {
+      return;
+    }
+
+    try {
+      const customer =
+        order.customer ||
+        (await this.customersService.findOne(
+          order.customerId,
+          order.organizationId,
+        ));
+
+      if (!customer?.phone) {
+        return;
+      }
+
+      const businessType = await this.getOrganizationBusinessType(
+        order.organizationId,
+      );
+      if (!businessType) {
+        return;
+      }
+
+      let templateName: string | null = null;
+      if (businessType === BusinessType.SERVICE) {
+        templateName = 'Заказ-наряд: обновление статуса';
+      } else if (businessType === BusinessType.PARTS) {
+        if (order.status === 'completed' || order.status === 'ready') {
+          templateName = 'Заказ готов к выдаче (запчасти)';
+        }
+      }
+
+      if (!templateName) {
+        return;
+      }
+
+      const template = await this.templatesService.findByName(
+        order.organizationId,
+        templateName,
+      );
+      if (!template?.content) {
+        return;
+      }
+
+      const variables: Record<string, string> = {
+        name: customer.name || 'Уважаемый клиент',
+        organizationName: await this.getOrganizationName(order.organizationId),
+        orderNumber: order.orderNumber || `#${order.id}`,
+        status: this.formatStatusLabel(order.status),
+      };
+
+      const message = this.templatesService.fillTemplate(
+        template.content,
+        variables,
+      );
+
+      await this.whatsAppService.sendMessage(
+        actorUserId,
+        customer.phone,
+        message,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Ошибка отправки статуса заказа: ${error.message}`,
+        error.stack,
+      );
+    }
+  }
+
+  private async notifyB2CReservation(
+    order: Order,
+    actor?: { userId?: string; id?: string },
+  ) {
+    const actorUserId = actor?.userId || actor?.id;
+    if (!actorUserId) {
+      return;
+    }
+
+    if (!this.whatsAppService.isClientReady(actorUserId)) {
+      return;
+    }
+
+    try {
+      const customer =
+        order.customer ||
+        (await this.customersService.findOne(
+          order.customerId,
+          order.organizationId,
+        ));
+
+      if (!customer?.phone) {
+        return;
+      }
+
+      const template = await this.templatesService.findByName(
+        order.organizationId,
+        'Запчасть забронирована',
+      );
+      if (!template?.content) {
+        return;
+      }
+
+      const firstItem = order.items?.[0]?.item;
+      const variables: Record<string, string> = {
+        name: customer.name || 'Уважаемый клиент',
+        organizationName: await this.getOrganizationName(order.organizationId),
+        itemName: firstItem?.name || 'Запчасть',
+        sku: firstItem?.sku || '—',
+        reserveUntil: this.formatReserveUntil(order.reservedUntil),
+      };
+
+      const message = this.templatesService.fillTemplate(
+        template.content,
+        variables,
+      );
+
+      await this.whatsAppService.sendMessage(
+        actorUserId,
+        customer.phone,
+        message,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Ошибка отправки уведомления о резерве: ${error.message}`,
+        error.stack,
+      );
+    }
+  }
+
   private getWorkStageChanges(
     previousStages: OrderWorkStage[],
     nextStages: OrderWorkStage[],
@@ -345,13 +527,67 @@ export class OrdersService {
       .replace(/^-+|-+$/g, '');
   }
 
-  private async isServiceOrganization(organizationId: string): Promise<boolean> {
-    try {
-      const organization = await this.organizationsService.findOne(organizationId);
-      return organization.businessType === BusinessType.SERVICE;
-    } catch (error) {
-      return false;
+  private formatReserveUntil(value?: Date | string | null): string {
+    if (!value) {
+      return 'не указано';
     }
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return 'не указано';
+    }
+    return date.toLocaleString('ru-RU', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }
+
+  private formatStatusLabel(status: string): string {
+    switch (status) {
+      case 'processing':
+        return 'В работе';
+      case 'completed':
+        return 'Завершен';
+      case 'cancelled':
+        return 'Отменен';
+      case 'reserved':
+        return 'Забронирован';
+      case 'ready':
+        return 'Готов к выдаче';
+      default:
+        return 'Ожидание';
+    }
+  }
+
+  private async getOrganizationBusinessType(
+    organizationId: string,
+  ): Promise<BusinessType | null> {
+    try {
+      const organization = await this.organizationsService.findOne(
+        organizationId,
+      );
+      return organization.businessType || null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  private async getOrganizationName(organizationId: string): Promise<string> {
+    try {
+      const organization = await this.organizationsService.findOne(
+        organizationId,
+      );
+      return organization.name || 'наша компания';
+    } catch (error) {
+      return 'наша компания';
+    }
+  }
+
+  private async isServiceOrganization(organizationId: string): Promise<boolean> {
+    const businessType = await this.getOrganizationBusinessType(organizationId);
+    return businessType === BusinessType.SERVICE;
   }
 }
 

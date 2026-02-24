@@ -23,6 +23,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   List<Map<String, dynamic>> lowStockItems = [];
   List<Map<String, dynamic>> salesByCategory = [];
   Map<String, dynamic>? salesChart;
+  Map<String, dynamic>? abcXyzSummary;
+  List<Map<String, dynamic>> abcXyzItems = [];
+  List<Map<String, dynamic>> staffReportItems = [];
 
   String selectedPeriod = '30d';
 
@@ -64,6 +67,20 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       // График продаж
       final chartResponse = await dio.get('/api/dashboard/sales-chart?period=$selectedPeriod');
       salesChart = chartResponse.data;
+
+      // ABC/XYZ аналитика
+      final abcXyzResponse = await dio.get('/api/dashboard/abc-xyz');
+      abcXyzSummary = abcXyzResponse.data['summary'];
+      abcXyzItems = List<Map<String, dynamic>>.from(
+        abcXyzResponse.data['items'] ?? [],
+      );
+
+      // Отчеты по персоналу
+      final staffReportResponse =
+          await dio.get('/api/dashboard/staff-report?period=$selectedPeriod');
+      staffReportItems = List<Map<String, dynamic>>.from(
+        staffReportResponse.data['items'] ?? [],
+      );
 
       setState(() {
         isLoading = false;
@@ -235,6 +252,14 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             ),
           ],
           SizedBox(height: spacing),
+
+          if (abcXyzSummary != null || abcXyzItems.isNotEmpty)
+            _buildAbcXyzCard(isMobile: isMobile),
+          if (abcXyzSummary != null || abcXyzItems.isNotEmpty)
+            SizedBox(height: spacing),
+
+          if (staffReportItems.isNotEmpty) _buildStaffReportCard(isMobile: isMobile),
+          if (staffReportItems.isNotEmpty) SizedBox(height: spacing),
 
           // Продажи по категориям
           if (salesByCategory.isNotEmpty) _buildSalesByCategory(),
@@ -845,6 +870,204 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                           fontSize: 10,
                           color: AppTheme.textSecondary,
                         ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAbcXyzCard({bool isMobile = false}) {
+    final summary = abcXyzSummary ?? {};
+    final items = abcXyzItems;
+
+    Widget buildTag(String label, int value, Color color) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withOpacity(0.3)),
+        ),
+        child: Text(
+          '$label: $value',
+          style: TextStyle(
+            color: color,
+            fontWeight: FontWeight.w600,
+            fontSize: 12,
+          ),
+        ),
+      );
+    }
+
+    final currencyFormatter = NumberFormat.currency(
+      locale: 'ru_RU',
+      symbol: '₸',
+      decimalDigits: 0,
+    );
+
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: EdgeInsets.all(isMobile ? 16 : 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.insights, color: Colors.teal, size: isMobile ? 20 : 24),
+                SizedBox(width: isMobile ? 6 : 8),
+                Expanded(
+                  child: Text(
+                    'ABC/XYZ анализ',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontSize: isMobile ? 16 : 18,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: isMobile ? 12 : 16),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                buildTag('A', ((summary['A'] ?? 0) as num).toInt(), Colors.green),
+                buildTag('B', ((summary['B'] ?? 0) as num).toInt(), Colors.orange),
+                buildTag('C', ((summary['C'] ?? 0) as num).toInt(), Colors.redAccent),
+                buildTag('X', ((summary['X'] ?? 0) as num).toInt(), Colors.blue),
+                buildTag('Y', ((summary['Y'] ?? 0) as num).toInt(), Colors.deepPurple),
+                buildTag('Z', ((summary['Z'] ?? 0) as num).toInt(), Colors.grey),
+              ],
+            ),
+            SizedBox(height: isMobile ? 12 : 16),
+            if (items.isEmpty)
+              Text(
+                'Нет данных для ABC/XYZ анализа',
+                style: TextStyle(color: AppTheme.textSecondary),
+              )
+            else
+              ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: items.length,
+                separatorBuilder: (_, __) => const Divider(),
+                itemBuilder: (context, index) {
+                  final item = items[index];
+                  final abc = item['abc']?.toString() ?? '-';
+                  final xyz = item['xyz']?.toString() ?? '-';
+                  final revenue = item['revenue'] ?? 0;
+                  return ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: Colors.teal.withOpacity(0.1),
+                      child: Text(
+                        '$abc/$xyz',
+                        style: const TextStyle(
+                          color: Colors.teal,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                    title: Text(item['name'] ?? 'Без названия'),
+                    subtitle: Text(
+                      'Артикул: ${item['sku'] ?? '—'}',
+                      style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                    ),
+                    trailing: Text(
+                      currencyFormatter.format(revenue),
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  );
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStaffReportCard({bool isMobile = false}) {
+    final currencyFormatter = NumberFormat.currency(
+      locale: 'ru_RU',
+      symbol: '₸',
+      decimalDigits: 0,
+    );
+
+    String roleLabel(String? role) {
+      switch (role) {
+        case 'owner':
+          return 'Владелец';
+        case 'manager':
+          return 'Менеджер';
+        case 'storekeeper':
+          return 'Кладовщик';
+        case 'worker':
+          return 'Сотрудник';
+        default:
+          return 'Сотрудник';
+      }
+    }
+
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: EdgeInsets.all(isMobile ? 16 : 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.people, color: Colors.indigo, size: isMobile ? 20 : 24),
+                SizedBox(width: isMobile ? 6 : 8),
+                Expanded(
+                  child: Text(
+                    'Отчеты по персоналу',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontSize: isMobile ? 16 : 18,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: isMobile ? 12 : 16),
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: staffReportItems.length,
+              separatorBuilder: (_, __) => const Divider(),
+              itemBuilder: (context, index) {
+                final item = staffReportItems[index];
+                final ordersCount = (item['ordersCount'] as num?)?.toInt() ?? 0;
+                final revenue = (item['revenue'] as num?)?.toDouble() ?? 0;
+                final avgCheck = (item['avgCheck'] as num?)?.toDouble() ?? 0;
+                final conversion = (item['conversion'] as num?)?.toDouble() ?? 0;
+                return ListTile(
+                  title: Text(item['name'] ?? 'Сотрудник'),
+                  subtitle: Text(
+                    roleLabel(item['role']?.toString()),
+                    style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                  ),
+                  trailing: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        currencyFormatter.format(revenue),
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      Text(
+                        'Заказов: $ordersCount • Ср. чек: ${currencyFormatter.format(avgCheck)} • Оплата: ${(conversion * 100).toStringAsFixed(0)}%',
+                        style: TextStyle(fontSize: 10, color: AppTheme.textSecondary),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),

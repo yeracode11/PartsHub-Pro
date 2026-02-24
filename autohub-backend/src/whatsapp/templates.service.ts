@@ -74,6 +74,42 @@ export class TemplatesService {
 В наличии появились запчасти для {carModel}.
 Звоните, проконсультируем!`,
       },
+      {
+        organizationId,
+        name: 'Заказ-наряд: обновление статуса',
+        category: TemplateCategory.NOTIFICATION,
+        content: `Здравствуйте, {name}!
+
+Обновление по вашему заказ-наряду: {orderNumber}.
+Статус: {status}.
+
+С уважением,
+{organizationName}`,
+      },
+      {
+        organizationId,
+        name: 'Запчасть забронирована',
+        category: TemplateCategory.NOTIFICATION,
+        content: `Здравствуйте, {name}!
+
+Мы забронировали запчасть: {itemName} ({sku}).
+Резерв действует до {reserveUntil}.
+
+С уважением,
+{organizationName}`,
+      },
+      {
+        organizationId,
+        name: 'Заказ готов к выдаче (запчасти)',
+        category: TemplateCategory.NOTIFICATION,
+        content: `Здравствуйте, {name}!
+
+Ваш заказ {orderNumber} готов к выдаче.
+Можно заехать в удобное время.
+
+С уважением,
+{organizationName}`,
+      },
     ];
 
     for (const template of defaultTemplates) {
@@ -99,6 +135,15 @@ export class TemplatesService {
   async findOne(id: number, organizationId: string) {
     return await this.templateRepository.findOne({
       where: { id, organizationId },
+    });
+  }
+
+  /**
+   * Получить шаблон по названию
+   */
+  async findByName(organizationId: string, name: string) {
+    return await this.templateRepository.findOne({
+      where: { organizationId, name, isActive: true },
     });
   }
 
