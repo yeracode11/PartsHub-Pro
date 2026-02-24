@@ -13,6 +13,10 @@ interface UserSession {
   isReady: boolean;
   qrCode: string | null;
   reconnectAttempts: number;
+  isInitializing: boolean;
+  needsReauth: boolean;
+  reconnectInProgress: boolean;
+  reauthInProgress: boolean;
   userId: string;
 }
 
@@ -98,12 +102,18 @@ export class WhatsAppService implements OnModuleInit {
       isReady: false,
       qrCode: null,
       reconnectAttempts: 0,
+      isInitializing: true,
+      needsReauth: false,
+      reconnectInProgress: false,
+      reauthInProgress: false,
       userId,
     };
 
     // QR код для первой авторизации
     client.on('qr', (qr) => {
       session.qrCode = qr;
+      session.needsReauth = true;
+      session.isInitializing = false;
       this.logger.log(`📲 QR код для пользователя ${userId}:`);
       qrcode.generate(qr, { small: true });
     });
@@ -113,11 +123,14 @@ export class WhatsAppService implements OnModuleInit {
       session.isReady = true;
       session.qrCode = null;
       session.reconnectAttempts = 0;
+      session.needsReauth = false;
+      session.isInitializing = false;
       this.logger.log(`✅ WhatsApp клиент готов для пользователя ${userId}!`);
     });
 
     // Авторизация прошла успешно
     client.on('authenticated', () => {
+      session.isInitializing = false;
       this.logger.log(`✅ WhatsApp авторизован для пользователя ${userId}`);
     });
 
@@ -125,6 +138,9 @@ export class WhatsAppService implements OnModuleInit {
     client.on('auth_failure', (msg) => {
       this.logger.error(`❌ Ошибка авторизации WhatsApp для пользователя ${userId}:`, msg);
       session.isReady = false;
+      session.needsReauth = true;
+      session.qrCode = null;
+      this.scheduleReauth(userId, 'auth_failure').catch(() => undefined);
     });
 
     // Отключение
@@ -137,13 +153,10 @@ export class WhatsAppService implements OnModuleInit {
       if (session.reconnectAttempts < this.maxReconnectAttempts) {
         session.reconnectAttempts++;
         this.logger.log(`🔄 Попытка переподключения ${session.reconnectAttempts}/${this.maxReconnectAttempts} для пользователя ${userId}`);
-        setTimeout(() => {
-          this.initializeUserSession(userId).catch(err => {
-            this.logger.error(`❌ Ошибка переподключения для пользователя ${userId}:`, err.message);
-          });
-        }, 5000);
+        this.scheduleReconnect(userId).catch(() => undefined);
       } else {
         this.logger.error(`❌ Превышено максимальное количество попыток переподключения для пользователя ${userId}`);
+        this.scheduleReauth(userId, 'max_reconnect_attempts').catch(() => undefined);
       }
     });
 
@@ -164,6 +177,9 @@ export class WhatsAppService implements OnModuleInit {
   async initializeUserSession(userId: string): Promise<void> {
     this.logger.log(`📱 Инициализация WhatsApp сессии для пользователя: ${userId}`);
     const session = await this.getOrCreateSession(userId);
+    if (session.isInitializing) {
+      return;
+    }
     // Сессия уже создана и инициализирована в createSession
   }
 
@@ -181,6 +197,22 @@ export class WhatsAppService implements OnModuleInit {
   getQRCode(userId: string): string | null {
     const session = this.userSessions.get(userId);
     return session?.qrCode || null;
+  }
+
+  /**
+   * Нужна повторная авторизация через QR
+   */
+  needsReauth(userId: string): boolean {
+    const session = this.userSessions.get(userId);
+    return session?.needsReauth || false;
+  }
+
+  /**
+   * Принудительная повторная авторизация (очищает сессию)
+   */
+  async forceReauth(userId: string, reason: string = 'manual'): Promise<void> {
+    this.logger.warn(`🔐 Принудительная повторная авторизация WhatsApp (${reason}) для пользователя ${userId}`);
+    await this.rebuildSession(userId, true);
   }
 
   /**
@@ -212,6 +244,8 @@ export class WhatsAppService implements OnModuleInit {
       if (state !== 'CONNECTED') {
         this.logger.warn(`⚠️ WhatsApp клиент не подключен для пользователя ${userId}. Состояние: ${state}`);
         session.isReady = false;
+        session.needsReauth = true;
+        this.scheduleReauth(userId, 'state_not_connected').catch(() => undefined);
         throw new Error(`WhatsApp клиент не подключен. Состояние: ${state}. Требуется переподключение.`);
       }
     } catch (stateError) {
@@ -566,11 +600,7 @@ export class WhatsAppService implements OnModuleInit {
     this.logger.log(`🔄 Принудительное переподключение WhatsApp для пользователя ${userId}...`);
     
     try {
-      // Выходим из текущей сессии
-      await this.logout(userId);
-      
-      // Создаем новую сессию
-      await this.initializeUserSession(userId);
+      await this.rebuildSession(userId, false);
       
       this.logger.log(`✅ WhatsApp переподключен для пользователя ${userId}`);
     } catch (error) {
@@ -615,6 +645,81 @@ export class WhatsAppService implements OnModuleInit {
    */
   private delay(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Пересоздать сессию (с сохранением или очисткой авторизации)
+   */
+  private async rebuildSession(userId: string, clearAuth: boolean): Promise<void> {
+    const existing = this.userSessions.get(userId);
+    if (existing?.client) {
+      try {
+        await existing.client.destroy();
+      } catch (e) {
+        this.logger.warn(`⚠️ Не удалось корректно остановить клиента для ${userId}: ${e.message}`);
+      }
+    }
+
+    if (clearAuth) {
+      const dataPath = path.join('.wwebjs_auth', userId);
+      if (fs.existsSync(dataPath)) {
+        fs.rmSync(dataPath, { recursive: true, force: true });
+      }
+    }
+
+    const session = await this.createSession(userId);
+    if (clearAuth) {
+      session.needsReauth = true;
+    }
+    this.userSessions.set(userId, session);
+  }
+
+  /**
+   * Плановое переподключение без очистки авторизации
+   */
+  private async scheduleReconnect(userId: string): Promise<void> {
+    const session = this.userSessions.get(userId);
+    if (!session || session.reconnectInProgress) {
+      return;
+    }
+    session.reconnectInProgress = true;
+    setTimeout(async () => {
+      try {
+        await this.rebuildSession(userId, false);
+      } catch (err) {
+        this.logger.error(`❌ Ошибка переподключения для пользователя ${userId}:`, err.message);
+      } finally {
+        const updated = this.userSessions.get(userId);
+        if (updated) {
+          updated.reconnectInProgress = false;
+        }
+      }
+    }, 5000);
+  }
+
+  /**
+   * Плановая повторная авторизация через QR
+   */
+  private async scheduleReauth(userId: string, reason: string): Promise<void> {
+    const session = this.userSessions.get(userId);
+    if (!session || session.reauthInProgress) {
+      return;
+    }
+    session.reauthInProgress = true;
+    session.needsReauth = true;
+    setTimeout(async () => {
+      try {
+        this.logger.warn(`🔐 Требуется повторная авторизация WhatsApp (${reason}) для пользователя ${userId}`);
+        await this.rebuildSession(userId, true);
+      } catch (err) {
+        this.logger.error(`❌ Ошибка повторной авторизации для пользователя ${userId}:`, err.message);
+      } finally {
+        const updated = this.userSessions.get(userId);
+        if (updated) {
+          updated.reauthInProgress = false;
+        }
+      }
+    }, 1000);
   }
 
   /**

@@ -68,19 +68,28 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       final chartResponse = await dio.get('/api/dashboard/sales-chart?period=$selectedPeriod');
       salesChart = chartResponse.data;
 
-      // ABC/XYZ аналитика
-      final abcXyzResponse = await dio.get('/api/dashboard/abc-xyz');
-      abcXyzSummary = abcXyzResponse.data['summary'];
-      abcXyzItems = List<Map<String, dynamic>>.from(
-        abcXyzResponse.data['items'] ?? [],
-      );
+      // ABC/XYZ аналитика (опционально)
+      try {
+        final abcXyzResponse = await dio.get('/api/dashboard/abc-xyz');
+        abcXyzSummary = abcXyzResponse.data['summary'];
+        abcXyzItems = List<Map<String, dynamic>>.from(
+          abcXyzResponse.data['items'] ?? [],
+        );
+      } catch (_) {
+        abcXyzSummary = null;
+        abcXyzItems = [];
+      }
 
-      // Отчеты по персоналу
-      final staffReportResponse =
-          await dio.get('/api/dashboard/staff-report?period=$selectedPeriod');
-      staffReportItems = List<Map<String, dynamic>>.from(
-        staffReportResponse.data['items'] ?? [],
-      );
+      // Отчеты по персоналу (опционально)
+      try {
+        final staffReportResponse =
+            await dio.get('/api/dashboard/staff-report?period=$selectedPeriod');
+        staffReportItems = List<Map<String, dynamic>>.from(
+          staffReportResponse.data['items'] ?? [],
+        );
+      } catch (_) {
+        staffReportItems = [];
+      }
 
       setState(() {
         isLoading = false;

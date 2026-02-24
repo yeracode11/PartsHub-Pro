@@ -30,13 +30,14 @@ export class WhatsAppController {
     const userId = user.userId || user.id;
     const isReady = this.whatsappService.isClientReady(userId);
     const qrCode = this.whatsappService.getQRCode(userId);
+    const needsReauth = this.whatsappService.needsReauth(userId);
 
     return {
       ready: isReady,
-      needsAuth: qrCode !== null,
+      needsAuth: qrCode !== null || needsReauth,
       message: isReady
         ? 'WhatsApp готов к работе'
-        : qrCode
+        : qrCode || needsReauth
           ? 'Требуется авторизация - отсканируйте QR код'
           : 'Инициализация...',
     };
@@ -46,20 +47,28 @@ export class WhatsAppController {
    * Получить QR код для авторизации
    */
   @Get('qr')
-  getQRCode(@CurrentUser() user: any) {
+  async getQRCode(@CurrentUser() user: any) {
     const userId = user.userId || user.id;
     
     // Инициализируем сессию, если её еще нет
-    this.whatsappService.initializeUserSession(userId).catch(err => {
+    await this.whatsappService.initializeUserSession(userId).catch(err => {
       this.logger.error('Ошибка инициализации сессии', err.stack);
     });
     
-    const qrCode = this.whatsappService.getQRCode(userId);
+    let qrCode = this.whatsappService.getQRCode(userId);
+
+    if (!qrCode && !this.whatsappService.isClientReady(userId)) {
+      // Принудительно запрашиваем новый QR при неготовом клиенте
+      await this.whatsappService.forceReauth(userId, 'qr_request').catch(err => {
+        this.logger.error('Ошибка повторной авторизации WhatsApp', err.stack);
+      });
+      qrCode = this.whatsappService.getQRCode(userId);
+    }
 
     if (!qrCode) {
       return {
         qrCode: null,
-        message: 'QR код не требуется или уже авторизовано',
+        message: 'QR код генерируется. Подождите несколько секунд и обновите страницу.',
       };
     }
 

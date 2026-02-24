@@ -15,7 +15,8 @@ class BarcodeScannerService {
 
   Timer? _debounceTimer;
   String _buffer = '';
-  final Duration _scanTimeout = const Duration(milliseconds: 100);
+  final Duration _scanTimeout = const Duration(milliseconds: 50);
+  final int _minLength = 3;
 
   /// Обработчик отсканированного штрих-кода
   Function(String)? onBarcodeScanned;
@@ -25,6 +26,11 @@ class BarcodeScannerService {
   /// Сканеры обычно вводят данные очень быстро (все символы за ~100ms),
   /// поэтому мы собираем символы в буфер и обрабатываем их как один штрих-код.
   void handleInput(String value) {
+    if (value.trim().isEmpty) {
+      _debounceTimer?.cancel();
+      _buffer = '';
+      return;
+    }
     // Если значение короче предыдущего, значит поле было очищено
     if (value.length < _buffer.length) {
       _buffer = value;
@@ -40,8 +46,9 @@ class BarcodeScannerService {
 
     // Устанавливаем новый таймер
     _debounceTimer = Timer(_scanTimeout, () {
-      if (_buffer.isNotEmpty && onBarcodeScanned != null) {
-        onBarcodeScanned!(_buffer);
+      final value = _buffer.trim();
+      if (value.length >= _minLength && onBarcodeScanned != null) {
+        onBarcodeScanned!(value);
       }
       _buffer = '';
     });

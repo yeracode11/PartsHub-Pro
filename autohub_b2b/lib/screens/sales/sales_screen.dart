@@ -718,7 +718,6 @@ class _OrderDialogState extends State<_OrderDialog> {
   String selectedStatus = 'pending';
   String selectedPaymentStatus = 'pending';
   List<Map<String, dynamic>> selectedItems = [];
-  List<Map<String, dynamic>> suggestedItems = [];
   bool reserveEnabled = false;
   int reserveDays = 3;
   DateTime? reserveUntil;
@@ -760,8 +759,6 @@ class _OrderDialogState extends State<_OrderDialog> {
       }
     }
 
-    _refreshSuggestions();
-
     // Настроить сканер штрих‑кодов для режима кассы
     _barcodeScanner.onBarcodeScanned = _onBarcodeScanned;
 
@@ -784,10 +781,12 @@ class _OrderDialogState extends State<_OrderDialog> {
 
   /// Обработка отсканированного штрих‑кода (как на кассе)
   void _onBarcodeScanned(String barcode) {
-    if (!mounted || barcode.isEmpty) return;
+    if (!mounted) return;
+    final trimmed = barcode.trim();
+    if (trimmed.isEmpty) return;
 
     // Ищем товар по SKU / коду
-    final lower = barcode.trim().toLowerCase();
+    final lower = trimmed.toLowerCase();
     final matchedItem = widget.availableItems.firstWhere(
       (it) {
         final sku = (it['sku'] ?? '').toString().toLowerCase();
@@ -798,8 +797,8 @@ class _OrderDialogState extends State<_OrderDialog> {
 
     if (matchedItem.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Товар с кодом "$barcode" не найден'),
+      SnackBar(
+          content: Text('Товар с кодом "$trimmed" не найден'),
           backgroundColor: Colors.red,
         ),
       );
@@ -842,8 +841,6 @@ class _OrderDialogState extends State<_OrderDialog> {
         });
       });
     }
-    _refreshSuggestions();
-
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Добавлен товар: $name (x1)'),
@@ -857,150 +854,8 @@ class _OrderDialogState extends State<_OrderDialog> {
     _barcodeFocusNode.requestFocus();
   }
 
-  void _refreshSuggestions() {
-    if (selectedItems.isEmpty) {
-      setState(() {
-        suggestedItems = [];
-      });
-      return;
-    }
-
-    final lastItem = selectedItems.last;
-    final lastItemId = lastItem['itemId'] ?? lastItem['id'];
-    final sourceItem = widget.availableItems.firstWhere(
-      (item) => item['id'] == lastItemId,
-      orElse: () => {},
-    );
-    final category = sourceItem['category']?.toString();
-
-    final selectedIds = selectedItems
-        .map((item) => item['itemId'] ?? item['id'])
-        .where((id) => id != null)
-        .toSet();
-
-    final candidates = widget.availableItems.where((item) {
-      final itemId = item['id'];
-      if (selectedIds.contains(itemId)) return false;
-      final quantity = item['quantity'] as int? ?? 0;
-      if (quantity <= 0) return false;
-      if (category == null || category.isEmpty) return true;
-      return (item['category']?.toString() ?? '') == category;
-    }).toList();
-
-    candidates.sort((a, b) {
-      final qa = a['quantity'] as int? ?? 0;
-      final qb = b['quantity'] as int? ?? 0;
-      return qb.compareTo(qa);
-    });
-
-    setState(() {
-      suggestedItems = candidates.take(5).toList();
-    });
-  }
-
   void _setReserveUntilFromDays() {
     reserveUntil = DateTime.now().add(Duration(days: reserveDays));
-  }
-
-  Widget _buildSuggestedItems() {
-    if (suggestedItems.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    final currencyFormatter = NumberFormat.currency(
-      locale: 'ru_RU',
-      symbol: '₸',
-      decimalDigits: 0,
-    );
-
-    return Card(
-      elevation: 0,
-      color: AppTheme.primaryColor.withOpacity(0.04),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Рекомендуемые товары',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-            ),
-            const SizedBox(height: 8),
-            ListView.separated(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: suggestedItems.length,
-              separatorBuilder: (_, __) => const Divider(height: 16),
-              itemBuilder: (context, index) {
-                final item = suggestedItems[index];
-                final priceRaw = item['price'];
-                final double price = priceRaw is String
-                    ? double.tryParse(priceRaw) ?? 0
-                    : (priceRaw is num ? priceRaw.toDouble() : 0);
-                final sku = item['sku']?.toString();
-                return Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            item['name']?.toString() ?? 'Товар',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontWeight: FontWeight.w500),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            currencyFormatter.format(price),
-                            style: const TextStyle(
-                              color: AppTheme.textSecondary,
-                              fontSize: 12,
-                            ),
-                          ),
-                          if (sku != null && sku.isNotEmpty)
-                            Text(
-                              'Артикул: $sku',
-                              style: const TextStyle(
-                                color: AppTheme.textSecondary,
-                                fontSize: 11,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: () {
-                        setState(() {
-                          selectedItems.add({
-                            'id': item['id'],
-                            'itemId': item['id'],
-                            'name': item['name'],
-                            'price': price,
-                            'quantity': 1,
-                            'imageUrl': (item['images'] != null &&
-                                    (item['images'] as List).isNotEmpty)
-                                ? (item['images'] as List).first.toString()
-                                : item['imageUrl'],
-                            'sku': item['sku'],
-                          });
-                        });
-                        _refreshSuggestions();
-                      },
-                      icon: const Icon(Icons.add, size: 16),
-                      label: const Text('Добавить'),
-                    ),
-                  ],
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   Widget _buildReserveSection() {
@@ -1276,9 +1131,27 @@ class _OrderDialogState extends State<_OrderDialog> {
                                             };
                                           }
                                         });
-                                        _refreshSuggestions();
                                       },
                                       tooltip: 'Уменьшить количество',
+                                    ),
+                                    Text(
+                                      '$quantity',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.add_circle_outline),
+                                      onPressed: () {
+                                        setState(() {
+                                          final q = (item['quantity'] as int? ?? 1) + 1;
+                                          selectedItems[index] = {
+                                            ...item,
+                                            'quantity': q,
+                                          };
+                                        });
+                                      },
+                                      tooltip: 'Увеличить количество',
                                     ),
                                     Flexible(
                                       child: Text(
@@ -1297,7 +1170,6 @@ class _OrderDialogState extends State<_OrderDialog> {
                                   setState(() {
                                     selectedItems.removeAt(index);
                                   });
-                                  _refreshSuggestions();
                                 },
                                 tooltip: 'Удалить',
                               ),
@@ -1312,9 +1184,6 @@ class _OrderDialogState extends State<_OrderDialog> {
             ),
 
             const SizedBox(height: 16),
-            _buildSuggestedItems(),
-            if (suggestedItems.isNotEmpty) const SizedBox(height: 16),
-
             // Общая сумма
             Container(
               padding: const EdgeInsets.all(16),
@@ -1591,8 +1460,6 @@ class _OrderDialogState extends State<_OrderDialog> {
                           'quantity': quantity,
                         });
                       });
-                      _refreshSuggestions();
-
                       Navigator.pop(dialogContext);
                     },
               child: const Text('Добавить'),
