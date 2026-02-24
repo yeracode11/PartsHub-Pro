@@ -59,6 +59,15 @@ export class WhatsAppService implements OnModuleInit {
    */
   private async createSession(userId: string): Promise<UserSession> {
     const dataPath = path.join('.wwebjs_auth', userId);
+    const puppeteerTimeout = parseInt(
+      process.env.WHATSAPP_PUPPETEER_TIMEOUT_MS || '120000',
+      10,
+    );
+    const puppeteerProtocolTimeout = parseInt(
+      process.env.WHATSAPP_PUPPETEER_PROTOCOL_TIMEOUT_MS || '120000',
+      10,
+    );
+    const proxyServer = process.env.WHATSAPP_PROXY;
     
     // Создаем директорию для сессии, если её нет
     if (!fs.existsSync(dataPath)) {
@@ -88,8 +97,10 @@ export class WhatsAppService implements OnModuleInit {
           '--disable-background-timer-throttling',
           '--disable-backgrounding-occluded-windows',
           '--disable-renderer-backgrounding',
+          ...(proxyServer ? [`--proxy-server=${proxyServer}`] : []),
         ],
-        timeout: 120000,
+        timeout: puppeteerTimeout,
+        protocolTimeout: puppeteerProtocolTimeout,
       },
       webVersionCache: {
         type: 'remote',
