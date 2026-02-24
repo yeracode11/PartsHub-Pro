@@ -17,6 +17,7 @@ interface UserSession {
   needsReauth: boolean;
   reconnectInProgress: boolean;
   reauthInProgress: boolean;
+  lastError: string | null;
   userId: string;
 }
 
@@ -105,6 +106,7 @@ export class WhatsAppService implements OnModuleInit {
       needsReauth: false,
       reconnectInProgress: false,
       reauthInProgress: false,
+      lastError: null,
       userId,
     };
 
@@ -124,12 +126,14 @@ export class WhatsAppService implements OnModuleInit {
       session.reconnectAttempts = 0;
       session.needsReauth = false;
       session.isInitializing = false;
+      session.lastError = null;
       this.logger.log(`✅ WhatsApp клиент готов для пользователя ${userId}!`);
     });
 
     // Авторизация прошла успешно
     client.on('authenticated', () => {
       session.isInitializing = false;
+      session.lastError = null;
       this.logger.log(`✅ WhatsApp авторизован для пользователя ${userId}`);
     });
 
@@ -139,6 +143,7 @@ export class WhatsAppService implements OnModuleInit {
       session.isReady = false;
       session.needsReauth = true;
       session.qrCode = null;
+      session.lastError = typeof msg === 'string' ? msg : 'auth_failure';
       this.scheduleReauth(userId, 'auth_failure').catch(() => undefined);
     });
 
@@ -147,6 +152,7 @@ export class WhatsAppService implements OnModuleInit {
       this.logger.warn(`⚠️ WhatsApp отключен для пользователя ${userId}:`, reason);
       session.isReady = false;
       session.qrCode = null;
+      session.lastError = typeof reason === 'string' ? reason : 'disconnected';
       
       // Попытка переподключения
       if (session.reconnectAttempts < this.maxReconnectAttempts) {
@@ -165,7 +171,15 @@ export class WhatsAppService implements OnModuleInit {
     });
 
     // Инициализируем клиент
-    await client.initialize();
+    try {
+      await client.initialize();
+    } catch (error) {
+      const message = error?.message || 'Инициализация WhatsApp не удалась';
+      session.isInitializing = false;
+      session.needsReauth = true;
+      session.lastError = message;
+      this.logger.error(`❌ Ошибка инициализации WhatsApp для пользователя ${userId}:`, message);
+    }
 
     return session;
   }
@@ -204,6 +218,11 @@ export class WhatsAppService implements OnModuleInit {
   needsReauth(userId: string): boolean {
     const session = this.userSessions.get(userId);
     return session?.needsReauth || false;
+  }
+
+  getLastError(userId: string): string | null {
+    const session = this.userSessions.get(userId);
+    return session?.lastError || null;
   }
 
   /**

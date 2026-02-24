@@ -31,15 +31,19 @@ export class WhatsAppController {
     const isReady = this.whatsappService.isClientReady(userId);
     const qrCode = this.whatsappService.getQRCode(userId);
     const needsReauth = this.whatsappService.needsReauth(userId);
+    const lastError = this.whatsappService.getLastError(userId);
 
     return {
       ready: isReady,
       needsAuth: qrCode !== null || needsReauth,
+      lastError,
       message: isReady
         ? 'WhatsApp готов к работе'
         : qrCode || needsReauth
           ? 'Требуется авторизация - отсканируйте QR код'
-          : 'Инициализация...',
+          : lastError
+            ? `Ошибка подключения: ${lastError}`
+            : 'Инициализация...',
     };
   }
 
