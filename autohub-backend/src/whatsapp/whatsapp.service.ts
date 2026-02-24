@@ -83,7 +83,6 @@ export class WhatsAppService implements OnModuleInit {
           '--disable-extensions',
           '--disable-plugins',
           '--disable-images',
-          '--disable-javascript',
           '--disable-default-apps',
           '--disable-background-timer-throttling',
           '--disable-backgrounding-occluded-windows',
