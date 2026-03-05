@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import 'package:autohub_b2b/services/api/api_client.dart';
+import 'package:autohub_b2b/widgets/unauthorized_placeholder.dart';
 
 class AnalyticsScreen extends StatefulWidget {
   const AnalyticsScreen({super.key});
@@ -16,6 +17,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   final dio = ApiClient().dio;
   bool isLoading = true;
   String? error;
+  bool isForbidden = false;
+  String? forbiddenMessage;
 
   // Данные для аналитики
   Map<String, dynamic>? advancedAnalytics;
@@ -39,6 +42,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     setState(() {
       isLoading = true;
       error = null;
+      isForbidden = false;
+      forbiddenMessage = null;
     });
 
     try {
@@ -95,10 +100,20 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         isLoading = false;
       });
     } catch (e) {
-      setState(() {
-        error = e.toString();
-        isLoading = false;
-      });
+      if (e is DioException && e.response?.statusCode == 403) {
+        setState(() {
+          isForbidden = true;
+          isLoading = false;
+          forbiddenMessage =
+              (e.response?.data is Map<String, dynamic> ? (e.response?.data['message'] as String?) : null) ??
+                  'У вас нет доступа к разделу "Аналитика". Войдите под владельцем или менеджером.';
+        });
+      } else {
+        setState(() {
+          error = e.toString();
+          isLoading = false;
+        });
+      }
     }
   }
 
@@ -208,6 +223,13 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   Widget _buildContent() {
     if (isLoading) {
       return const Center(child: CircularProgressIndicator());
+    }
+
+    if (isForbidden) {
+      return UnauthorizedPlaceholder(
+        message: forbiddenMessage ??
+            'У вас нет доступа к разделу "Аналитика". Войдите под владельцем или менеджером.',
+      );
     }
 
     if (error != null) {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/services/api/api_client.dart';
+import 'package:autohub_b2b/widgets/unauthorized_placeholder.dart';
 import 'package:dio/dio.dart';
 import 'package:intl/intl.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -19,8 +20,10 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
 
   bool isLoading = true;
   bool isWhatsAppReady = false;
+  bool isForbidden = false;
   String? qrCode;
   String? statusMessage;
+  String? forbiddenMessage;
 
   List<Map<String, dynamic>> templates = [];
   List<Map<String, dynamic>> customers = [];
@@ -66,13 +69,24 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
       // Загружаем историю
       await _loadHistory();
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Ошибка загрузки данных: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+      if (e is DioException && e.response?.statusCode == 403) {
+        if (mounted) {
+          setState(() {
+            isForbidden = true;
+            forbiddenMessage =
+                (e.response?.data is Map<String, dynamic> ? (e.response?.data['message'] as String?) : null) ??
+                    'У вас нет доступа к модулю WhatsApp. Войдите под владельцем или менеджером.';
+          });
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Ошибка загрузки данных: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     } finally {
       if (mounted) {
@@ -106,6 +120,16 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
         });
       }
     } catch (e) {
+      if (e is DioException && e.response?.statusCode == 403) {
+        if (mounted) {
+          setState(() {
+            isForbidden = true;
+            forbiddenMessage =
+                (e.response?.data is Map<String, dynamic> ? (e.response?.data['message'] as String?) : null) ??
+                    'У вас нет доступа к модулю WhatsApp. Войдите под владельцем или менеджером.';
+          });
+        }
+      }
     }
   }
 
@@ -398,6 +422,13 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
   Widget build(BuildContext context) {
     if (isLoading) {
       return const Center(child: CircularProgressIndicator());
+    }
+
+    if (isForbidden) {
+      return UnauthorizedPlaceholder(
+        message: forbiddenMessage ??
+            'У вас нет доступа к этому разделу. Войдите под владельцем или менеджером, чтобы использовать WhatsApp‑рассылку.',
+      );
     }
 
     return Column(

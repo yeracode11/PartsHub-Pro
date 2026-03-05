@@ -5,6 +5,8 @@ import 'package:autohub_b2b/models/incoming_doc_model.dart';
 import 'package:autohub_b2b/services/api/api_client.dart';
 import 'package:autohub_b2b/services/api/incoming_api_service.dart';
 import 'package:autohub_b2b/screens/warehouse/incoming_doc_screen.dart';
+import 'package:autohub_b2b/widgets/unauthorized_placeholder.dart';
+import 'package:dio/dio.dart';
 
 class IncomingListScreen extends StatefulWidget {
   const IncomingListScreen({super.key});
@@ -19,6 +21,8 @@ class _IncomingListScreenState extends State<IncomingListScreen> {
   bool _isLoading = true;
   String? _error;
   IncomingDocStatus? _filterStatus;
+  bool _isForbidden = false;
+  String? _forbiddenMessage;
 
   @override
   void initState() {
@@ -32,6 +36,8 @@ class _IncomingListScreenState extends State<IncomingListScreen> {
     setState(() {
       _isLoading = true;
       _error = null;
+      _isForbidden = false;
+      _forbiddenMessage = null;
     });
 
     try {
@@ -45,9 +51,26 @@ class _IncomingListScreenState extends State<IncomingListScreen> {
         _documents = docs;
         _isLoading = false;
       });
+    } on DioException catch (e) {
+      if (!mounted) return;
+
+      if (e.response?.statusCode == 403) {
+        setState(() {
+          _isForbidden = true;
+          _isLoading = false;
+          _forbiddenMessage =
+              (e.response?.data is Map<String, dynamic> ? (e.response?.data['message'] as String?) : null) ??
+                  'У вас нет доступа к разделу "Приходные накладные". Войдите под владельцем или менеджером.';
+        });
+      } else {
+        setState(() {
+          _error = e.toString();
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       if (!mounted) return;
-      
+
       setState(() {
         _error = e.toString();
         _isLoading = false;
@@ -57,6 +80,16 @@ class _IncomingListScreenState extends State<IncomingListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isForbidden) {
+      return Scaffold(
+        backgroundColor: AppTheme.backgroundColor,
+        body: UnauthorizedPlaceholder(
+          message: _forbiddenMessage ??
+              'У вас нет доступа к разделу "Приходные накладные". Войдите под владельцем или менеджером.',
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
       appBar: AppBar(

@@ -13,6 +13,7 @@ import 'package:autohub_b2b/services/api/api_client.dart';
 import 'package:autohub_b2b/screens/warehouse/item_edit_screen.dart';
 import 'package:autohub_b2b/screens/warehouse/printer_settings_screen.dart';
 import 'package:autohub_b2b/services/hardware/thermal_printer_service.dart';
+import 'package:autohub_b2b/widgets/unauthorized_placeholder.dart';
 
 class WarehouseScreen extends StatefulWidget {
   const WarehouseScreen({super.key});
@@ -31,6 +32,8 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
   List<Warehouse> warehouses = [];
   bool isLoading = true;
   String? error;
+  bool isForbidden = false;
+  String? forbiddenMessage;
   
   // Активные фильтры
   Map<String, dynamic> activeFilters = {};
@@ -85,7 +88,19 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
           warehouses = loadedWarehouses;
         });
       }
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 403) {
+        if (mounted) {
+          setState(() {
+            isForbidden = true;
+            forbiddenMessage =
+                (e.response?.data is Map<String, dynamic> ? (e.response?.data['message'] as String?) : null) ??
+                    'У вас нет доступа к модулю "Склад". Войдите под владельцем или менеджером.';
+          });
+        }
+      }
     } catch (e) {
+      // игнорируем другие ошибки, они проявятся при загрузке товаров
     }
   }
 
@@ -95,6 +110,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
     setState(() {
       isLoading = true;
       error = null;
+      // не сбрасываем isForbidden здесь, чтобы не мигала заглушка
     });
 
     try {
@@ -132,9 +148,26 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
           isLoading = false;
         });
       }
+    } on DioException catch (e) {
+      if (!mounted) return;
+
+      if (e.response?.statusCode == 403) {
+        setState(() {
+          isForbidden = true;
+          forbiddenMessage =
+              (e.response?.data is Map<String, dynamic> ? (e.response?.data['message'] as String?) : null) ??
+                  'У вас нет доступа к модулю "Склад". Войдите под владельцем или менеджером.';
+          isLoading = false;
+        });
+      } else {
+        setState(() {
+          error = e.toString();
+          isLoading = false;
+        });
+      }
     } catch (e) {
       if (!mounted) return;
-      
+
       setState(() {
         error = e.toString();
         isLoading = false;
@@ -816,6 +849,16 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
     final isMobile = MediaQuery.of(context).size.width < 768;
     final padding = isMobile ? 16.0 : 24.0;
 
+    if (isForbidden) {
+      return Scaffold(
+        backgroundColor: AppTheme.backgroundColor,
+        body: UnauthorizedPlaceholder(
+          message: forbiddenMessage ??
+              'У вас нет доступа к модулю "Склад". Войдите под владельцем или менеджером.',
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
       body: Column(
@@ -1136,6 +1179,16 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
             ),
             child: Row(
               children: [
+                const SizedBox(
+                  width: 40,
+                  child: Center(
+                    child: Icon(
+                      Icons.check_box_outline_blank,
+                      size: 16,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                ),
                 Expanded(
                   flex: 3,
                   child: Text(
@@ -1202,6 +1255,24 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                   ),
                   child: Row(
                     children: [
+                      SizedBox(
+                        width: 40,
+                        child: Checkbox(
+                          value: selectedItemIds.contains(item.id),
+                          onChanged: item.id == null
+                              ? null
+                              : (value) {
+                                  setState(() {
+                                    if (value == true) {
+                                      selectedItemIds.add(item.id!);
+                                    } else {
+                                      selectedItemIds.remove(item.id);
+                                    }
+                                  });
+                                },
+                          activeColor: AppTheme.primaryColor,
+                        ),
+                      ),
                       Expanded(
                         flex: 3,
                         child: Text(

@@ -2,6 +2,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:autohub_b2b/blocs/dashboard/dashboard_event.dart';
 import 'package:autohub_b2b/blocs/dashboard/dashboard_state.dart';
 import 'package:autohub_b2b/services/api/dashboard_api_service.dart';
+import 'package:autohub_b2b/services/api/api_exception.dart';
 import 'package:autohub_b2b/models/dashboard_stats_model.dart';
 
 class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
@@ -41,7 +42,14 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
         currentPeriod: '7d',
       ));
     } catch (e) {
-      emit(DashboardError('Ошибка загрузки данных: $e'));
+      if (e is ForbiddenException) {
+        emit(const DashboardError(
+          'У вас нет доступа к этому разделу.\nВойдите под владельцем или менеджером.',
+          isForbidden: true,
+        ));
+      } else {
+        emit(DashboardError('Ошибка загрузки данных: $e'));
+      }
     }
   }
 
@@ -83,7 +91,14 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
             : '7d',
       ));
     } catch (e) {
-      emit(DashboardError('Ошибка обновления данных: $e'));
+      if (e is ForbiddenException) {
+        emit(const DashboardError(
+          'У вас нет доступа к этому разделу.\nВойдите под владельцем или менеджером.',
+          isForbidden: true,
+        ));
+      } else {
+        emit(DashboardError('Ошибка обновления данных: $e'));
+      }
     }
   }
 

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../models/warehouse_model.dart';
 import '../../services/warehouse_service.dart';
+import 'package:autohub_b2b/widgets/unauthorized_placeholder.dart';
+import 'package:dio/dio.dart';
 
 class WarehousesScreen extends StatefulWidget {
   const WarehousesScreen({Key? key}) : super(key: key);
@@ -14,6 +16,8 @@ class _WarehousesScreenState extends State<WarehousesScreen> {
   List<Warehouse> _warehouses = [];
   Map<String, int> _itemsCounts = {};
   bool _isLoading = true;
+  bool _isForbidden = false;
+  String? _forbiddenMessage;
 
   @override
   void initState() {
@@ -22,7 +26,11 @@ class _WarehousesScreenState extends State<WarehousesScreen> {
   }
 
   Future<void> _loadWarehouses() async {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _isForbidden = false;
+      _forbiddenMessage = null;
+    });
     try {
       final warehouses = await _warehouseService.getWarehouses();
       final counts = <String, int>{};
@@ -37,6 +45,24 @@ class _WarehousesScreenState extends State<WarehousesScreen> {
         _itemsCounts = counts;
         _isLoading = false;
       });
+    } on DioException catch (e) {
+      setState(() => _isLoading = false);
+      if (e.response?.statusCode == 403) {
+        if (mounted) {
+          setState(() {
+            _isForbidden = true;
+            _forbiddenMessage =
+                (e.response?.data is Map<String, dynamic> ? (e.response?.data['message'] as String?) : null) ??
+                    'У вас нет доступа к разделу "Склады". Войдите под владельцем или менеджером.';
+          });
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Ошибка загрузки складов: $e')),
+          );
+        }
+      }
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
@@ -205,6 +231,15 @@ class _WarehousesScreenState extends State<WarehousesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isForbidden) {
+      return Scaffold(
+        body: UnauthorizedPlaceholder(
+          message: _forbiddenMessage ??
+              'У вас нет доступа к разделу "Склады". Войдите под владельцем или менеджером.',
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Склады'),

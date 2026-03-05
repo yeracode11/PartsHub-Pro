@@ -6,6 +6,7 @@ import 'package:autohub_b2b/blocs/dashboard/dashboard_bloc.dart';
 import 'package:autohub_b2b/blocs/dashboard/dashboard_event.dart';
 import 'package:autohub_b2b/blocs/dashboard/dashboard_state.dart';
 import 'package:autohub_b2b/widgets/service_reminders_widget.dart';
+import 'package:autohub_b2b/widgets/unauthorized_placeholder.dart';
 import 'package:intl/intl.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -36,6 +37,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           }
 
           if (state is DashboardError) {
+            if (state.isForbidden) {
+              return UnauthorizedPlaceholder(message: state.message);
+            }
             return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
