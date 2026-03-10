@@ -275,6 +275,22 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
     }
   }
 
+  Future<void> _checkAuthorizationStatusWithMessage() async {
+    await _checkWhatsAppStatus();
+    if (!mounted) return;
+
+    final text = isWhatsAppReady
+        ? 'Авторизация активна'
+        : (statusMessage ?? 'Требуется авторизация');
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(text),
+        backgroundColor: isWhatsAppReady ? Colors.green : Colors.orange,
+      ),
+    );
+  }
+
   Future<void> _loadTemplates() async {
     try {
       final response = await dio.get('/api/whatsapp/templates');
@@ -490,6 +506,13 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
                     foregroundColor: Colors.white,
                   ),
                 ),
+              const SizedBox(width: 8),
+              OutlinedButton.icon(
+                onPressed: _checkAuthorizationStatusWithMessage,
+                icon: const Icon(Icons.verified_user_outlined),
+                label: const Text('Проверить статус авторизации'),
+              ),
+              const SizedBox(width: 8),
               if (!isWhatsAppReady)
                 ElevatedButton.icon(
                   onPressed: _reconnectWhatsApp,

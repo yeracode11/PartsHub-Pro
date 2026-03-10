@@ -69,10 +69,12 @@ class _ItemsFilterWidgetState extends State<ItemsFilterWidget> {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 768;
     return Dialog(
       child: Container(
-        width: 500,
+        width: isMobile ? double.infinity : 500,
         constraints: BoxConstraints(
+          maxWidth: 500,
           maxHeight: MediaQuery.of(context).size.height * 0.8,
         ),
         child: Column(
@@ -228,16 +230,40 @@ class _ItemsFilterWidgetState extends State<ItemsFilterWidget> {
               child: Row(
                 children: [
                   Expanded(
-                    child: OutlinedButton(
-                      onPressed: _resetFilters,
-                      child: const Text('Сбросить'),
+                    child: SizedBox(
+                      height: 52,
+                      child: OutlinedButton(
+                        onPressed: _resetFilters,
+                        style: OutlinedButton.styleFrom(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        child: const Text(
+                          'Сбросить',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
-                    child: ElevatedButton(
-                      onPressed: _applyFilters,
-                      child: const Text('Применить'),
+                    child: SizedBox(
+                      height: 52,
+                      child: ElevatedButton(
+                        onPressed: _applyFilters,
+                        style: ElevatedButton.styleFrom(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        child: const Text(
+                          'Применить',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
                     ),
                   ),
                 ],

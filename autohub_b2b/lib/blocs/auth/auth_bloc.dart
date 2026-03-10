@@ -20,8 +20,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       AuthCheckRequested event, Emitter<AuthState> emit) async {
     try {
       // Проверяем сохраненные данные пользователя
-      final userData = await _storage.getUserData();
-      final token = await _storage.getAuthToken();
+      // Добавляем защиту от зависаний: ограничиваем время ожидания
+      final userData = await _storage
+          .getUserData()
+          .timeout(const Duration(seconds: 5), onTimeout: () => null);
+      final token = await _storage
+          .getAuthToken()
+          .timeout(const Duration(seconds: 5), onTimeout: () => null);
 
       if (userData != null && token != null) {
         // Восстанавливаем пользователя из сохраненных данных

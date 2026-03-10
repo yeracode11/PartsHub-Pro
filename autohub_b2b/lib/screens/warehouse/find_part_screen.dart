@@ -552,12 +552,24 @@ class _FindPartScreenState extends State<FindPartScreen> with WidgetsBindingObse
     _scannerController.stop();
   }
 
+  void _closeScreen() {
+    _stopScanning();
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    }
+  }
+
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          onPressed: _closeScreen,
+          tooltip: 'Закрыть',
+        ),
         title: const Text('Найти запчасть'),
         backgroundColor: Colors.black87,
         foregroundColor: Colors.white,
