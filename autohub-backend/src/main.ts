@@ -32,7 +32,8 @@ function createAppLogger() {
         timeout: 10000,
         batching: true,
         json: true,
-        replaceTimestamp: true,
+        // Let Loki assign ingestion timestamp to avoid ms/ns mismatch.
+        replaceTimestamp: false,
         basicAuth:
           process.env.LOKI_USERNAME && process.env.LOKI_PASSWORD
             ? `${process.env.LOKI_USERNAME}:${process.env.LOKI_PASSWORD}`
