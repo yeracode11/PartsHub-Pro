@@ -28,6 +28,9 @@ function createAppLogger() {
           app: serviceName,
           env: environment,
         },
+        interval: 2,
+        timeout: 10000,
+        batching: true,
         json: true,
         replaceTimestamp: true,
         basicAuth:
@@ -50,9 +53,14 @@ function createAppLogger() {
 }
 
 async function bootstrap() {
+  const appLogger = createAppLogger();
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
-    logger: createAppLogger(),
+    logger: appLogger,
   });
+  appLogger.log(
+    `Loki bootstrap log. env=${process.env.LOKI_ENV || process.env.NODE_ENV || 'development'}`,
+    'Bootstrap',
+  );
   
   // Включаем CORS для работы с Flutter приложением
   const corsOrigin = process.env.CORS_ORIGIN || '*';
@@ -71,5 +79,6 @@ async function bootstrap() {
   const host = process.env.HOST || '0.0.0.0'; // Слушаем на всех интерфейсах для доступа извне
   
   await app.listen(port, host);
+  appLogger.log(`HTTP server started on ${host}:${port}`, 'Bootstrap');
 }
 bootstrap();
