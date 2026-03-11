@@ -9,9 +9,9 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "${DB_PORT:-5433}:5432"
+      - '${DB_PORT:-5433}:5432'
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-autohub_user}"]
+      test: ['CMD-SHELL', 'pg_isready -U ${DB_USER:-autohub_user}']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -21,10 +21,10 @@ services:
     container_name: autohub-loki
     command: -config.file=/etc/loki/config.yml
     volumes:
-      - ./observability/loki/loki-config.yml:/etc/loki/config.yml:ro
+      - ./autohub-backend/observability/loki/loki-config.yml:/etc/loki/config.yml:ro
       - loki_data:/loki
     ports:
-      - "3100:3100"
+      - '3100:3100'
 
   grafana:
     image: grafana/grafana:11.1.4
@@ -34,14 +34,16 @@ services:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./autohub-backend/observability/grafana/provisioning:/etc/grafana/provisioning:ro
     ports:
-      - "3001:3000"
+      - '3001:3000'
     depends_on:
       - loki
 
   backend:
-    build: .
+    build:
+      context: ./autohub-backend
+      dockerfile: Dockerfile
     container_name: autohub-backend
     environment:
       NODE_ENV: production
@@ -64,9 +66,9 @@ services:
       GREEN_API_INSTANCE_NAME: ${GREEN_API_INSTANCE_NAME:-7105313983}
       GREEN_API_TOKEN_INSTANCE: ${GREEN_API_TOKEN_INSTANCE:-}
     ports:
-      - "${BACKEND_PORT:-3002}:3000"
+      - '${BACKEND_PORT:-3002}:3000'
     volumes:
-      - ./uploads:/app/uploads
+      - ./autohub-backend/uploads:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -78,4 +80,3 @@ volumes:
   postgres_data:
   grafana_data:
   loki_data:
-

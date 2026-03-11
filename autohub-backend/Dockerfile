@@ -1,25 +1,26 @@
-FROM node:20-alpine
-
+FROM node:20-alpine AS deps
 WORKDIR /app
-
-# Копируем package files
 COPY package*.json ./
+RUN npm ci
 
-# Устанавливаем зависимости
-RUN npm ci --only=production
-
-# Копируем исходный код
+FROM node:20-alpine AS build
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-
-# Собираем приложение
 RUN npm run build
 
-# Создаем директорию для загрузок
+FROM node:20-alpine AS prod-deps
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --omit=dev
+
+FROM node:20-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=prod-deps /app/node_modules ./node_modules
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/package*.json ./
 RUN mkdir -p uploads/items
-
-# Expose порт
 EXPOSE 3000
-
-# Запускаем приложение
 CMD ["node", "dist/main.js"]
 

@@ -1,4 +1,17 @@
 node_modules
+dist
+coverage
+.git
+.gitignore
+npm-debug.log
+Dockerfile*
+docker-compose*.yml
+*.md
+uploads
+.wwebjs_auth
+.env
+.env.*
+node_modules
 npm-debug.log
 dist
 coverage

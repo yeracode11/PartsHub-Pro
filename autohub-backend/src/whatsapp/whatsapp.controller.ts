@@ -40,7 +40,7 @@ export class WhatsAppController {
       message: isReady
         ? 'WhatsApp готов к работе'
         : qrCode || needsReauth
-          ? 'Требуется авторизация - отсканируйте QR код'
+          ? 'Требуется авторизация в Green API'
           : lastError
             ? `Ошибка подключения: ${lastError}`
             : 'Инициализация...',
@@ -72,13 +72,14 @@ export class WhatsAppController {
     if (!qrCode) {
       return {
         qrCode: null,
-        message: 'QR код генерируется. Подождите несколько секунд и обновите страницу.',
+        message:
+          'QR недоступен через API. Авторизуйте инстанс в Green API кабинете.',
       };
     }
 
     return {
       qrCode,
-      message: 'Отсканируйте этот QR код в WhatsApp',
+      message: 'Отсканируйте QR код для авторизации Green API',
     };
   }
 

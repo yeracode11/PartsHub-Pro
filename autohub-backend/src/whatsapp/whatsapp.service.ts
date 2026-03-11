@@ -1,31 +1,29 @@
 import { Injectable, Logger, OnModuleInit, Inject } from '@nestjs/common';
-import { Client, LocalAuth, Message } from 'whatsapp-web.js';
-import * as qrcode from 'qrcode-terminal';
+import axios, { AxiosError } from 'axios';
 import { MessageHistoryService } from './message-history.service';
 import { MessageStatus } from './entities/message-history.entity';
 import { VehiclesService } from '../vehicles/vehicles.service';
 import { TemplatesService } from './templates.service';
-import * as fs from 'fs';
-import * as path from 'path';
 
-interface UserSession {
-  client: Client;
+interface UserState {
   isReady: boolean;
   qrCode: string | null;
-  reconnectAttempts: number;
-  isInitializing: boolean;
   needsReauth: boolean;
-  reconnectInProgress: boolean;
-  reauthInProgress: boolean;
   lastError: string | null;
-  userId: string;
 }
 
 @Injectable()
 export class WhatsAppService implements OnModuleInit {
   private readonly logger = new Logger(WhatsAppService.name);
-  private userSessions: Map<string, UserSession> = new Map();
-  private readonly maxReconnectAttempts = 3;
+  private userStates: Map<string, UserState> = new Map();
+
+  private readonly apiUrl =
+    process.env.GREEN_API_URL || 'https://7105.api.greenapi.com';
+  private readonly idInstance =
+    process.env.GREEN_API_ID_INSTANCE || '7105313983';
+  private readonly apiTokenInstance = process.env.GREEN_API_TOKEN_INSTANCE || '';
+  private readonly instanceName =
+    process.env.GREEN_API_INSTANCE_NAME || this.idInstance;
 
   constructor(
     @Inject(MessageHistoryService)
@@ -35,381 +33,106 @@ export class WhatsAppService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    // WhatsApp теперь инициализируется по требованию для каждого пользователя
-    this.logger.log('📱 WhatsApp сервис готов. Сессии будут создаваться по требованию.');
-  }
-
-  /**
-   * Получить или создать сессию для пользователя
-   */
-  private async getOrCreateSession(userId: string): Promise<UserSession> {
-    let session = this.userSessions.get(userId);
-
-    if (!session) {
-      this.logger.log(`📱 Создание новой WhatsApp сессии для пользователя: ${userId}`);
-      session = await this.createSession(userId);
-      this.userSessions.set(userId, session);
-    }
-
-    return session;
-  }
-
-  /**
-   * Создать новую сессию для пользователя
-   */
-  private async createSession(userId: string): Promise<UserSession> {
-    const dataPath = path.join('.wwebjs_auth', userId);
-    const puppeteerTimeout = parseInt(
-      process.env.WHATSAPP_PUPPETEER_TIMEOUT_MS || '120000',
-      10,
+    this.logger.log(
+      `📱 WhatsApp service via Green API initialized (instance: ${this.instanceName})`,
     );
-    const puppeteerProtocolTimeout = parseInt(
-      process.env.WHATSAPP_PUPPETEER_PROTOCOL_TIMEOUT_MS || '120000',
-      10,
-    );
-    const proxyServer = process.env.WHATSAPP_PROXY;
-    
-    // Создаем директорию для сессии, если её нет
-    if (!fs.existsSync(dataPath)) {
-      fs.mkdirSync(dataPath, { recursive: true });
-    }
-
-    const client = new Client({
-      authStrategy: new LocalAuth({
-        dataPath: dataPath,
-      }),
-      puppeteer: {
-        headless: true,
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-accelerated-2d-canvas',
-          '--no-first-run',
-          '--no-zygote',
-          '--disable-gpu',
-          '--disable-web-security',
-          '--disable-features=VizDisplayCompositor',
-          '--disable-extensions',
-          '--disable-plugins',
-          '--disable-images',
-          '--disable-default-apps',
-          '--disable-background-timer-throttling',
-          '--disable-backgrounding-occluded-windows',
-          '--disable-renderer-backgrounding',
-          ...(proxyServer ? [`--proxy-server=${proxyServer}`] : []),
-        ],
-        timeout: puppeteerTimeout,
-        protocolTimeout: puppeteerProtocolTimeout,
-      },
-      webVersionCache: {
-        type: 'remote',
-        remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
-      },
-    });
-
-    const session: UserSession = {
-      client,
-      isReady: false,
-      qrCode: null,
-      reconnectAttempts: 0,
-      isInitializing: true,
-      needsReauth: false,
-      reconnectInProgress: false,
-      reauthInProgress: false,
-      lastError: null,
-      userId,
-    };
-
-    // QR код для первой авторизации
-    client.on('qr', (qr) => {
-      session.qrCode = qr;
-      session.needsReauth = true;
-      session.isInitializing = false;
-      this.logger.log(`📲 QR код для пользователя ${userId}:`);
-      qrcode.generate(qr, { small: true });
-    });
-
-    // Клиент готов
-    client.on('ready', () => {
-      session.isReady = true;
-      session.qrCode = null;
-      session.reconnectAttempts = 0;
-      session.needsReauth = false;
-      session.isInitializing = false;
-      session.lastError = null;
-      this.logger.log(`✅ WhatsApp клиент готов для пользователя ${userId}!`);
-    });
-
-    // Авторизация прошла успешно
-    client.on('authenticated', () => {
-      session.isInitializing = false;
-      session.lastError = null;
-      this.logger.log(`✅ WhatsApp авторизован для пользователя ${userId}`);
-    });
-
-    // Ошибка авторизации
-    client.on('auth_failure', (msg) => {
-      this.logger.error(`❌ Ошибка авторизации WhatsApp для пользователя ${userId}:`, msg);
-      session.isReady = false;
-      session.needsReauth = true;
-      session.qrCode = null;
-      session.lastError = typeof msg === 'string' ? msg : 'auth_failure';
-      this.scheduleReauth(userId, 'auth_failure').catch(() => undefined);
-    });
-
-    // Отключение
-    client.on('disconnected', (reason) => {
-      this.logger.warn(`⚠️ WhatsApp отключен для пользователя ${userId}:`, reason);
-      session.isReady = false;
-      session.qrCode = null;
-      session.lastError = typeof reason === 'string' ? reason : 'disconnected';
-      
-      // Попытка переподключения
-      if (session.reconnectAttempts < this.maxReconnectAttempts) {
-        session.reconnectAttempts++;
-        this.logger.log(`🔄 Попытка переподключения ${session.reconnectAttempts}/${this.maxReconnectAttempts} для пользователя ${userId}`);
-        this.scheduleReconnect(userId).catch(() => undefined);
-      } else {
-        this.logger.error(`❌ Превышено максимальное количество попыток переподключения для пользователя ${userId}`);
-        this.scheduleReauth(userId, 'max_reconnect_attempts').catch(() => undefined);
-      }
-    });
-
-    // Входящие сообщения
-    client.on('message', async (message: Message) => {
-      this.logger.debug(`📨 Получено сообщение от ${message.from} для пользователя ${userId}: ${message.body}`);
-    });
-
-    // Инициализируем клиент
-    try {
-      await client.initialize();
-    } catch (error) {
-      const message = error?.message || 'Инициализация WhatsApp не удалась';
-      session.isInitializing = false;
-      session.needsReauth = true;
-      session.lastError = message;
-      this.logger.error(`❌ Ошибка инициализации WhatsApp для пользователя ${userId}:`, message);
-    }
-
-    return session;
   }
 
-  /**
-   * Инициализировать сессию пользователя
-   */
   async initializeUserSession(userId: string): Promise<void> {
-    this.logger.log(`📱 Инициализация WhatsApp сессии для пользователя: ${userId}`);
-    const session = await this.getOrCreateSession(userId);
-    if (session.isInitializing) {
-      return;
-    }
-    // Сессия уже создана и инициализирована в createSession
+    await this.refreshState(userId);
   }
 
-  /**
-   * Проверка готовности клиента пользователя
-   */
   isClientReady(userId: string): boolean {
-    const session = this.userSessions.get(userId);
-    return session?.isReady || false;
+    return this.userStates.get(userId)?.isReady || false;
   }
 
-  /**
-   * Получить QR код для авторизации пользователя
-   */
   getQRCode(userId: string): string | null {
-    const session = this.userSessions.get(userId);
-    return session?.qrCode || null;
+    return this.userStates.get(userId)?.qrCode || null;
   }
 
-  /**
-   * Нужна повторная авторизация через QR
-   */
   needsReauth(userId: string): boolean {
-    const session = this.userSessions.get(userId);
-    return session?.needsReauth || false;
+    return this.userStates.get(userId)?.needsReauth || false;
   }
 
   getLastError(userId: string): string | null {
-    const session = this.userSessions.get(userId);
-    return session?.lastError || null;
+    return this.userStates.get(userId)?.lastError || null;
   }
 
-  /**
-   * Принудительная повторная авторизация (очищает сессию)
-   */
   async forceReauth(userId: string, reason: string = 'manual'): Promise<void> {
-    this.logger.warn(`🔐 Принудительная повторная авторизация WhatsApp (${reason}) для пользователя ${userId}`);
-    await this.rebuildSession(userId, true);
+    this.logger.warn(
+      `🔐 Green API: marked reauth required (${reason}) for user ${userId}`,
+    );
+    const current = this.userStates.get(userId) ?? this.getDefaultState();
+    this.userStates.set(userId, {
+      ...current,
+      isReady: false,
+      needsReauth: true,
+      qrCode: null,
+      lastError:
+        'Требуется авторизация в Green API (личный кабинет / мобильное устройство).',
+    });
   }
 
-  /**
-   * Отправить сообщение одному контакту с retry логикой
-   */
   async sendMessage(
     userId: string,
     phone: string,
     message: string,
     retries: number = 3,
   ): Promise<void> {
-    const session = await this.getOrCreateSession(userId);
-
-    if (!session.client) {
-      this.logger.error(`❌ WhatsApp клиент не инициализирован для пользователя ${userId}`);
-      throw new Error('WhatsApp клиент не инициализирован. Попробуйте переподключиться.');
+    if (!this.apiTokenInstance) {
+      throw new Error(
+        'GREEN_API_TOKEN_INSTANCE не задан. Добавьте токен инстанса в env.',
+      );
     }
 
-    if (!session.isReady) {
-      this.logger.error(`❌ WhatsApp клиент не готов для пользователя ${userId}. isReady = false`);
-      throw new Error('WhatsApp клиент не готов. Отсканируйте QR код.');
+    await this.refreshState(userId);
+    if (!this.isClientReady(userId)) {
+      throw new Error(
+        'WhatsApp не готов в Green API. Выполните авторизацию инстанса.',
+      );
     }
 
-    // Проверяем состояние клиента через API
-    try {
-      const state = await session.client.getState();
-      this.logger.log(`📊 Состояние WhatsApp клиента для пользователя ${userId}: ${state}`);
-      
-      if (state !== 'CONNECTED') {
-        this.logger.warn(`⚠️ WhatsApp клиент не подключен для пользователя ${userId}. Состояние: ${state}`);
-        session.isReady = false;
-        session.needsReauth = true;
-        this.scheduleReauth(userId, 'state_not_connected').catch(() => undefined);
-        throw new Error(`WhatsApp клиент не подключен. Состояние: ${state}. Требуется переподключение.`);
-      }
-    } catch (stateError) {
-      this.logger.error(`❌ Ошибка проверки состояния клиента для пользователя ${userId}: ${stateError.message}`);
-    }
-
-    // Форматируем номер телефона
     const formattedPhone = this.formatPhoneNumber(phone);
-    const chatId = `${formattedPhone}@c.us`;
-
-    this.logger.log(`📱 Отправка на номер: ${phone} -> ${formattedPhone} (chatId: ${chatId}) для пользователя ${userId}`);
-    this.logger.log(`📝 Длина сообщения: ${message.length} символов`);
+    const chatId = this.toChatId(formattedPhone);
 
     let lastError: Error | null = null;
-
-    // Retry логика
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
-        this.logger.log(
-          `📤 Отправка сообщения на ${formattedPhone} (попытка ${attempt}/${retries}) для пользователя ${userId}`,
-        );
-
-        if (!session.isReady || !session.client) {
-          throw new Error('WhatsApp клиент стал недоступен');
-        }
-
-        const sendPromise = session.client.sendMessage(chatId, message);
-        const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(
-            () =>
-              reject(
-                new Error(
-                  `Таймаут отправки сообщения (90 сек, попытка ${attempt}/${retries})`,
-                ),
-              ),
-            90000,
-          ),
-        );
-
-        const result = await Promise.race([sendPromise, timeoutPromise]);
-        
-        if (result) {
-          this.logger.log(`✅ Сообщение отправлено на ${formattedPhone}. ID: ${result.id || 'N/A'} для пользователя ${userId}`);
-        } else {
-          this.logger.log(`✅ Сообщение отправлено на ${formattedPhone} для пользователя ${userId}`);
-        }
-        
+        await this.greenApiPost('sendMessage', {
+          chatId,
+          message,
+          linkPreview: false,
+        });
+        this.setReadyState(userId, true);
         return;
       } catch (error) {
         lastError = error as Error;
-        const errorMessage = error.message || 'Неизвестная ошибка';
-
-        this.logger.error(
-          `❌ Попытка ${attempt}/${retries} не удалась для ${formattedPhone} (пользователь ${userId})`,
-        );
-        this.logger.error(`   Ошибка: ${errorMessage}`);
-
-        const errorLower = errorMessage.toLowerCase();
-
+        const msg = (lastError.message || '').toLowerCase();
         if (
-          errorLower.includes('session closed') ||
-          errorLower.includes('protocol error') ||
-          errorLower.includes('target closed') ||
-          errorLower.includes('не готов') ||
-          errorLower.includes('недоступен') ||
-          errorLower.includes('not connected') ||
-          errorLower.includes('disconnected') ||
-          errorLower.includes('authentication') ||
-          errorLower.includes('auth_failure')
+          msg.includes('401') ||
+          msg.includes('unauthorized') ||
+          msg.includes('not authorized') ||
+          msg.includes('not logged')
         ) {
-          session.isReady = false;
-          this.logger.warn(
-            `🔄 Сессия WhatsApp закрыта для пользователя ${userId}, требуется переподключение`,
-          );
+          this.setReadyState(userId, false, {
+            needsReauth: true,
+            lastError: 'Инстанс Green API не авторизован.',
+          });
           throw new Error(
-            `Не удалось отправить сообщение: ${errorMessage}. Требуется переподключение WhatsApp.`,
+            'Инстанс Green API не авторизован. Выполните авторизацию и повторите.',
           );
         }
-
-        if (
-          errorLower.includes('invalid number') ||
-          errorLower.includes('неверный номер') ||
-          errorLower.includes('number not registered') ||
-          errorLower.includes('номер не зарегистрирован')
-        ) {
-          throw new Error(`Неверный номер телефона: ${errorMessage}`);
-        }
-
-        if (
-          errorLower.includes('blocked') ||
-          errorLower.includes('заблокирован') ||
-          errorLower.includes('rate limit') ||
-          errorLower.includes('too many requests')
-        ) {
-          throw new Error(
-            `Сообщение не может быть отправлено: ${errorMessage}. Возможно, номер заблокирован или превышен лимит запросов.`,
-          );
-        }
-
         if (attempt < retries) {
-          const delayMs = attempt * 3000;
-          this.logger.log(`⏳ Ожидание ${delayMs}мс перед повторной попыткой...`);
-          await this.delay(delayMs);
-
-          if (!session.isReady || !session.client) {
-            throw new Error('WhatsApp клиент стал недоступен во время повторных попыток');
-          }
-
-          try {
-            const state = await session.client.getState();
-            if (state !== 'CONNECTED') {
-              this.logger.warn(`⚠️ Состояние клиента изменилось для пользователя ${userId}: ${state}`);
-              session.isReady = false;
-              throw new Error(`WhatsApp клиент отключен. Состояние: ${state}`);
-            }
-          } catch (stateError) {
-            this.logger.warn(`⚠️ Не удалось проверить состояние для пользователя ${userId}: ${stateError.message}`);
-          }
+          await this.delay(attempt * 2000);
         }
       }
     }
 
-    this.logger.error(
-      `❌ Не удалось отправить сообщение на ${formattedPhone} после ${retries} попыток (пользователь ${userId})`,
-    );
-    this.logger.error(`   Последняя ошибка: ${lastError?.message}`);
-    
     throw new Error(
-      `Не удалось отправить сообщение после ${retries} попыток: ${lastError?.message}`,
+      `Не удалось отправить сообщение после ${retries} попыток: ${lastError?.message || 'Unknown error'}`,
     );
   }
 
-  /**
-   * Массовая рассылка с задержкой между сообщениями
-   */
   async sendBulk(
     userId: string,
     recipients: Array<{ phone: string; name?: string; customerId?: number }>,
@@ -421,67 +144,52 @@ export class WhatsAppService implements OnModuleInit {
       campaignName?: string;
     },
   ): Promise<{ sent: number; failed: number; errors: string[] }> {
-    const session = await this.getOrCreateSession(userId);
-    
-    if (!session.isReady) {
+    await this.refreshState(userId);
+    if (!this.isClientReady(userId)) {
       throw new Error('WhatsApp клиент не готов');
     }
 
-    const results = {
-      sent: 0,
-      failed: 0,
-      errors: [] as string[],
-    };
-
-    this.logger.log(`📢 Начинаем массовую рассылку на ${recipients.length} контактов для пользователя ${userId}`);
+    const results = { sent: 0, failed: 0, errors: [] as string[] };
 
     for (const recipient of recipients) {
       let status = MessageStatus.SENT;
       let errorMessage = null;
 
       try {
-        // Получаем автомобиль клиента для замены {carModel}
         let carModelText = 'автомобиль';
-        
         if (recipient.customerId && options?.organizationId) {
           try {
-            const customerId = typeof recipient.customerId === 'number' 
-              ? recipient.customerId 
-              : parseInt(String(recipient.customerId), 10);
-            
+            const customerId =
+              typeof recipient.customerId === 'number'
+                ? recipient.customerId
+                : parseInt(String(recipient.customerId), 10);
             if (!isNaN(customerId)) {
               const vehicles = await this.vehiclesService.findByCustomer(
                 options.organizationId,
                 customerId,
               );
-              
-              if (vehicles && vehicles.length > 0) {
+              if (vehicles?.length) {
                 const vehicle = vehicles[0];
                 carModelText = vehicle.year
                   ? `${vehicle.brand} ${vehicle.model} ${vehicle.year}`
                   : `${vehicle.brand} ${vehicle.model}`;
               }
             }
-          } catch (e) {
-            this.logger.error(`❌ Ошибка получения автомобиля для клиента ${recipient.customerId}: ${e.message}`);
-          }
+          } catch (_) {}
         }
 
-        // Подставляем переменные в шаблон
         const variables: Record<string, string> = {
           name: recipient.name || 'Уважаемый клиент',
           carModel: carModelText,
         };
-        
         if (options?.organizationId) {
           variables.organizationName = 'наш сервис';
         }
-        
+
         const personalizedMessage = this.templatesService.fillTemplate(
           template,
           variables,
         );
-
         await this.sendMessage(userId, recipient.phone, personalizedMessage);
         results.sent++;
       } catch (error) {
@@ -491,56 +199,20 @@ export class WhatsAppService implements OnModuleInit {
         errorMessage = error.message;
       }
 
-      // Сохраняем в историю
       if (options) {
         try {
-          let carModelText = 'автомобиль';
-          if (recipient.customerId && options?.organizationId) {
-            try {
-              const vehicles = await this.vehiclesService.findByCustomer(
-                options.organizationId,
-                recipient.customerId,
-              );
-              
-              if (vehicles && vehicles.length > 0) {
-                const vehicle = vehicles[0];
-                carModelText = vehicle.year
-                  ? `${vehicle.brand} ${vehicle.model} ${vehicle.year}`
-                  : `${vehicle.brand} ${vehicle.model}`;
-              }
-            } catch (e) {
-              // Игнорируем ошибку при сохранении истории
-            }
-          }
-
-          const historyVariables: Record<string, string> = {
-            name: recipient.name || 'Уважаемый клиент',
-            carModel: carModelText,
-          };
-          
-          if (options?.organizationId) {
-            historyVariables.organizationName = 'наш сервис';
-          }
-          
-          const historyMessage = this.templatesService.fillTemplate(
-            template,
-            historyVariables,
-          );
-
           await this.historyService.create({
             organizationId: options.organizationId,
             sentBy: options.sentBy,
             customerId: recipient.customerId,
             phone: recipient.phone,
-            message: historyMessage,
+            message: template,
             status,
             errorMessage,
             isBulk: true,
             campaignName: options.campaignName,
           });
-        } catch (e) {
-          this.logger.error(`Ошибка сохранения истории: ${e.message}`);
-        }
+        } catch (_) {}
       }
 
       if (delayMs > 0) {
@@ -548,223 +220,187 @@ export class WhatsAppService implements OnModuleInit {
       }
     }
 
-    this.logger.log(
-      `✅ Рассылка завершена для пользователя ${userId}. Отправлено: ${results.sent}, Ошибок: ${results.failed}`,
-    );
-
     return results;
   }
 
-  /**
-   * Отправить сообщение с медиа
-   */
   async sendMediaMessage(
     userId: string,
     phone: string,
     mediaUrl: string,
     caption?: string,
   ): Promise<void> {
-    const session = await this.getOrCreateSession(userId);
-    
-    if (!session.isReady) {
+    await this.refreshState(userId);
+    if (!this.isClientReady(userId)) {
       throw new Error('WhatsApp клиент не готов');
     }
 
-    try {
-      const formattedPhone = this.formatPhoneNumber(phone);
-      const chatId = `${formattedPhone}@c.us`;
+    const formattedPhone = this.formatPhoneNumber(phone);
+    const chatId = this.toChatId(formattedPhone);
 
-      const message = caption
-        ? `${caption}\n\n${mediaUrl}`
-        : mediaUrl;
-
-      await session.client.sendMessage(chatId, message);
-
-      this.logger.log(`✅ Сообщение с медиа отправлено на ${formattedPhone} для пользователя ${userId}`);
-    } catch (error) {
-      this.logger.error(`❌ Ошибка отправки медиа на ${phone} для пользователя ${userId}:`, error.message);
-      throw error;
-    }
+    await this.greenApiPost('sendFileByUrl', {
+      chatId,
+      urlFile: mediaUrl,
+      fileName: 'media-file',
+      caption: caption || '',
+    });
   }
 
-  /**
-   * Выйти из WhatsApp аккаунта (удалить сессию)
-   */
   async logout(userId: string): Promise<void> {
-    this.logger.log(`🚪 Выход из WhatsApp для пользователя ${userId}`);
-    
-    const session = this.userSessions.get(userId);
-    
-    if (session) {
-      try {
-        // Уничтожаем клиент
-        if (session.client) {
-          await session.client.destroy();
-        }
-        
-        // Удаляем сессию из памяти
-        this.userSessions.delete(userId);
-        
-        // Удаляем директорию с сессией
-        const dataPath = path.join('.wwebjs_auth', userId);
-        if (fs.existsSync(dataPath)) {
-          fs.rmSync(dataPath, { recursive: true, force: true });
-          this.logger.log(`🗑️ Удалена директория сессии для пользователя ${userId}`);
-        }
-        
-        this.logger.log(`✅ Пользователь ${userId} успешно вышел из WhatsApp`);
-      } catch (error) {
-        this.logger.error(`❌ Ошибка при выходе из WhatsApp для пользователя ${userId}:`, error.message);
-        throw error;
-      }
-    } else {
-      this.logger.warn(`⚠️ Сессия не найдена для пользователя ${userId}`);
-    }
-  }
-
-  /**
-   * Принудительное переподключение
-   */
-  async reconnect(userId: string): Promise<void> {
-    this.logger.log(`🔄 Принудительное переподключение WhatsApp для пользователя ${userId}...`);
-    
     try {
-      await this.rebuildSession(userId, false);
-      
-      this.logger.log(`✅ WhatsApp переподключен для пользователя ${userId}`);
+      await this.greenApiPost('logout');
+    } catch (e) {
+      this.logger.warn(`⚠️ Green API logout warning: ${e.message}`);
+    }
+    this.setReadyState(userId, false, {
+      needsReauth: true,
+      lastError: 'Требуется авторизация в Green API',
+      qrCode: null,
+    });
+  }
+
+  async reconnect(userId: string): Promise<void> {
+    await this.greenApiPost('reboot');
+    await this.delay(2000);
+    await this.refreshState(userId);
+  }
+
+  async destroy() {
+    this.userStates.clear();
+  }
+
+  private async refreshState(userId: string): Promise<void> {
+    try {
+      const stateResponse = await this.greenApiGet('getStateInstance');
+      const state = String(stateResponse?.stateInstance || '').toLowerCase();
+      const ready = state === 'authorized';
+      const current = this.userStates.get(userId) ?? this.getDefaultState();
+      this.userStates.set(userId, {
+        ...current,
+        isReady: ready,
+        needsReauth: !ready,
+        lastError: ready
+          ? null
+          : `Инстанс не авторизован (${state || 'unknown'}).`,
+      });
+      if (!ready) {
+        await this.tryRefreshQr(userId);
+      }
     } catch (error) {
-      this.logger.error(`❌ Ошибка переподключения для пользователя ${userId}:`, error.message);
-      throw error;
+      const message = this.extractAxiosError(error);
+      const current = this.userStates.get(userId) ?? this.getDefaultState();
+      this.userStates.set(userId, {
+        ...current,
+        isReady: false,
+        needsReauth: true,
+        lastError: message,
+      });
     }
   }
 
-  /**
-   * Форматирование номера телефона
-   */
+  private async tryRefreshQr(userId: string): Promise<void> {
+    try {
+      const qrResponse = await this.greenApiGet('qr');
+      const qrCode = qrResponse?.qrCode || qrResponse?.message || null;
+      const current = this.userStates.get(userId) ?? this.getDefaultState();
+      this.userStates.set(userId, { ...current, qrCode });
+    } catch (_) {
+      const current = this.userStates.get(userId) ?? this.getDefaultState();
+      this.userStates.set(userId, {
+        ...current,
+        qrCode: null,
+        lastError:
+          current.lastError ||
+          `QR недоступен через API. Авторизуйте инстанс ${this.instanceName} в Green API.`,
+      });
+    }
+  }
+
+  private async greenApiPost(
+    method: string,
+    data?: Record<string, unknown>,
+  ): Promise<any> {
+    if (!this.apiTokenInstance) {
+      throw new Error('GREEN_API_TOKEN_INSTANCE is not configured');
+    }
+    const url = `${this.apiUrl}/waInstance${this.idInstance}/${method}/${this.apiTokenInstance}`;
+    const response = await axios.post(url, data || {}, { timeout: 60000 });
+    return response.data;
+  }
+
+  private async greenApiGet(method: string): Promise<any> {
+    if (!this.apiTokenInstance) {
+      throw new Error('GREEN_API_TOKEN_INSTANCE is not configured');
+    }
+    const url = `${this.apiUrl}/waInstance${this.idInstance}/${method}/${this.apiTokenInstance}`;
+    const response = await axios.get(url, { timeout: 60000 });
+    return response.data;
+  }
+
+  private getDefaultState(): UserState {
+    return {
+      isReady: false,
+      qrCode: null,
+      needsReauth: true,
+      lastError: null,
+    };
+  }
+
+  private setReadyState(
+    userId: string,
+    isReady: boolean,
+    patch?: Partial<UserState>,
+  ): void {
+    const current = this.userStates.get(userId) ?? this.getDefaultState();
+    this.userStates.set(userId, {
+      ...current,
+      isReady,
+      needsReauth: !isReady,
+      ...(patch || {}),
+    });
+  }
+
+  private toChatId(phone: string): string {
+    return `${phone}@c.us`;
+  }
+
   private formatPhoneNumber(phone: string): string {
     if (!phone || typeof phone !== 'string') {
       throw new Error('Номер телефона не указан или имеет неверный формат');
     }
-
     let cleaned = phone.replace(/\D/g, '');
-
-    if (!cleaned || cleaned.length === 0) {
+    if (!cleaned) {
       throw new Error('Номер телефона не содержит цифр');
     }
-
     if (cleaned.startsWith('8') && cleaned.length === 11) {
-      cleaned = '7' + cleaned.substring(1);
+      cleaned = `7${cleaned.substring(1)}`;
     }
-
-    if (cleaned.startsWith('+')) {
-      cleaned = cleaned.substring(1);
-    }
-
     if (cleaned.length < 10 || cleaned.length > 15) {
       throw new Error(
         `Номер телефона имеет неверную длину: ${cleaned.length} цифр. Ожидается 10-15 цифр.`,
       );
     }
-
     return cleaned;
   }
 
-  /**
-   * Задержка (утилита)
-   */
+  private extractAxiosError(error: unknown): string {
+    if (error instanceof AxiosError) {
+      const status = error.response?.status;
+      const data = error.response?.data;
+      if (typeof data === 'string') {
+        return status ? `${status}: ${data}` : data;
+      }
+      if (data && typeof data === 'object') {
+        const msg = (data as any).message || (data as any).error;
+        if (msg) {
+          return status ? `${status}: ${msg}` : String(msg);
+        }
+      }
+      return status ? `${status}: ${error.message}` : error.message;
+    }
+    return String(error);
+  }
+
   private delay(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
-  /**
-   * Пересоздать сессию (с сохранением или очисткой авторизации)
-   */
-  private async rebuildSession(userId: string, clearAuth: boolean): Promise<void> {
-    const existing = this.userSessions.get(userId);
-    if (existing?.client) {
-      try {
-        await existing.client.destroy();
-      } catch (e) {
-        this.logger.warn(`⚠️ Не удалось корректно остановить клиента для ${userId}: ${e.message}`);
-      }
-    }
-
-    if (clearAuth) {
-      const dataPath = path.join('.wwebjs_auth', userId);
-      if (fs.existsSync(dataPath)) {
-        fs.rmSync(dataPath, { recursive: true, force: true });
-      }
-    }
-
-    const session = await this.createSession(userId);
-    if (clearAuth) {
-      session.needsReauth = true;
-    }
-    this.userSessions.set(userId, session);
-  }
-
-  /**
-   * Плановое переподключение без очистки авторизации
-   */
-  private async scheduleReconnect(userId: string): Promise<void> {
-    const session = this.userSessions.get(userId);
-    if (!session || session.reconnectInProgress) {
-      return;
-    }
-    session.reconnectInProgress = true;
-    setTimeout(async () => {
-      try {
-        await this.rebuildSession(userId, false);
-      } catch (err) {
-        this.logger.error(`❌ Ошибка переподключения для пользователя ${userId}:`, err.message);
-      } finally {
-        const updated = this.userSessions.get(userId);
-        if (updated) {
-          updated.reconnectInProgress = false;
-        }
-      }
-    }, 5000);
-  }
-
-  /**
-   * Плановая повторная авторизация через QR
-   */
-  private async scheduleReauth(userId: string, reason: string): Promise<void> {
-    const session = this.userSessions.get(userId);
-    if (!session || session.reauthInProgress) {
-      return;
-    }
-    session.reauthInProgress = true;
-    session.needsReauth = true;
-    setTimeout(async () => {
-      try {
-        this.logger.warn(`🔐 Требуется повторная авторизация WhatsApp (${reason}) для пользователя ${userId}`);
-        await this.rebuildSession(userId, true);
-      } catch (err) {
-        this.logger.error(`❌ Ошибка повторной авторизации для пользователя ${userId}:`, err.message);
-      } finally {
-        const updated = this.userSessions.get(userId);
-        if (updated) {
-          updated.reauthInProgress = false;
-        }
-      }
-    }, 1000);
-  }
-
-  /**
-   * Остановка всех клиентов
-   */
-  async destroy() {
-    for (const [userId, session] of this.userSessions.entries()) {
-      try {
-        if (session.client) {
-          await session.client.destroy();
-        }
-        this.logger.log(`WhatsApp клиент остановлен для пользователя ${userId}`);
-      } catch (error) {
-        this.logger.error(`Ошибка остановки клиента для пользователя ${userId}:`, error.message);
-      }
-    }
-    this.userSessions.clear();
   }
 }

@@ -12,7 +12,7 @@ import { Repository } from 'typeorm';
 import { ItemsService } from '../items/items.service';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { OrdersService } from '../orders/orders.service';
-import { Order } from '../orders/entities/order.entity';
+import { Order, OrderWorkStage } from '../orders/entities/order.entity';
 
 @Controller('api/b2c')
 export class B2CController {
@@ -302,7 +302,11 @@ export class B2CController {
           status: 'pending',
           paymentStatus: 'pending',
           isB2C: true,
-        } as Partial<Order> & { items?: Array<{ itemId: number; quantity: number }>; shippingAddress?: string };
+        } as Partial<Order> & {
+          items?: Array<{ itemId: number; quantity: number }>;
+          shippingAddress?: string;
+          workStages?: OrderWorkStage[];
+        };
 
         const order = await this.ordersService.create(
           targetOrganizationId,
@@ -369,7 +373,11 @@ export class B2CController {
         status: 'pending',
         paymentStatus: 'pending',
         isB2C: true, // Помечаем что это заказ из B2C магазина
-        } as Partial<Order> & { items?: Array<{ itemId: number; quantity: number }>; shippingAddress?: string };
+        } as Partial<Order> & {
+          items?: Array<{ itemId: number; quantity: number }>;
+          shippingAddress?: string;
+          workStages?: OrderWorkStage[];
+        };
 
       
       // Создаем заказ без проверки количества для B2C
