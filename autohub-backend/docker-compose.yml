@@ -16,16 +16,7 @@ services:
       timeout: 5s
       retries: 5
 
-  loki:
-    image: grafana/loki:2.9.8
-    container_name: autohub-loki
-    command: -config.file=/etc/loki/config.yml
-    volumes:
-      - ./observability/loki/loki-config.yml:/etc/loki/config.yml:ro
-      - loki_data:/loki
-    ports:
-      - "3100:3100"
-
+  
   grafana:
     image: grafana/grafana:11.1.4
     container_name: autohub-grafana
@@ -37,8 +28,7 @@ services:
       - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
     ports:
       - "3001:3000"
-    depends_on:
-      - loki
+
 
   backend:
     build: .
@@ -55,7 +45,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:-change_me_in_production}
       CORS_ORIGIN: ${CORS_ORIGIN:-*}
       LOG_LEVEL: ${LOG_LEVEL:-info}
-      LOKI_HOST: ${LOKI_HOST:-http://loki:3100}
+      LOKI_HOST: ${LOKI_HOST:-http://78.140.246.83:3100}
       LOKI_SERVICE_NAME: ${LOKI_SERVICE_NAME:-autohub-backend}
       LOKI_ENV: ${LOKI_ENV:-production}
       GREEN_API_URL: ${GREEN_API_URL:-https://7105.api.greenapi.com}
@@ -70,9 +60,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      loki:
-        condition: service_started
-    restart: unless-stopped
 
 volumes:
   postgres_data:
