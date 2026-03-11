@@ -1,25 +1,25 @@
 FROM node:20-alpine AS deps
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci
+RUN npm ci --no-audit --no-fund
 
-FROM node:20-alpine AS build
+FROM deps AS build
 WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+COPY nest-cli.json ./
+COPY tsconfig*.json ./
+COPY src ./src
 RUN npm run build
 
-FROM node:20-alpine AS prod-deps
+FROM deps AS prod-deps
 WORKDIR /app
-COPY package*.json ./
-RUN npm ci --omit=dev
+RUN npm prune --omit=dev
 
 FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
-COPY --from=build /app/package*.json ./
+COPY package*.json ./
 RUN mkdir -p uploads/items
 EXPOSE 3000
 CMD ["node", "dist/main.js"]
