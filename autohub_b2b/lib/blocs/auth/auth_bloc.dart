@@ -3,10 +3,12 @@ import 'package:autohub_b2b/blocs/auth/auth_event.dart';
 import 'package:autohub_b2b/blocs/auth/auth_state.dart';
 import 'package:autohub_b2b/models/user_model.dart';
 import 'package:autohub_b2b/services/auth/secure_storage_service.dart';
+import 'package:autohub_b2b/config/environment.dart';
 import 'package:dio/dio.dart';
 
 class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final SecureStorageService _storage = SecureStorageService();
+  String get _authBaseUrl => Environment.apiBaseUrl.replaceAll('/api', '');
 
   AuthBloc() : super(AuthInitial()) {
     on<AuthCheckRequested>(_onAuthCheckRequested);
@@ -60,7 +62,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       emit(AuthLoading());
       
       // Шаг 1: Прямая авторизация через наш бэкенд
-      final dio = Dio(BaseOptions(baseUrl: 'http://78.140.246.83:3000'));
+      final dio = Dio(BaseOptions(baseUrl: _authBaseUrl));
       final jwtResponse = await dio.post('/api/auth/login', data: {
         'email': event.email,
         'password': event.password,
@@ -156,7 +158,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       emit(AuthLoading());
       
       // Регистрация через наш бэкенд
-      final dio = Dio(BaseOptions(baseUrl: 'http://78.140.246.83:3000'));
+      final dio = Dio(BaseOptions(baseUrl: _authBaseUrl));
       final registerResponse = await dio.post('/api/auth/register', data: {
         'email': event.email,
         'password': event.password,

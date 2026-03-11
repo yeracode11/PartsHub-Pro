@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:autohub_b2b/services/auth/secure_storage_service.dart';
+import 'package:autohub_b2b/config/environment.dart';
 
 /// Глобальный API клиент с автоматическим добавлением JWT токена
 class ApiClient {
@@ -14,7 +15,7 @@ class ApiClient {
   ApiClient._internal() {
     dio = Dio(
       BaseOptions(
-        baseUrl: 'http://78.140.246.83:3000', // Production API сервер
+        baseUrl: Environment.apiBaseUrl.replaceAll('/api', ''),
         connectTimeout: const Duration(seconds: 60), // Увеличено до 60 секунд
         receiveTimeout: const Duration(seconds: 60), // Увеличено до 60 секунд
         sendTimeout: const Duration(seconds: 60), // Таймаут отправки
