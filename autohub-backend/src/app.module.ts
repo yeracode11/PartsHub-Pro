@@ -65,8 +65,12 @@ const logger = new Logger('AppModule');
           }
         }
 
-        // SSL только в production
-        if (process.env.NODE_ENV === 'production') {
+        // SSL включаем только по явному флагу.
+        // Это важно для docker postgres без SSL.
+        const dbSsl =
+          (process.env.DB_SSL || '').toLowerCase() === 'true' ||
+          (process.env.DB_SSL || '') === '1';
+        if (dbSsl) {
           config.ssl = { rejectUnauthorized: false };
         }
 
