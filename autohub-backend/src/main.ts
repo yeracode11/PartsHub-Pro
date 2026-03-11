@@ -4,7 +4,8 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
 import { WinstonModule, utilities } from 'nest-winston';
 import * as winston from 'winston';
-import LokiTransport from 'winston-loki';
+import axios from 'axios';
+import { Writable } from 'stream';
 
 function createAppLogger() {
   const serviceName = process.env.LOKI_SERVICE_NAME || 'autohub-backend';
@@ -21,28 +22,58 @@ function createAppLogger() {
   ];
 
   if (lokiHost) {
+    const normalizedHost = lokiHost.replace(/\/+$/, '');
+    const basicAuth =
+      process.env.LOKI_USERNAME && process.env.LOKI_PASSWORD
+        ? `${process.env.LOKI_USERNAME}:${process.env.LOKI_PASSWORD}`
+        : undefined;
+    const authHeader = basicAuth
+      ? { Authorization: `Basic ${Buffer.from(basicAuth).toString('base64')}` }
+      : {};
+
+    // Fallback transport: ship every formatted log line to Loki via HTTP API.
+    // This is more predictable than winston-loki for our deployment.
+    const lokiStream = new Writable({
+      write(chunk, _encoding, callback) {
+        const line = chunk.toString().trim();
+        if (!line) {
+          callback();
+          return;
+        }
+
+        const timestampNs = (BigInt(Date.now()) * 1000000n).toString();
+        const payload = {
+          streams: [
+            {
+              stream: {
+                app: serviceName,
+                env: environment,
+              },
+              values: [[timestampNs, line]],
+            },
+          ],
+        };
+
+        void axios
+          .post(`${normalizedHost}/loki/api/v1/push`, payload, {
+            timeout: 10000,
+            headers: {
+              'Content-Type': 'application/json',
+              ...authHeader,
+            },
+          })
+          .catch((error: unknown) => {
+            const message = error instanceof Error ? error.message : String(error);
+            console.error('[Loki] push error:', message);
+          });
+
+        callback();
+      },
+    });
+
     transports.push(
-      new LokiTransport({
-        host: lokiHost,
-        labels: {
-          app: serviceName,
-          env: environment,
-        },
-        interval: 2,
-        timeout: 10000,
-        batching: true,
-        json: true,
-        // Let Loki assign ingestion timestamp to avoid ms/ns mismatch.
-        replaceTimestamp: false,
-        basicAuth:
-          process.env.LOKI_USERNAME && process.env.LOKI_PASSWORD
-            ? `${process.env.LOKI_USERNAME}:${process.env.LOKI_PASSWORD}`
-            : undefined,
-        onConnectionError: (error) => {
-          // Важно не падать при недоступности Loki
-          const message = error instanceof Error ? error.message : String(error);
-          console.error('[Loki] connection error:', message);
-        },
+      new winston.transports.Stream({
+        stream: lokiStream,
       }),
     );
   }
