@@ -34,7 +34,7 @@ void main() async {
   // Автообновление (только Windows, WinSparkle)
   if (Platform.isWindows) {
     const feedUrl =
-        'https://raw.githubusercontent.com/YOUR_ORG/PartsHub-Pro/main/appcast.xml';
+        'https://raw.githubusercontent.com/yeracode11/PartsHub-Pro/main/appcast.xml';
     await autoUpdater.setFeedURL(feedUrl);
     await autoUpdater.setScheduledCheckInterval(3600); // раз в час
     unawaited(autoUpdater.checkForUpdates());

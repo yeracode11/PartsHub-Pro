@@ -24,10 +24,29 @@ signtool sign /f "путь\к\сертификату.pfx" /p "пароль" /tr 
    ```
 
 2. **Сгенерируйте DSA-ключи** в папке `autohub_b2b/`:
+
+   **Вариант A** — через auto_updater:
    ```bash
    cd autohub_b2b
    dart run auto_updater:generate_keys
    ```
+
+   **Вариант B** — если ошибка `FormatException: Unexpected extension byte` (кодировка консоли Windows):
+   ```cmd
+   cd autohub_b2b
+   chcp 65001
+   dart run auto_updater:generate_keys
+   ```
+
+   **Вариант C** — вручную через OpenSSL (если auto_updater падает):
+   ```cmd
+   cd autohub_b2b
+   openssl genpkey -genparam -algorithm DSA -out dsaparam.pem -pkeyopt dsa_paramgen_bits:2048
+   openssl genpkey -paramfile dsaparam.pem -out dsa_priv.pem
+   openssl dsa -in dsa_priv.pem -pubout -out dsa_pub.pem
+   del dsaparam.pem
+   ```
+
    Создаются `dsa_priv.pem` и `dsa_pub.pem`. Приватный ключ храните в секрете (GitHub Secrets).
 
 3. **Обновите feed URL** в `lib/main.dart` — замените `YOUR_ORG` на ваш GitHub org/user.

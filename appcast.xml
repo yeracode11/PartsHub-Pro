@@ -13,10 +13,10 @@
     -->
     <item>
       <title>Версия 1.0.0</title>
-      <sparkle:releaseNotesLink>https://github.com/YOUR_ORG/PartsHub-Pro/releases</sparkle:releaseNotesLink>
+      <sparkle:releaseNotesLink>https://github.com/yeracode11/PartsHub-Pro/releases</sparkle:releaseNotesLink>
       <pubDate>Mon, 10 Feb 2025 12:00:00 +0800</pubDate>
       <enclosure
-        url="https://github.com/YOUR_ORG/PartsHub-Pro/releases/download/v1.0.0/autohub_b2b-1.0.0+1-windows.exe"
+        url="https://github.com/yeracode11/PartsHub-Pro/releases/download/v1.0.0/autohub_b2b-1.0.0+1-windows.exe"
         sparkle:dsaSignature="REPLACE_WITH_SIGNATURE_FROM_sign_update"
         sparkle:version="1.0.0+1"
         sparkle:os="windows"
