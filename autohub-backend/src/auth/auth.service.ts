@@ -133,6 +133,7 @@ export class AuthService {
     const organization = await this.organizationsService.create({
       name: organizationName,
       businessType: businessType,
+      phone: registerDto.phone,
       isActive: true,
     } as any);
 

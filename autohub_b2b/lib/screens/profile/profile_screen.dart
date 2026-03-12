@@ -17,6 +17,7 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   String? _organizationName;
+  String? _organizationPhone;
   bool _loading = true;
 
   @override
@@ -29,8 +30,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final storage = SecureStorageService();
     final userData = await storage.getUserData();
     if (userData != null && userData['organization'] != null) {
+      final organization = userData['organization'];
       setState(() {
-        _organizationName = userData['organization']['name'] as String?;
+        _organizationName = organization['name'] as String?;
+        _organizationPhone = (organization['phone'] as String?) ?? userData['phone'] as String?;
         _loading = false;
       });
     } else {
@@ -169,6 +172,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     icon: Icons.business_center,
                     title: 'Организация',
                     value: _organizationName!,
+                  ),
+                  const Divider(height: 1),
+                ],
+                if (_organizationPhone != null && _organizationPhone!.isNotEmpty) ...[
+                  _buildInfoTile(
+                    icon: Icons.phone,
+                    title: 'Телефон',
+                    value: _organizationPhone!,
                   ),
                   const Divider(height: 1),
                 ],

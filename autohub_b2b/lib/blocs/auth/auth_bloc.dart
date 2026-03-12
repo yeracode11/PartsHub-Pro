@@ -69,6 +69,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       });
 
       final jwtData = jwtResponse.data;
+      final organizationPhone = jwtData['user']?['organization']?['phone'];
 
       // Шаг 3: Создаем UserModel из данных бэкенда
       final userModel = UserModel(
@@ -90,6 +91,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         'createdAt': userModel.createdAt.toIso8601String(),
         'organizationId': jwtData['user']['organizationId'],
         'organization': jwtData['user']['organization'],
+        if (organizationPhone != null) 'phone': organizationPhone,
       });
       
       await _storage.saveAuthTokens(
@@ -163,11 +165,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         'email': event.email,
         'password': event.password,
         'name': event.name,
+        'phone': event.phone,
         if (event.organizationName != null) 'organizationName': event.organizationName,
         if (event.businessType != null) 'businessType': event.businessType,
       });
 
       final registerData = registerResponse.data;
+      final organizationPhone = registerData['user']?['organization']?['phone'];
 
       // Создаем UserModel из данных бэкенда
       final userModel = UserModel(
@@ -189,6 +193,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         'createdAt': userModel.createdAt.toIso8601String(),
         'organizationId': registerData['user']['organizationId'],
         'organization': registerData['user']['organization'],
+        if (organizationPhone != null) 'phone': organizationPhone,
       });
       
       await _storage.saveAuthTokens(

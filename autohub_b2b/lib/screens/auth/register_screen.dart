@@ -15,6 +15,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
+  final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   final _organizationNameController = TextEditingController();
@@ -139,6 +140,29 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                   const SizedBox(height: 16),
 
+                  // Телефон (обязательно)
+                  TextFormField(
+                    controller: _phoneController,
+                    decoration: const InputDecoration(
+                      labelText: 'Телефон',
+                      prefixIcon: Icon(Icons.phone),
+                      border: OutlineInputBorder(),
+                      hintText: '+7 777 123 45 67',
+                    ),
+                    keyboardType: TextInputType.phone,
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Введите номер телефона';
+                      }
+                      final normalized = value.replaceAll(RegExp(r'[^0-9+]'), '');
+                      if (normalized.length < 10) {
+                        return 'Введите корректный номер телефона';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+
                   // Пароль поле
                   TextFormField(
                     controller: _passwordController,
@@ -254,6 +278,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                       email: _emailController.text.trim(),
                                       password: _passwordController.text,
                                       name: _nameController.text.trim(),
+                                      phone: _phoneController.text.trim(),
                                       organizationName: _organizationNameController.text.trim().isEmpty
                                           ? null
                                           : _organizationNameController.text.trim(),
@@ -301,6 +326,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();
+    _phoneController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     _organizationNameController.dispose();

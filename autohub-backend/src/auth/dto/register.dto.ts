@@ -15,6 +15,10 @@ export class RegisterDto {
   name: string;
 
   @IsString()
+  @IsNotEmpty()
+  phone: string;
+
+  @IsString()
   @IsOptional()
   organizationName?: string; // Название организации (опционально)
 

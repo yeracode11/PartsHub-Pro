@@ -27,6 +27,7 @@ class AuthSignUpRequested extends AuthEvent {
   final String email;
   final String password;
   final String name;
+  final String phone;
   final String? organizationName;
   final String? businessType; // 'service', 'parts', 'wash'
 
@@ -34,12 +35,13 @@ class AuthSignUpRequested extends AuthEvent {
     required this.email,
     required this.password,
     required this.name,
+    required this.phone,
     this.organizationName,
     this.businessType,
   });
 
   @override
-  List<Object?> get props => [email, password, name, organizationName, businessType];
+  List<Object?> get props => [email, password, name, phone, organizationName, businessType];
 }
 
 class AuthSignOutRequested extends AuthEvent {}
