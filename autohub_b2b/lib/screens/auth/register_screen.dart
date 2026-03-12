@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter/services.dart';
 import 'package:autohub_b2b/blocs/auth/auth_bloc.dart';
 import 'package:autohub_b2b/blocs/auth/auth_event.dart';
 import 'package:autohub_b2b/blocs/auth/auth_state.dart';
@@ -150,12 +151,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       hintText: '+7 777 123 45 67',
                     ),
                     keyboardType: TextInputType.phone,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      _PhoneMaskFormatter(),
+                    ],
                     validator: (value) {
                       if (value == null || value.trim().isEmpty) {
                         return 'Введите номер телефона';
                       }
-                      final normalized = value.replaceAll(RegExp(r'[^0-9+]'), '');
-                      if (normalized.length < 10) {
+                      final digitsOnly = value.replaceAll(RegExp(r'[^0-9]'), '');
+                      // +7 (XXX) XXX-XX-XX => 11 digits with country code.
+                      if (digitsOnly.length != 11 || !digitsOnly.startsWith('7')) {
                         return 'Введите корректный номер телефона';
                       }
                       return null;
@@ -331,6 +337,56 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _confirmPasswordController.dispose();
     _organizationNameController.dispose();
     super.dispose();
+  }
+}
+
+class _PhoneMaskFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final digits = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.isEmpty) {
+      return const TextEditingValue();
+    }
+
+    final normalizedDigits = digits.startsWith('7')
+        ? digits
+        : digits.startsWith('8')
+            ? '7${digits.substring(1)}'
+            : '7$digits';
+    final limited = normalizedDigits.length > 11
+        ? normalizedDigits.substring(0, 11)
+        : normalizedDigits;
+
+    final masked = _buildMask(limited);
+    return TextEditingValue(
+      text: masked,
+      selection: TextSelection.collapsed(offset: masked.length),
+    );
+  }
+
+  String _buildMask(String digits) {
+    final buffer = StringBuffer('+7');
+    if (digits.length > 1) {
+      final area = digits.substring(1, digits.length > 4 ? 4 : digits.length);
+      buffer.write(' ($area');
+      if (digits.length >= 4) buffer.write(')');
+    }
+    if (digits.length > 4) {
+      final first = digits.substring(4, digits.length > 7 ? 7 : digits.length);
+      buffer.write(' $first');
+    }
+    if (digits.length > 7) {
+      final second = digits.substring(7, digits.length > 9 ? 9 : digits.length);
+      buffer.write('-$second');
+    }
+    if (digits.length > 9) {
+      final third = digits.substring(9, digits.length > 11 ? 11 : digits.length);
+      buffer.write('-$third');
+    }
+    return buffer.toString();
   }
 }
 
