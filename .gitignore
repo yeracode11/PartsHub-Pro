@@ -3,6 +3,7 @@
 # Игнорировать все MD файлы
 *.md
 !README.md
+!**/WINDOWS_UPDATE.md
 
 # macOS
 .DS_Store
@@ -110,6 +111,9 @@ captures/
 **/android/.idea/
 **/android/app/release/
 **/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
+
+# WinSparkle auto-update (keep private key secret)
+**/dsa_priv.pem
 
 # Environment files
 .env

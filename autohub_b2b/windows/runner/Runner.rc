@@ -105,6 +105,14 @@ BEGIN
     END
 END
 
+/////////////////////////////////////////////////////////////////////////////
+//
+// WinSparkle DSA public key (for update verification)
+// Generate keys: dart run auto_updater:generate_keys
+// Place dsa_pub.pem in autohub_b2b/ folder
+//
+DSAPub      DSAPEM      "../../dsa_pub.pem"
+
 #endif    // English (United States) resources
 /////////////////////////////////////////////////////////////////////////////
 

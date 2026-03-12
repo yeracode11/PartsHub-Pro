@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>AutoHub B2B</title>
+    <description>Обновления AutoHub B2B</description>
+    <language>ru</language>
+    <!--
+      Добавьте item при каждом новом релизе:
+      1. Соберите: flutter_distributor release --name prod --jobs windows-exe
+      2. Подпишите: dart run auto_updater:sign_update dist/VERSION/autohub_b2b-VERSION-windows.exe
+      3. Загрузите .exe в GitHub Release
+      4. Вставьте sparkle:dsaSignature и length из вывода sign_update
+    -->
+    <item>
+      <title>Версия 1.0.0</title>
+      <sparkle:releaseNotesLink>https://github.com/YOUR_ORG/PartsHub-Pro/releases</sparkle:releaseNotesLink>
+      <pubDate>Mon, 10 Feb 2025 12:00:00 +0800</pubDate>
+      <enclosure
+        url="https://github.com/YOUR_ORG/PartsHub-Pro/releases/download/v1.0.0/autohub_b2b-1.0.0+1-windows.exe"
+        sparkle:dsaSignature="REPLACE_WITH_SIGNATURE_FROM_sign_update"
+        sparkle:version="1.0.0+1"
+        sparkle:os="windows"
+        length="0"
+        type="application/octet-stream" />
+    </item>
+  </channel>
+</rss>

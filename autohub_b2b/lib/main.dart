@@ -1,5 +1,9 @@
+import 'dart:async';
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:auto_updater/auto_updater.dart';
 import 'package:autohub_b2b/blocs/auth/auth_bloc.dart';
 import 'package:autohub_b2b/blocs/auth/auth_event.dart';
 import 'package:autohub_b2b/blocs/auth/auth_state.dart';
@@ -26,7 +30,16 @@ import 'package:autohub_b2b/services/auth/secure_storage_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
+  // Автообновление (только Windows, WinSparkle)
+  if (Platform.isWindows) {
+    const feedUrl =
+        'https://raw.githubusercontent.com/YOUR_ORG/PartsHub-Pro/main/appcast.xml';
+    await autoUpdater.setFeedURL(feedUrl);
+    await autoUpdater.setScheduledCheckInterval(3600); // раз в час
+    unawaited(autoUpdater.checkForUpdates());
+  }
+
   // Инициализация базы данных
   final database = AppDatabase();
 
