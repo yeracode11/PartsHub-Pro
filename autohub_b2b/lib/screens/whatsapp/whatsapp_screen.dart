@@ -162,14 +162,19 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
         ),
       );
 
-      final response = await dio.post('/api/whatsapp/reconnect');
-      
+      // validateStatus: не бросать при 500 — показываем сообщение из ответа
+      final response = await dio.post(
+        '/api/whatsapp/reconnect',
+        options: Options(validateStatus: (s) => s != null && s! < 600),
+      );
+
       if (mounted) {
         Navigator.pop(context); // Закрываем диалог прогресса
-        
-        final qrFromReconnect = response.data['qrCode'];
-        final success = response.data['success'] ?? false;
-        final msg = response.data['message'] ?? '';
+
+        final data = response.data is Map ? response.data as Map<String, dynamic> : <String, dynamic>{};
+        final qrFromReconnect = data['qrCode'];
+        final success = data['success'] ?? false;
+        final msg = (data['message'] ?? '').toString();
         
         setState(() {
           qrCode = qrFromReconnect;
@@ -195,9 +200,13 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
           );
         } else {
           await _checkWhatsAppStatus();
+          final displayMsg = (response.statusCode == 500 &&
+                  (msg.isEmpty || msg.toLowerCase().contains('internal server')))
+              ? 'Ошибка сервера. Проверьте логи бэкенда (pm2 logs) и настройки Green API в .env'
+              : (msg.isNotEmpty ? msg : 'Ошибка переподключения');
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(msg.isNotEmpty ? msg : 'Ошибка переподключения'),
+              content: Text(displayMsg),
               backgroundColor: Colors.red,
               duration: const Duration(seconds: 5),
             ),
@@ -210,7 +219,7 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
 
         final errMsg = e.toString().contains('GREEN_API_TOKEN')
             ? 'Токен Green API не настроен. Добавьте GREEN_API_TOKEN_INSTANCE в .env'
-            : 'Ошибка переподключения: ${e.toString().split('\n').first}';
+            : 'Ошибка переподключения. Проверьте настройки Green API на сервере.';
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -220,7 +229,6 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
           ),
         );
 
-        // Пробуем обновить статус (QR может быть доступен)
         _checkWhatsAppStatus();
       }
     }

@@ -20,10 +20,10 @@ export class WhatsAppExceptionFilter implements ExceptionFilter {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest();
-    const url = request?.url || request?.path || '';
+    const url = (request?.originalUrl || request?.url || request?.path || '').toString();
 
     // Только для WhatsApp API
-    if (!url.includes('/api/whatsapp')) {
+    if (!url.includes('whatsapp')) {
       throw exception;
     }
 
@@ -44,10 +44,12 @@ export class WhatsAppExceptionFilter implements ExceptionFilter {
       stack,
     );
 
-    response.status(HttpStatus.OK).json({
-      success: false,
-      message: message || 'Внутренняя ошибка',
-      qrCode: null,
-    });
+    if (!response.headersSent) {
+      response.status(HttpStatus.OK).json({
+        success: false,
+        message: message || 'Внутренняя ошибка',
+        qrCode: null,
+      });
+    }
   }
 }
