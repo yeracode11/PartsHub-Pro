@@ -50,6 +50,12 @@ export class WhatsAppService implements OnModuleInit {
     return this.userStates.get(userId)?.qrCode || null;
   }
 
+  /** Прямая ссылка на QR для браузера (qr.green-api.com) */
+  getQRUrl(): string | null {
+    if (!this.apiTokenInstance || !this.idInstance) return null;
+    return `https://qr.green-api.com/waInstance${this.idInstance}/${this.apiTokenInstance}`;
+  }
+
   needsReauth(userId: string): boolean {
     return this.userStates.get(userId)?.needsReauth || false;
   }

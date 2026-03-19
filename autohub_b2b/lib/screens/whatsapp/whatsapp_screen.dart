@@ -7,6 +7,7 @@ import 'package:autohub_b2b/widgets/offline_placeholder.dart';
 import 'package:dio/dio.dart';
 import 'package:intl/intl.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class WhatsAppScreen extends StatefulWidget {
   const WhatsAppScreen({super.key});
@@ -25,6 +26,7 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
   bool isForbidden = false;
   bool _isOffline = false;
   String? qrCode;
+  String? qrUrl;
   String? statusMessage;
   String? forbiddenMessage;
 
@@ -119,16 +121,20 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
         statusMessage = response.data['message'];
       });
 
-      // Если требуется авторизация, получаем QR код
+      // Если требуется авторизация, получаем QR код или ссылку
       if (!ready && needsAuth) {
         final qrResponse = await dio.get('/api/whatsapp/qr');
-        final qrData = qrResponse.data['qrCode'];
+        final data = qrResponse.data is Map ? qrResponse.data as Map<String, dynamic> : <String, dynamic>{};
+        final u = (data['qrUrl'] ?? response.data['qrUrl'])?.toString();
         setState(() {
-          qrCode = qrData;
+          qrCode = data['qrCode'];
+          qrUrl = (u != null && u.isNotEmpty) ? u : null;
         });
       } else {
+        final u = response.data['qrUrl']?.toString();
         setState(() {
           qrCode = null;
+          qrUrl = (u != null && u.isNotEmpty) ? u : null;
         });
       }
     } catch (e) {
@@ -173,17 +179,19 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
 
         final data = response.data is Map ? response.data as Map<String, dynamic> : <String, dynamic>{};
         final qrFromReconnect = data['qrCode'];
+        final qrUrlFromReconnect = (data['qrUrl'] ?? '').toString();
         final success = data['success'] ?? false;
         final msg = (data['message'] ?? '').toString();
         
         setState(() {
           qrCode = qrFromReconnect;
+          qrUrl = qrUrlFromReconnect.isNotEmpty ? qrUrlFromReconnect : null;
           isWhatsAppReady = false;
           if (msg.isNotEmpty) statusMessage = msg;
         });
         
-        if (qrFromReconnect != null) {
-          _showQRDialog(qrCodeOverride: qrFromReconnect);
+        if (qrFromReconnect != null || qrUrlFromReconnect.isNotEmpty) {
+          _showQRDialog(qrCodeOverride: qrFromReconnect, qrUrlOverride: qrUrlFromReconnect.isNotEmpty ? qrUrlFromReconnect : null);
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Отсканируйте QR код для авторизации'),
@@ -314,9 +322,11 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
   Future<void> _refreshQr() async {
     try {
       final qrResponse = await dio.get('/api/whatsapp/qr');
-      final qrData = qrResponse.data['qrCode'];
+      final data = qrResponse.data is Map ? qrResponse.data as Map<String, dynamic> : <String, dynamic>{};
+      final url = data['qrUrl']?.toString();
       setState(() {
-        qrCode = qrData;
+        qrCode = data['qrCode'];
+        qrUrl = (url != null && url.isNotEmpty) ? url : null;
       });
     } catch (e) {
       if (mounted) {
@@ -555,7 +565,7 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
                   ],
                 ),
               ),
-              if (!isWhatsAppReady && qrCode != null)
+              if (!isWhatsAppReady && (qrCode != null || qrUrl != null))
                 ElevatedButton.icon(
                   onPressed: () => _showQRDialog(),
                   icon: const Icon(Icons.qr_code),
@@ -1025,10 +1035,11 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
     );
   }
 
-  void _showQRDialog({String? qrCodeOverride}) {
+  void _showQRDialog({String? qrCodeOverride, String? qrUrlOverride}) {
     final isMobile = MediaQuery.of(context).size.width < 768;
     final qrWidget = _WhatsAppQRDialog(
       qrCode: qrCodeOverride ?? qrCode,
+      qrUrl: qrUrlOverride ?? qrUrl,
       onRefresh: _refreshQr,
       onCheckStatus: () {
         Navigator.pop(context);
@@ -1047,6 +1058,7 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
 
 class _WhatsAppQRDialog extends StatelessWidget {
   final String? qrCode;
+  final String? qrUrl;
   final VoidCallback onRefresh;
   final VoidCallback onCheckStatus;
 
@@ -1102,6 +1114,7 @@ class _WhatsAppQRDialog extends StatelessWidget {
 
   const _WhatsAppQRDialog({
     required this.qrCode,
+    this.qrUrl,
     required this.onRefresh,
     required this.onCheckStatus,
   });
@@ -1149,6 +1162,44 @@ class _WhatsAppQRDialog extends StatelessWidget {
                 ],
               ),
               child: _WhatsAppQRDialog._buildQrWidget(qrCode!, qrSize),
+            )
+          else if (qrUrl != null && qrUrl!.isNotEmpty)
+            Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    children: [
+                      const Icon(Icons.qr_code_2, size: 64, color: Colors.grey),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'QR код отображается по ссылке Green API',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                      const SizedBox(height: 16),
+                      FilledButton.icon(
+                        onPressed: () async {
+                          final uri = Uri.tryParse(qrUrl!);
+                          if (uri != null && await canLaunchUrl(uri)) {
+                            await launchUrl(uri, mode: LaunchMode.externalApplication);
+                          }
+                        },
+                        icon: const Icon(Icons.open_in_browser),
+                        label: const Text('Открыть QR в браузере'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFF25D366),
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             )
           else
             Container(

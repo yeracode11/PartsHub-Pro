@@ -43,12 +43,14 @@ export class WhatsAppController {
 
       const isReady = this.whatsappService.isClientReady(userId);
       const qrCode = this.whatsappService.getQRCode(userId);
+      const qrUrl = this.whatsappService.getQRUrl();
       const needsReauth = this.whatsappService.needsReauth(userId);
       const lastError = this.whatsappService.getLastError(userId);
 
       return {
         ready: isReady,
-        needsAuth: qrCode !== null || needsReauth,
+        needsAuth: qrCode !== null || qrUrl !== null || needsReauth,
+        qrUrl: qrUrl ?? null,
         lastError,
         message: isReady
           ? 'WhatsApp готов к работе'
@@ -92,24 +94,21 @@ export class WhatsAppController {
       }
 
       const lastError = this.whatsappService.getLastError(userId);
-
-      if (!qrCode) {
-        return {
-          qrCode: null,
-          message:
-            lastError ||
-            'QR недоступен через API. Авторизуйте инстанс в Green API кабинете.',
-        };
-      }
+      const qrUrl = this.whatsappService.getQRUrl();
 
       return {
         qrCode,
-        message: 'Отсканируйте QR код для авторизации Green API',
+        qrUrl: qrUrl ?? null,
+        message: qrCode
+          ? 'Отсканируйте QR код для авторизации Green API'
+          : (lastError ||
+              'Откройте ссылку в браузере для сканирования QR'),
       };
     } catch (err: any) {
       this.logger.error(`QR error: ${err?.message}`, err?.stack);
       return {
         qrCode: null,
+        qrUrl: this.whatsappService.getQRUrl(),
         message: err?.message || 'Не удалось получить QR код',
       };
     }
@@ -238,10 +237,12 @@ export class WhatsAppController {
       const lastError = this.whatsappService.getLastError(userId);
       const isReady = this.whatsappService.isClientReady(userId);
 
+      const qrUrl = this.whatsappService.getQRUrl();
       return {
-        success: !!qrCode || isReady,
+        success: !!qrCode || !!qrUrl || isReady,
         message: qrCode ? 'Отсканируйте QR код' : (lastError || 'WhatsApp переподключен'),
         qrCode: qrCode ?? null,
+        qrUrl: qrUrl ?? null,
       };
     } catch (error: any) {
       const msg = String(error?.message || error || 'Ошибка переподключения');
@@ -252,10 +253,12 @@ export class WhatsAppController {
         qrCode = this.whatsappService.getQRCode(userId);
       } catch (_) {}
 
+      const qrUrl = this.whatsappService.getQRUrl();
       return {
         success: false,
         message: msg,
         qrCode: qrCode ?? null,
+        qrUrl: qrUrl ?? null,
       };
     }
   }
