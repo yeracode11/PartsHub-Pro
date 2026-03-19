@@ -72,6 +72,43 @@ export class WhatsAppController {
   }
 
   /**
+   * Получить код авторизации по номеру телефона (альтернатива QR для мобильных).
+   * WhatsApp: Связанные устройства → Привязка устройства → Связать по номеру телефона.
+   */
+  @Post('auth-code')
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  async getAuthorizationCode(
+    @CurrentUser() user: any,
+    @Body() body: { phoneNumber: string },
+  ) {
+    const userId = user.userId || user.id;
+    const phone = body?.phoneNumber?.trim();
+    if (!phone) {
+      throw new HttpException(
+        'Укажите номер телефона в международном формате (без + и 00)',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    try {
+      const result = await this.whatsappService.getAuthorizationCode(userId, phone);
+      return {
+        success: result.status,
+        code: result.code,
+        message: result.status
+          ? `Код получен. Введите в WhatsApp (действует ~2.5 мин): ${result.code}`
+          : 'Код не получен. Инстанс может быть авторизован — нажмите «Выйти» и повторите.',
+      };
+    } catch (error: any) {
+      const msg = error?.message || 'Ошибка получения кода';
+      if (msg.includes('только цифры') || msg.includes('Validation')) {
+        throw new HttpException(msg, HttpStatus.BAD_REQUEST);
+      }
+      throw new HttpException(msg, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  /**
    * Получить QR код для авторизации.
    * Не выбрасывает 500 — всегда возвращает 200 с qrCode или сообщением об ошибке.
    */

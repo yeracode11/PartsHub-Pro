@@ -390,6 +390,35 @@ export class WhatsAppService implements OnModuleInit {
     await this.tryRefreshQr(userId);
   }
 
+  /**
+   * Получить код авторизации по номеру телефона (альтернатива QR для мобильных).
+   * POST {{apiUrl}}/waInstance{{idInstance}}/getAuthorizationCode/{{apiTokenInstance}}
+   * Тело: { phoneNumber: number } — международный формат без + и 00.
+   */
+  async getAuthorizationCode(userId: string, phone: string): Promise<{ status: boolean; code: string }> {
+    if (!this.apiTokenInstance) {
+      throw new Error('GREEN_API_TOKEN_INSTANCE не задан');
+    }
+
+    const formatted = this.formatPhoneNumber(phone);
+    const phoneNumber = parseInt(formatted, 10);
+    if (isNaN(phoneNumber) || phoneNumber <= 0) {
+      throw new Error('Номер телефона должен содержать только цифры');
+    }
+
+    const base = this.apiUrl.replace(/\/$/, '');
+    const url = `${base}/waInstance${this.idInstance}/getAuthorizationCode/${this.apiTokenInstance}`;
+
+    const { data } = await axios.post<{ status?: boolean; code?: string }>(url, { phoneNumber }, {
+      timeout: 35000, // до 30 сек по документации
+    });
+
+    return {
+      status: data?.status ?? false,
+      code: data?.code ?? '',
+    };
+  }
+
   async destroy() {
     this.userStates.clear();
   }

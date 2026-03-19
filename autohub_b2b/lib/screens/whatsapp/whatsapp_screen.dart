@@ -25,6 +25,7 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
   bool isWhatsAppReady = false;
   bool isForbidden = false;
   bool _isOffline = false;
+  bool _isCheckingStatus = false;
   String? qrCode;
   String? qrUrl;
   String? statusMessage;
@@ -43,10 +44,8 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
     _tabController = TabController(length: 3, vsync: this);
     _loadInitialData();
     
-    // Периодически проверяем статус WhatsApp (каждые 10 секунд)
     _tabController.addListener(() {
-      if (_tabController.index == 0) {
-        // Если пользователь на вкладке "Рассылка", обновляем статус
+      if (_tabController.index == 0 && !_isCheckingStatus) {
         _checkWhatsAppStatus();
       }
     });
@@ -110,44 +109,51 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
   }
 
   Future<void> _checkWhatsAppStatus() async {
+    if (_isCheckingStatus) return;
+    _isCheckingStatus = true;
     try {
       final response = await dio.get('/api/whatsapp/status');
-      final ready = response.data['ready'] ?? false;
-      final needsAuth = response.data['needsAuth'] ?? false;
-      
-      
+      final data = response.data is Map ? response.data as Map<String, dynamic> : <String, dynamic>{};
+      final ready = data['ready'] ?? false;
+      final needsAuth = data['needsAuth'] ?? false;
+      final message = data['message']?.toString();
+
+      if (!mounted) return;
       setState(() {
         isWhatsAppReady = ready;
-        statusMessage = response.data['message'];
+        statusMessage = message ?? statusMessage;
       });
 
       // Если требуется авторизация, получаем QR код или ссылку
       if (!ready && needsAuth) {
         final qrResponse = await dio.get('/api/whatsapp/qr');
-        final data = qrResponse.data is Map ? qrResponse.data as Map<String, dynamic> : <String, dynamic>{};
-        final u = (data['qrUrl'] ?? response.data['qrUrl'])?.toString();
+        final qrData = qrResponse.data is Map ? qrResponse.data as Map<String, dynamic> : <String, dynamic>{};
+        final u = (qrData['qrUrl'] ?? data['qrUrl'])?.toString();
+        if (!mounted) return;
         setState(() {
-          qrCode = data['qrCode'];
+          qrCode = qrData['qrCode'];
           qrUrl = (u != null && u.isNotEmpty) ? u : null;
         });
       } else {
-        final u = response.data['qrUrl']?.toString();
+        final u = data['qrUrl']?.toString();
+        if (!mounted) return;
         setState(() {
           qrCode = null;
           qrUrl = (u != null && u.isNotEmpty) ? u : null;
         });
       }
     } catch (e) {
+      if (!mounted) return;
       if (e is DioException && e.response?.statusCode == 403) {
-        if (mounted) {
-          setState(() {
-            isForbidden = true;
-            forbiddenMessage =
-                (e.response?.data is Map<String, dynamic> ? (e.response?.data['message'] as String?) : null) ??
-                    'У вас нет доступа к модулю WhatsApp. Войдите под владельцем или менеджером.';
-          });
-        }
+        setState(() {
+          isForbidden = true;
+          forbiddenMessage =
+              (e.response?.data is Map<String, dynamic> ? (e.response?.data['message'] as String?) : null) ??
+                  'У вас нет доступа к модулю WhatsApp. Войдите под владельцем или менеджером.';
+        });
       }
+    } finally {
+      if (mounted) _isCheckingStatus = false;
     }
   }
 
@@ -537,10 +543,12 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
       );
     }
 
-    return Column(
-      children: [
-        // Заголовок и статус
-        Padding(
+    return Container(
+      color: AppTheme.backgroundColor,
+      child: Column(
+        children: [
+          // Заголовок и статус
+          Padding(
           padding: const EdgeInsets.all(24),
           child: Row(
             children: [
@@ -654,7 +662,8 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
             ],
           ),
         ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -1058,22 +1067,235 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
 
   void _showQRDialog({String? qrCodeOverride, String? qrUrlOverride}) {
     final isMobile = MediaQuery.of(context).size.width < 768;
-    final qrWidget = _WhatsAppQRDialog(
-      qrCode: qrCodeOverride ?? qrCode,
-      qrUrl: qrUrlOverride ?? qrUrl,
-      onRefresh: _refreshQr,
-      onCheckStatus: () {
-        Navigator.pop(context);
-        _checkWhatsAppStatus();
-      },
-    );
     if (isMobile) {
+      // На мобилке — авторизация по коду (GetAuthorizationCode) вместо QR
       Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => qrWidget),
+        MaterialPageRoute(
+          builder: (_) => _WhatsAppAuthCodeScreen(
+            dio: dio,
+            onCheckStatus: () {
+              Navigator.pop(context);
+              _checkWhatsAppStatus();
+            },
+          ),
+        ),
       );
     } else {
+      final qrWidget = _WhatsAppQRDialog(
+        qrCode: qrCodeOverride ?? qrCode,
+        qrUrl: qrUrlOverride ?? qrUrl,
+        onRefresh: _refreshQr,
+        onCheckStatus: () {
+          Navigator.pop(context);
+          _checkWhatsAppStatus();
+        },
+      );
       showDialog(context: context, builder: (_) => qrWidget);
     }
+  }
+}
+
+/// Экран авторизации по коду для мобильных (GetAuthorizationCode вместо QR).
+class _WhatsAppAuthCodeScreen extends StatefulWidget {
+  final Dio dio;
+  final VoidCallback onCheckStatus;
+
+  const _WhatsAppAuthCodeScreen({
+    required this.dio,
+    required this.onCheckStatus,
+  });
+
+  @override
+  State<_WhatsAppAuthCodeScreen> createState() => _WhatsAppAuthCodeScreenState();
+}
+
+class _WhatsAppAuthCodeScreenState extends State<_WhatsAppAuthCodeScreen> {
+  final _phoneController = TextEditingController();
+  String? _authCode;
+  String? _error;
+  bool _isLoading = false;
+
+  @override
+  void dispose() {
+    _phoneController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _getCode() async {
+    final phone = _phoneController.text.trim().replaceAll(RegExp(r'[\s\-\(\)]'), '');
+    if (phone.isEmpty) {
+      setState(() {
+        _error = 'Введите номер телефона';
+        _authCode = null;
+      });
+      return;
+    }
+    final digitsOnly = phone.replaceAll(RegExp(r'\D'), '');
+    if (digitsOnly.length < 10) {
+      setState(() {
+        _error = 'Номер должен содержать минимум 10 цифр';
+        _authCode = null;
+      });
+      return;
+    }
+
+    setState(() {
+      _error = null;
+      _authCode = null;
+      _isLoading = true;
+    });
+
+    try {
+      // Нормализация: 8XXXXXXXXXX → 7XXXXXXXXXX, 10 цифр → 7XXXXXXXXXX
+      String phoneForApi = digitsOnly;
+      if (digitsOnly.startsWith('8') && digitsOnly.length == 11) {
+        phoneForApi = '7${digitsOnly.substring(1)}';
+      } else if (digitsOnly.length == 10 && !digitsOnly.startsWith('7')) {
+        phoneForApi = '7$digitsOnly';
+      }
+
+      final response = await widget.dio.post(
+        '/api/whatsapp/auth-code',
+        data: {'phoneNumber': phoneForApi},
+      );
+      final data = response.data is Map ? response.data as Map<String, dynamic> : <String, dynamic>{};
+      final success = data['success'] ?? false;
+      final code = data['code']?.toString() ?? '';
+
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          if (success && code.isNotEmpty) {
+            _authCode = code;
+            _error = null;
+          } else {
+            _authCode = null;
+            _error = data['message']?.toString() ?? 'Код не получен. Нажмите «Выйти» и повторите.';
+          }
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        final msg = e is DioException && e.response?.data is Map
+            ? (e.response!.data as Map)['message']?.toString()
+            : e.toString();
+        setState(() {
+          _isLoading = false;
+          _authCode = null;
+          _error = msg ?? 'Ошибка получения кода';
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Авторизация WhatsApp'),
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          onPressed: () => Navigator.pop(context),
+        ),
+        actions: [
+          FilledButton.icon(
+            onPressed: () {
+              Navigator.pop(context);
+              widget.onCheckStatus();
+            },
+            icon: const Icon(Icons.refresh),
+            label: const Text('Проверить статус'),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF25D366),
+              foregroundColor: Colors.white,
+            ),
+          ),
+        ],
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'Свяжите устройство по номеру телефона',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              '1. Откройте WhatsApp на телефоне\n'
+              '2. Настройки → Связанные устройства\n'
+              '3. Привязка устройства → Связать по номеру телефона\n'
+              '4. Введите номер ниже и получите код',
+              style: TextStyle(fontSize: 14, color: AppTheme.textSecondary),
+            ),
+            const SizedBox(height: 24),
+            TextField(
+              controller: _phoneController,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(
+                labelText: 'Номер телефона',
+                hintText: '79001234567',
+                border: OutlineInputBorder(),
+              ),
+              onSubmitted: (_) => _getCode(),
+            ),
+            const SizedBox(height: 16),
+            if (_error != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Text(
+                  _error!,
+                  style: const TextStyle(color: Colors.red, fontSize: 13),
+                ),
+              ),
+            FilledButton.icon(
+              onPressed: _isLoading ? null : _getCode,
+              icon: _isLoading ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.sms),
+              label: Text(_isLoading ? 'Получение кода...' : 'Получить код'),
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF25D366),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+            ),
+            if (_authCode != null) ...[
+              const SizedBox(height: 32),
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF25D366).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF25D366)),
+                ),
+                child: Column(
+                  children: [
+                    const Text(
+                      'Введите этот код в WhatsApp:',
+                      style: TextStyle(fontSize: 14),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      _authCode!,
+                      style: const TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 8,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Код действует ~2.5 минуты',
+                      style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 }
 
