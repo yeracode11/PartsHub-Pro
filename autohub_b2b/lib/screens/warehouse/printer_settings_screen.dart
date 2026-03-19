@@ -1,8 +1,10 @@
+import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/services/hardware/thermal_printer_service.dart';
+import 'package:blue_thermal_printer/blue_thermal_printer.dart';
 
-/// Экран настроек принтера (для продакшена)
 class PrinterSettingsScreen extends StatefulWidget {
   const PrinterSettingsScreen({super.key});
 
@@ -12,222 +14,169 @@ class PrinterSettingsScreen extends StatefulWidget {
 
 class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
   final ThermalPrinterService _printer = ThermalPrinterService();
-  List<Map<String, dynamic>> _availablePrinters = [];
+
+  List<Map<String, dynamic>> _systemPrinters = [];
+  List<BluetoothDevice> _bluetoothDevices = [];
   bool _isLoading = false;
-  bool _isRefreshing = false;
-  Map<String, dynamic> _printerStatus = {};
+  bool _isScanning = false;
+  bool _isPrinting = false;
+  bool _isConnectingWifi = false;
+  String? _connectingAddress;
+
+  final _ipController = TextEditingController();
+  final _portController = TextEditingController(text: '9100');
 
   @override
   void initState() {
     super.initState();
-    _initializePrinter();
+    _init();
   }
 
-  /// Инициализация: автоподключение и загрузка принтеров
-  Future<void> _initializePrinter() async {
-    setState(() {
-      _isLoading = true;
-    });
+  @override
+  void dispose() {
+    _ipController.dispose();
+    _portController.dispose();
+    super.dispose();
+  }
 
-    // Попытка автоподключения к сохраненному принтеру
+  Future<void> _init() async {
+    setState(() => _isLoading = true);
     await _printer.autoConnectToSavedPrinter();
-    
-    // Обновляем статус
-    _updatePrinterStatus();
-    
-    // Загружаем список доступных принтеров
-    await _loadPrinters();
-    
-    setState(() {
-      _isLoading = false;
-    });
+    if (_printer.isWifi && _printer.wifiIp != null) {
+      _ipController.text = _printer.wifiIp!;
+      _portController.text = _printer.wifiPort.toString();
+    }
+    await _refresh();
+    setState(() => _isLoading = false);
   }
 
-  /// Обновление статуса принтера
-  void _updatePrinterStatus() {
-    setState(() {
-      _printerStatus = _printer.getPrinterStatus();
-    });
+  Future<void> _refresh() async {
+    if (Platform.isAndroid) {
+      await _scanBluetooth();
+    }
+    if (Platform.isWindows || Platform.isMacOS || Platform.isLinux || Platform.isIOS) {
+      await _loadSystemPrinters();
+    }
   }
 
-  Future<void> _loadPrinters() async {
+  Future<void> _scanBluetooth() async {
+    setState(() => _isScanning = true);
+    try {
+      final devices = await _printer.scanBluetoothDevices();
+      if (mounted) setState(() { _bluetoothDevices = devices; _isScanning = false; });
+    } catch (_) {
+      if (mounted) setState(() => _isScanning = false);
+    }
+  }
+
+  Future<void> _loadSystemPrinters() async {
     try {
       final printers = await _printer.getAvailableUSBPrinters();
-      setState(() {
-        _availablePrinters = printers;
-      });
+      if (mounted) {
+        setState(() {
+          _systemPrinters = printers.where((p) => p['isBluetooth'] != true).toList();
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _connectWifi() async {
+    final ip = _ipController.text.trim();
+    if (ip.isEmpty) {
+      _showSnack('Введите IP-адрес принтера', Colors.orange);
+      return;
+    }
+    final port = int.tryParse(_portController.text.trim()) ?? 9100;
+
+    setState(() => _isConnectingWifi = true);
+    try {
+      final ok = await _printer.connectWifi(ip, port: port);
+      if (mounted) {
+        setState(() => _isConnectingWifi = false);
+        _showSnack(
+          ok ? 'Подключено к $ip:$port' : 'Не удалось подключиться к $ip:$port',
+          ok ? Colors.green : Colors.red,
+        );
+      }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Ошибка загрузки принтеров: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        setState(() => _isConnectingWifi = false);
+        _showSnack('Ошибка: $e', Colors.red);
       }
     }
   }
 
-  Future<void> _connectToPrinter(Map<String, dynamic> printer) async {
-    setState(() {
-      _isRefreshing = true;
-    });
-
+  Future<void> _connectBluetooth(BluetoothDevice device) async {
+    setState(() => _connectingAddress = device.address);
     try {
-      // Отключаемся от текущего принтера, если подключены
-      if (_printer.isConnected) {
-        await _printer.disconnect();
+      final ok = await _printer.connectBluetooth(device);
+      if (mounted) {
+        setState(() => _connectingAddress = null);
+        _showSnack(
+          ok ? 'Подключено: ${device.name ?? device.address}' : 'Не удалось подключиться',
+          ok ? Colors.green : Colors.red,
+        );
       }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _connectingAddress = null);
+        _showSnack('Ошибка: $e', Colors.red);
+      }
+    }
+  }
 
-      // Подключаемся к выбранному принтеру
-      final connected = await _printer.connectUSB(
+  Future<void> _connectSystem(Map<String, dynamic> printer) async {
+    setState(() => _connectingAddress = printer['name']);
+    try {
+      if (_printer.isConnected) await _printer.disconnect();
+      final ok = await _printer.connectUSB(
         printerName: printer['name'] as String?,
         printerData: printer,
       );
-
       if (mounted) {
-        setState(() {
-          _isRefreshing = false;
-        });
-        
-        _updatePrinterStatus();
-
-        if (connected) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('✅ Подключено: ${printer['name']}'),
-              backgroundColor: Colors.green,
-              duration: const Duration(seconds: 2),
-            ),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('❌ Не удалось подключиться к принтеру'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
+        setState(() => _connectingAddress = null);
+        _showSnack(
+          ok ? 'Подключено: ${printer['name']}' : 'Не удалось подключиться',
+          ok ? Colors.green : Colors.red,
+        );
       }
     } catch (e) {
       if (mounted) {
-        setState(() {
-          _isRefreshing = false;
-        });
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Ошибка подключения: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        setState(() => _connectingAddress = null);
+        _showSnack('Ошибка: $e', Colors.red);
       }
     }
   }
 
-  /// Отвязать принтер
-  Future<void> _unbindPrinter() async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Отвязать принтер?'),
-        content: Text(
-          'Принтер "${_printerStatus['printerName']}" будет отключен.\n\n'
-          'Настройки будут удалены, но вы сможете подключиться снова.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Отмена'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-            ),
-            child: const Text('Отвязать'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm == true) {
-      setState(() {
-        _isRefreshing = true;
-      });
-
-      await _printer.disconnect(clearSettings: true);
-      
-      setState(() {
-        _isRefreshing = false;
-      });
-      
-      _updatePrinterStatus();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Принтер отвязан'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    }
+  Future<void> _disconnect() async {
+    await _printer.disconnect(clearSettings: true);
+    setState(() {});
+    _showSnack('Принтер отключён', Colors.green);
   }
 
-  Future<void> _printTestPage() async {
-    if (!_printer.isConnected) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Сначала подключитесь к принтеру'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-      return;
-    }
-
-    setState(() {
-      _isRefreshing = true;
-    });
-
+  Future<void> _testPrint() async {
+    setState(() => _isPrinting = true);
     try {
-      final success = await _printer.printTestPage();
-
+      final ok = await _printer.printTestPage();
       if (mounted) {
-        setState(() {
-          _isRefreshing = false;
-        });
-
-        if (success) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('✅ Тестовая страница отправлена на печать'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('❌ Ошибка печати'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
+        setState(() => _isPrinting = false);
+        _showSnack(
+          ok ? 'Тестовая страница отправлена' : 'Ошибка печати',
+          ok ? Colors.green : Colors.red,
+        );
       }
     } catch (e) {
       if (mounted) {
-        setState(() {
-          _isRefreshing = false;
-        });
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Ошибка печати: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        setState(() => _isPrinting = false);
+        _showSnack('Ошибка: $e', Colors.red);
       }
     }
+  }
+
+  void _showSnack(String text, Color color) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(text), backgroundColor: color, duration: const Duration(seconds: 2)),
+    );
   }
 
   @override
@@ -237,46 +186,56 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
       appBar: AppBar(
         title: const Text('Настройки принтера'),
         actions: [
-          // Кнопка обновления списка принтеров
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: _isLoading ? null : _loadPrinters,
-            tooltip: 'Обновить список',
+            onPressed: _isLoading ? null : _refresh,
+            tooltip: 'Обновить',
           ),
         ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          : RefreshIndicator(
+              onRefresh: _refresh,
+              child: ListView(
+                padding: const EdgeInsets.all(16),
                 children: [
-                  // Карточка текущего статуса
                   _buildStatusCard(),
-                  
                   const SizedBox(height: 24),
-                  
-                  // Список доступных принтеров
-                  _buildPrintersList(),
-                  
+                  _buildWifiSection(),
                   const SizedBox(height: 24),
-                  
-                  // Кнопка тестовой печати
-                  if (_printer.isConnected) _buildTestPrintButton(),
+                  if (Platform.isAndroid) ...[
+                    _buildBluetoothSection(),
+                    const SizedBox(height: 24),
+                  ],
+                  if (_systemPrinters.isNotEmpty) ...[
+                    _buildSystemPrintersSection(),
+                    const SizedBox(height: 24),
+                  ],
+                  if (_printer.isConnected) _buildTestButton(),
                 ],
               ),
             ),
     );
   }
 
-  /// Карточка статуса принтера
+  // ========================== Status Card ==========================
+
   Widget _buildStatusCard() {
-    final isConnected = _printerStatus['isConnected'] == true;
-    final printerName = _printerStatus['printerName'];
+    final connected = _printer.isConnected;
+    final name = _printer.printerName;
+    final status = _printer.getPrinterStatus();
+    final isBt = status['isBluetooth'] == true;
+    final isWifi = status['isWifi'] == true;
+
+    String connectionLabel = '';
+    if (isWifi) {
+      connectionLabel = ' (WiFi)';
+    } else if (isBt) {
+      connectionLabel = ' (Bluetooth)';
+    }
 
     return Card(
-      elevation: 2,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -284,10 +243,19 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
           children: [
             Row(
               children: [
-                Icon(
-                  isConnected ? Icons.print : Icons.print_disabled,
-                  color: isConnected ? Colors.green : Colors.grey,
-                  size: 32,
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: connected
+                        ? Colors.green.withOpacity(0.1)
+                        : Colors.grey.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    connected ? Icons.print : Icons.print_disabled,
+                    color: connected ? Colors.green : Colors.grey,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -295,170 +263,327 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Статус принтера',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                        connected ? 'Принтер подключён' : 'Принтер не подключён',
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        isConnected ? 'Подключен' : 'Не подключен',
-                        style: TextStyle(
-                          color: isConnected ? Colors.green : Colors.grey,
-                          fontWeight: FontWeight.w500,
+                      if (connected && name != null)
+                        Text(
+                          '$name$connectionLabel',
+                          style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary),
                         ),
-                      ),
                     ],
                   ),
                 ),
-                // Кнопка отвязать (только если подключен)
-                if (isConnected)
-                  IconButton(
-                    icon: const Icon(Icons.link_off),
-                    color: Colors.red,
-                    onPressed: _isRefreshing ? null : _unbindPrinter,
-                    tooltip: 'Отвязать принтер',
+                if (connected)
+                  TextButton(
+                    onPressed: _disconnect,
+                    style: TextButton.styleFrom(foregroundColor: Colors.red),
+                    child: const Text('Отключить'),
                   ),
               ],
             ),
-            
-            // Информация о подключенном принтере
-            if (isConnected && printerName != null) ...[
-              const Divider(height: 24),
-              _buildInfoRow('Название', printerName),
-              if (_printerStatus['printerUrl'] != null)
-                _buildInfoRow('URL', _printerStatus['printerUrl']),
-              _buildInfoRow('Размер этикетки', '100 x 70 мм'),
-              _buildInfoRow('Кириллица', 'Поддерживается'),
-            ],
+            if (!connected)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Text(
+                  Platform.isIOS
+                      ? 'Подключите принтер по WiFi (введите IP-адрес ниже).'
+                      : Platform.isAndroid
+                          ? 'Подключитесь по WiFi или Bluetooth.'
+                          : 'Выберите принтер из списка ниже.',
+                  style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+                ),
+              ),
           ],
         ),
       ),
     );
   }
 
-  /// Строка информации
-  Widget _buildInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 140,
-            child: Text(
-              label,
-              style: const TextStyle(
-                color: Colors.grey,
-                fontSize: 14,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(
-                fontWeight: FontWeight.w500,
-                fontSize: 14,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  // ========================== WiFi Section ==========================
 
-  /// Список доступных принтеров
-  Widget _buildPrintersList() {
+  Widget _buildWifiSection() {
+    final isWifiConnected = _printer.isConnected && _printer.isWifi;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Row(
+          children: [
+            const Icon(Icons.wifi, color: Colors.orange, size: 20),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text(
+                'WiFi-принтер (TCP)',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
         Text(
-          'Доступные принтеры',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
+          Platform.isIOS
+              ? 'Для Xprinter на iOS используйте подключение по WiFi.\nПринтер и телефон должны быть в одной WiFi-сети.'
+              : 'Подключение к принтеру по WiFi (порт 9100).\nПринтер и устройство должны быть в одной сети.',
+          style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
         ),
         const SizedBox(height: 12),
-        
-        if (_availablePrinters.isEmpty)
+        Card(
+          color: isWifiConnected ? Colors.green.shade50 : null,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      flex: 3,
+                      child: TextField(
+                        controller: _ipController,
+                        decoration: const InputDecoration(
+                          labelText: 'IP-адрес',
+                          hintText: '192.168.1.100',
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                          prefixIcon: Icon(Icons.router, size: 20),
+                        ),
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+                        ],
+                        enabled: !isWifiConnected,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      flex: 1,
+                      child: TextField(
+                        controller: _portController,
+                        decoration: const InputDecoration(
+                          labelText: 'Порт',
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        enabled: !isWifiConnected,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: isWifiConnected
+                      ? Row(
+                          children: [
+                            const Icon(Icons.check_circle, color: Colors.green, size: 20),
+                            const SizedBox(width: 8),
+                            const Expanded(
+                              child: Text(
+                                'Подключён',
+                                style: TextStyle(
+                                  color: Colors.green,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        )
+                      : ElevatedButton.icon(
+                          onPressed: _isConnectingWifi ? null : _connectWifi,
+                          icon: _isConnectingWifi
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Icon(Icons.wifi),
+                          label: Text(_isConnectingWifi ? 'Подключение...' : 'Подключить по WiFi'),
+                        ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ========================== Bluetooth Section ==========================
+
+  Widget _buildBluetoothSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.bluetooth, color: Colors.blue, size: 20),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text(
+                'Bluetooth-устройства',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ),
+            if (_isScanning)
+              const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+            else
+              IconButton(
+                icon: const Icon(Icons.search, size: 20),
+                onPressed: _scanBluetooth,
+                tooltip: 'Поиск Bluetooth',
+              ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        const Text(
+          'Убедитесь, что принтер включён и спарен с телефоном.',
+          style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+        ),
+        const SizedBox(height: 12),
+        if (_bluetoothDevices.isEmpty && !_isScanning)
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Row(
                 children: [
-                  const Icon(Icons.info_outline, color: Colors.orange),
+                  Icon(Icons.bluetooth_disabled, color: Colors.grey.shade400),
                   const SizedBox(width: 12),
-                  Expanded(
+                  const Expanded(
                     child: Text(
-                      'Принтеры не найдены.\nПодключите принтер и нажмите "Обновить".',
-                      style: TextStyle(color: Colors.grey[600]),
+                      'Спаренные устройства не найдены.\nВключите Bluetooth и спарьте принтер.',
+                      style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
                     ),
                   ),
                 ],
               ),
             ),
-          )
-        else
-          ...List.generate(_availablePrinters.length, (index) {
-            final printer = _availablePrinters[index];
-            final isCurrentPrinter = printer['name'] == _printerStatus['printerName'];
-            
-            return Card(
-              color: isCurrentPrinter ? Colors.green.shade50 : null,
-              elevation: isCurrentPrinter ? 4 : 1,
-              margin: const EdgeInsets.only(bottom: 8),
-              child: ListTile(
-                leading: Icon(
-                  isCurrentPrinter ? Icons.check_circle : Icons.print,
-                  color: isCurrentPrinter ? Colors.green : AppTheme.primaryColor,
-                ),
-                title: Text(
-                  printer['name'] ?? 'Неизвестный принтер',
-                  style: TextStyle(
-                    fontWeight: isCurrentPrinter ? FontWeight.bold : FontWeight.normal,
-                  ),
-                ),
-                subtitle: Text(
-                  isCurrentPrinter ? 'Текущий принтер' : printer['url'] ?? '',
-                  style: TextStyle(
-                    color: isCurrentPrinter ? Colors.green : Colors.grey,
-                    fontSize: 12,
-                  ),
-                ),
-                trailing: isCurrentPrinter
-                    ? const Icon(Icons.check, color: Colors.green)
-                    : ElevatedButton(
-                        onPressed: _isRefreshing ? null : () => _connectToPrinter(printer),
-                        child: const Text('Подключить'),
-                      ),
+          ),
+        ..._bluetoothDevices.map((device) {
+          final isCurrent =
+              _printer.isConnected && _printer.printerName == (device.name ?? device.address);
+          final isConnecting = _connectingAddress == device.address;
+
+          return Card(
+            color: isCurrent ? Colors.green.shade50 : null,
+            margin: const EdgeInsets.only(bottom: 8),
+            child: ListTile(
+              leading: Icon(
+                isCurrent ? Icons.check_circle : Icons.bluetooth,
+                color: isCurrent ? Colors.green : Colors.blue,
               ),
-            );
-          }),
+              title: Text(
+                device.name ?? 'Без имени',
+                style: TextStyle(fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal),
+              ),
+              subtitle: Text(
+                isCurrent ? 'Подключён' : (device.address ?? ''),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isCurrent ? Colors.green : AppTheme.textSecondary,
+                ),
+              ),
+              trailing: isCurrent
+                  ? const Icon(Icons.check, color: Colors.green)
+                  : isConnecting
+                      ? const SizedBox(
+                          width: 24, height: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : ElevatedButton(
+                          onPressed: () => _connectBluetooth(device),
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                          ),
+                          child: const Text('Подключить'),
+                        ),
+            ),
+          );
+        }),
       ],
     );
   }
 
-  /// Кнопка тестовой печати
-  Widget _buildTestPrintButton() {
+  // ========================== System Printers ==========================
+
+  Widget _buildSystemPrintersSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Row(
+          children: [
+            Icon(Icons.usb, color: AppTheme.textSecondary, size: 20),
+            SizedBox(width: 8),
+            Text('Системные принтеры', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        const SizedBox(height: 12),
+        ..._systemPrinters.map((printer) {
+          final isCurrent = _printer.isConnected && _printer.printerName == printer['name'];
+          final isConnecting = _connectingAddress == printer['name'];
+
+          return Card(
+            color: isCurrent ? Colors.green.shade50 : null,
+            margin: const EdgeInsets.only(bottom: 8),
+            child: ListTile(
+              leading: Icon(
+                isCurrent ? Icons.check_circle : Icons.print,
+                color: isCurrent ? Colors.green : AppTheme.primaryColor,
+              ),
+              title: Text(
+                printer['name'] ?? 'Принтер',
+                style: TextStyle(fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal),
+              ),
+              subtitle: Text(
+                isCurrent
+                    ? 'Подключён'
+                    : (printer['connectionType'] ?? printer['url'] ?? ''),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isCurrent ? Colors.green : AppTheme.textSecondary,
+                ),
+              ),
+              trailing: isCurrent
+                  ? const Icon(Icons.check, color: Colors.green)
+                  : isConnecting
+                      ? const SizedBox(
+                          width: 24, height: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : ElevatedButton(
+                          onPressed: () => _connectSystem(printer),
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                          ),
+                          child: const Text('Подключить'),
+                        ),
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
+  // ========================== Test Button ==========================
+
+  Widget _buildTestButton() {
     return SizedBox(
       width: double.infinity,
+      height: 52,
       child: ElevatedButton.icon(
-        onPressed: _isRefreshing ? null : _printTestPage,
-        icon: _isRefreshing
+        onPressed: _isPrinting ? null : _testPrint,
+        icon: _isPrinting
             ? const SizedBox(
-                width: 16,
-                height: 16,
+                width: 18, height: 18,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
                   valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                 ),
               )
             : const Icon(Icons.print),
-        label: Text(_isRefreshing ? 'Печать...' : 'Печать тестовой страницы'),
-        style: ElevatedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-        ),
+        label: Text(_isPrinting ? 'Печать...' : 'Тестовая печать'),
+        style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
       ),
     );
   }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:autohub_b2b/core/theme.dart';
+import 'package:autohub_b2b/widgets/unauthorized_placeholder.dart';
 import 'package:autohub_b2b/services/api/api_client.dart';
 import 'package:autohub_b2b/models/vehicle_model.dart';
 import 'package:dio/dio.dart';
@@ -18,6 +19,8 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
   final dio = ApiClient().dio;
   VehicleModel? vehicle;
   bool isLoading = true;
+  bool isForbidden = false;
+  String? forbiddenMessage;
 
   @override
   void initState() {
@@ -26,7 +29,10 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
   }
 
   Future<void> _loadVehicleDetails() async {
-    setState(() => isLoading = true);
+    setState(() {
+      isLoading = true;
+      isForbidden = false;
+    });
 
     try {
       final response = await dio.get('/api/vehicles/${widget.vehicleId}');
@@ -34,6 +40,27 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
         vehicle = VehicleModel.fromJson(response.data);
         isLoading = false;
       });
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 403) {
+        setState(() {
+          isForbidden = true;
+          forbiddenMessage = (e.response?.data is Map<String, dynamic>
+                  ? (e.response?.data['message'] as String?)
+                  : null) ??
+              'У вас нет доступа к просмотру этого автомобиля.';
+          isLoading = false;
+        });
+      } else {
+        setState(() => isLoading = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Ошибка загрузки: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
     } catch (e) {
       setState(() => isLoading = false);
       if (mounted) {
@@ -247,10 +274,12 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
           ),
         ],
       ),
-      body: isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : vehicle == null
-              ? const Center(child: Text('Автомобиль не найден'))
+      body: isForbidden
+          ? UnauthorizedPlaceholder(message: forbiddenMessage)
+          : isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : vehicle == null
+                  ? const Center(child: Text('Автомобиль не найден'))
               : SingleChildScrollView(
                   padding: const EdgeInsets.all(24),
                   child: Column(

@@ -4,6 +4,8 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/models/item_model.dart';
 import 'package:autohub_b2b/services/items_service.dart';
+import 'package:autohub_b2b/repositories/items_repository.dart';
+import 'package:autohub_b2b/services/service_locator.dart';
 import 'package:autohub_b2b/screens/warehouse/item_detail_screen.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -16,6 +18,7 @@ class FindPartScreen extends StatefulWidget {
 
 class _FindPartScreenState extends State<FindPartScreen> with WidgetsBindingObserver {
   final ItemsService _itemsService = ItemsService();
+  final ItemsRepository _itemsRepo = ServiceLocator().itemsRepository;
   final MobileScannerController _scannerController = MobileScannerController();
   
   bool _isScanning = false;
@@ -359,7 +362,7 @@ class _FindPartScreenState extends State<FindPartScreen> with WidgetsBindingObse
   Future<void> _findItemByCode(String code) async {
     try {
       _log('FindPartScreen: Searching for item with code: "$code"');
-      final item = await _itemsService.findItemByCode(code);
+      final item = await _itemsRepo.findByCode(code);
       
       if (!mounted) return;
       

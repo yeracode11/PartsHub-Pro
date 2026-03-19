@@ -4,15 +4,26 @@ import 'package:autohub_b2b/blocs/auth/auth_bloc.dart';
 import 'package:autohub_b2b/blocs/auth/auth_event.dart';
 import 'package:autohub_b2b/core/theme.dart';
 
-/// Виджет-заглушка, который отображается при ошибке 403 (Доступ запрещён).
-/// Предлагает пользователю войти в систему.
+/// Виджет-заглушка при ошибке 403 (Доступ запрещён) или 401 (Требуется авторизация).
+/// [isForbidden] — true для 403 (доступ запрещён), false для 401 (нужна авторизация).
 class UnauthorizedPlaceholder extends StatelessWidget {
   final String? message;
+  /// true = 403 (Доступ запрещён), false = 401 (Требуется авторизация)
+  final bool isForbidden;
 
-  const UnauthorizedPlaceholder({super.key, this.message});
+  const UnauthorizedPlaceholder({
+    super.key,
+    this.message,
+    this.isForbidden = true,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final title = isForbidden ? 'Доступ запрещён' : 'Требуется авторизация';
+    final defaultMessage = isForbidden
+        ? 'У вас нет доступа к этому разделу.\nОбратитесь к администратору или войдите под другой учётной записью.'
+        : 'У вас нет доступа к этому разделу.\nПожалуйста, войдите в систему.';
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -44,7 +55,7 @@ class UnauthorizedPlaceholder extends StatelessWidget {
             const SizedBox(height: 28),
 
             Text(
-              'Требуется авторизация',
+              title,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.bold,
@@ -55,8 +66,7 @@ class UnauthorizedPlaceholder extends StatelessWidget {
             const SizedBox(height: 12),
 
             Text(
-              message ??
-                  'У вас нет доступа к этому разделу.\nПожалуйста, войдите в систему.',
+              message ?? defaultMessage,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: AppTheme.textSecondary,

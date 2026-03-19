@@ -6,6 +6,7 @@ import 'package:autohub_b2b/services/api/api_client.dart';
 import 'package:autohub_b2b/services/api/incoming_api_service.dart';
 import 'package:autohub_b2b/screens/warehouse/incoming_doc_screen.dart';
 import 'package:autohub_b2b/widgets/unauthorized_placeholder.dart';
+import 'package:autohub_b2b/widgets/offline_placeholder.dart';
 import 'package:dio/dio.dart';
 
 class IncomingListScreen extends StatefulWidget {
@@ -23,6 +24,7 @@ class _IncomingListScreenState extends State<IncomingListScreen> {
   IncomingDocStatus? _filterStatus;
   bool _isForbidden = false;
   String? _forbiddenMessage;
+  bool _isOffline = false;
 
   @override
   void initState() {
@@ -38,6 +40,7 @@ class _IncomingListScreenState extends State<IncomingListScreen> {
       _error = null;
       _isForbidden = false;
       _forbiddenMessage = null;
+      _isOffline = false;
     });
 
     try {
@@ -62,6 +65,11 @@ class _IncomingListScreenState extends State<IncomingListScreen> {
               (e.response?.data is Map<String, dynamic> ? (e.response?.data['message'] as String?) : null) ??
                   'У вас нет доступа к разделу "Приходные накладные". Войдите под владельцем или менеджером.';
         });
+      } else if (isNetworkError(e)) {
+        setState(() {
+          _isOffline = true;
+          _isLoading = false;
+        });
       } else {
         setState(() {
           _error = e.toString();
@@ -71,10 +79,17 @@ class _IncomingListScreenState extends State<IncomingListScreen> {
     } catch (e) {
       if (!mounted) return;
 
-      setState(() {
-        _error = e.toString();
-        _isLoading = false;
-      });
+      if (isNetworkError(e)) {
+        setState(() {
+          _isOffline = true;
+          _isLoading = false;
+        });
+      } else {
+        setState(() {
+          _error = e.toString();
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -138,7 +153,9 @@ class _IncomingListScreenState extends State<IncomingListScreen> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _error != null
+          : _isOffline
+              ? OfflinePlaceholder(onRetry: _loadDocuments)
+              : _error != null
               ? Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,

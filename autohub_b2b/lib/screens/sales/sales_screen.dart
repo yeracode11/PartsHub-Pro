@@ -1,5 +1,8 @@
+import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:autohub_b2b/core/theme.dart';
+import 'package:autohub_b2b/widgets/unauthorized_placeholder.dart';
 import 'package:autohub_b2b/services/database/database.dart';
 import 'package:autohub_b2b/models/order_model.dart';
 import 'package:autohub_b2b/screens/sales/order_detail_screen.dart';
@@ -8,6 +11,9 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
 import 'package:dio/dio.dart';
 import 'package:autohub_b2b/services/api/api_client.dart';
+import 'package:autohub_b2b/repositories/orders_repository.dart';
+import 'package:autohub_b2b/services/service_locator.dart';
+import 'package:autohub_b2b/utils/dialog_helper.dart';
 
 class SalesScreen extends StatefulWidget {
   const SalesScreen({super.key});
@@ -18,9 +24,12 @@ class SalesScreen extends StatefulWidget {
 
 class _SalesScreenState extends State<SalesScreen> {
   final dio = ApiClient().dio;
+  final OrdersRepository _ordersRepo = ServiceLocator().ordersRepository;
   List<OrderModel> orders = [];
   bool isLoading = true;
   String? error;
+  bool isForbidden = false;
+  String? forbiddenMessage;
 
   @override
   void initState() {
@@ -34,25 +43,35 @@ class _SalesScreenState extends State<SalesScreen> {
     setState(() {
       isLoading = true;
       error = null;
+      isForbidden = false;
     });
 
     try {
-      final response = await dio.get('/api/orders');
-      final List<dynamic> data = response.data;
+      final loadedOrders = await _ordersRepo.getOrders();
       
       if (!mounted) return;
       
       setState(() {
-        orders = data.map((json) => OrderModel.fromJson(json)).toList();
+        orders = loadedOrders;
         isLoading = false;
       });
     } catch (e) {
       if (!mounted) return;
-      
-      setState(() {
-        error = e.toString();
-        isLoading = false;
-      });
+      if (e is DioException && e.response?.statusCode == 403) {
+        setState(() {
+          isForbidden = true;
+          forbiddenMessage = (e.response?.data is Map<String, dynamic>
+                  ? (e.response?.data['message'] as String?)
+                  : null) ??
+              'У вас нет доступа к разделу «Продажи». Войдите под владельцем или менеджером.';
+          isLoading = false;
+        });
+      } else {
+        setState(() {
+          error = e.toString();
+          isLoading = false;
+        });
+      }
     }
   }
 
@@ -125,6 +144,10 @@ class _SalesScreenState extends State<SalesScreen> {
   }
 
   Widget _buildOrdersList({bool isMobile = false}) {
+    if (isForbidden) {
+      return UnauthorizedPlaceholder(message: forbiddenMessage);
+    }
+
     if (isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -578,17 +601,23 @@ class _SalesScreenState extends State<SalesScreen> {
     }
 
     if (!context.mounted) return;
-    
-    showDialog(
-      context: context,
-      builder: (dialogContext) => _OrderDialog(
-        isEdit: isEdit,
-        order: order,
-        availableItems: availableItems,
-        dio: dio,
-        onSuccess: _loadOrders,
-      ),
+
+    final isMobile = MediaQuery.of(context).size.width < 768;
+    final orderDialog = _OrderDialog(
+      isEdit: isEdit,
+      order: order,
+      availableItems: availableItems,
+      dio: dio,
+      onSuccess: _loadOrders,
     );
+
+    if (isMobile) {
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => orderDialog),
+      );
+    } else {
+      showDialog(context: context, builder: (_) => orderDialog);
+    }
     } else {
       // Просмотр/редактирование существующего заказа
       // Загружаем полную информацию о заказе с товарами
@@ -627,17 +656,23 @@ class _SalesScreenState extends State<SalesScreen> {
           }
           
           if (!context.mounted) return;
-          
-          showDialog(
-            context: context,
-            builder: (dialogContext) => _OrderDialog(
-              isEdit: true,
-              order: fullOrder,
-              availableItems: availableItems,
-              dio: dio,
-              onSuccess: _loadOrders,
-            ),
+
+          final isMobile = MediaQuery.of(context).size.width < 768;
+          final editDialog = _OrderDialog(
+            isEdit: true,
+            order: fullOrder,
+            availableItems: availableItems,
+            dio: dio,
+            onSuccess: _loadOrders,
           );
+
+          if (isMobile) {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => editDialog),
+            );
+          } else {
+            showDialog(context: context, builder: (_) => editDialog);
+          }
         }
       } catch (e) {
         if (context.mounted) {
@@ -650,40 +685,19 @@ class _SalesScreenState extends State<SalesScreen> {
   }
 
   void _showDeleteDialog(BuildContext context, OrderModel order) {
-    showDialog(
+    DialogHelper.showConfirm(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Удалить заказ?'),
-        content: Text(
-            'Вы уверены что хотите удалить заказ "${order.orderNumber}"?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              try {
-                await dio.delete('/api/orders/${order.id}');
-                if (context.mounted) {
-                  Navigator.pop(dialogContext);
-                  _loadOrders();
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Ошибка: $e')),
-                  );
-                }
-              }
-            },
-            style: FilledButton.styleFrom(
-              backgroundColor: Colors.red,
-            ),
-            child: const Text('Удалить'),
-          ),
-        ],
-      ),
+      title: 'Удалить заказ?',
+      message: 'Вы уверены что хотите удалить заказ "${order.orderNumber}"?',
+      confirmText: 'Удалить',
+      isDestructive: true,
+      onConfirm: (ctx) async {
+        await dio.delete('/api/orders/${order.id}');
+        if (context.mounted) {
+          Navigator.pop(ctx);
+          _loadOrders();
+        }
+      },
     );
   }
 
@@ -777,6 +791,26 @@ class _OrderDialogState extends State<_OrderDialog> {
     _barcodeController.dispose();
     notesController.dispose();
     super.dispose();
+  }
+
+  bool get _isMobilePlatform {
+    try {
+      return Platform.isAndroid || Platform.isIOS;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Открывает камеру для сканирования штрих-кода / QR-кода (мобильные устройства)
+  Future<void> _openCameraScanner() async {
+    final result = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (context) => const _BarcodeScannerPage(),
+      ),
+    );
+    if (result != null && result.isNotEmpty && mounted) {
+      _onBarcodeScanned(result);
+    }
   }
 
   /// Обработка отсканированного штрих‑кода (как на кассе)
@@ -934,38 +968,352 @@ class _OrderDialogState extends State<_OrderDialog> {
   @override
   Widget build(BuildContext context) {
     final isMobile = MediaQuery.of(context).size.width < 768;
-    
+
+    if (isMobile) return _buildMobileLayout(context);
+    return _buildDesktopDialog(context);
+  }
+
+  // ========================= MOBILE: Full-screen Scaffold =========================
+
+  Widget _buildMobileLayout(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppTheme.backgroundColor,
+      appBar: AppBar(
+        title: Text(widget.isEdit ? 'Редактировать заказ' : 'Новый заказ'),
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          onPressed: () => Navigator.pop(context),
+        ),
+        actions: [
+          FilledButton(
+            onPressed: selectedItems.isEmpty ? null : _createOrder,
+            child: Text(widget.isEdit ? 'Сохранить' : 'Создать'),
+          ),
+          const SizedBox(width: 12),
+        ],
+      ),
+      body: Column(
+        children: [
+          // Сканер / ввод кода — sticky сверху
+          Container(
+            color: Theme.of(context).cardColor,
+            padding: const EdgeInsets.fromLTRB(4, 4, 4, 0),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _barcodeController,
+                        focusNode: _barcodeFocusNode,
+                        decoration: InputDecoration(
+                          hintText: 'Штрихкод / артикул',
+                          prefixIcon: const Icon(Icons.qr_code_scanner, size: 20),
+                          suffixIcon: _isMobilePlatform
+                              ? IconButton(
+                                  icon: const Icon(Icons.camera_alt),
+                                  onPressed: _openCameraScanner,
+                                )
+                              : null,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          isDense: true,
+                        ),
+                        onChanged: (value) => _barcodeScanner.handleInput(value),
+                        onEditingComplete: () {
+                          _barcodeScanner.clearBuffer();
+                          _barcodeController.clear();
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    OutlinedButton.icon(
+                      onPressed: _showAddItemDialog,
+                      icon: const Icon(Icons.add, size: 18),
+                      label: const Text('Товар'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                const Divider(height: 1),
+              ],
+            ),
+          ),
+
+          // Список товаров
+          Expanded(
+            child: selectedItems.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.shopping_cart_outlined, size: 56, color: Colors.grey.shade300),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Сканируйте товар\nили добавьте вручную',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.grey.shade500, fontSize: 15),
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    itemCount: selectedItems.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (context, index) => _buildMobileItemCard(index),
+                  ),
+          ),
+
+          // Итого + настройки — sticky снизу
+          _buildMobileBottomPanel(context),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileItemCard(int index) {
+    final item = selectedItems[index];
+    final price = double.tryParse(item['price'].toString()) ?? 0;
+    final quantity = item['quantity'] as int;
+    final subtotal = price * quantity;
+    final imageUrl = item['imageUrl'] as String?;
+    final sku = item['sku'] as String?;
+
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Фото
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: imageUrl != null
+                  ? CachedNetworkImage(
+                      imageUrl: imageUrl.startsWith('http')
+                          ? imageUrl
+                          : 'http://78.140.246.83:3000$imageUrl',
+                      width: 56,
+                      height: 56,
+                      fit: BoxFit.cover,
+                      maxWidthDiskCache: 200,
+                      maxHeightDiskCache: 200,
+                      memCacheWidth: 200,
+                      memCacheHeight: 200,
+                      placeholder: (_, __) => Container(width: 56, height: 56, color: Colors.grey.shade200),
+                      errorWidget: (_, __, ___) => Container(
+                        width: 56, height: 56,
+                        color: Colors.grey.shade200,
+                        child: const Icon(Icons.image_not_supported, color: Colors.grey, size: 20),
+                      ),
+                    )
+                  : Container(
+                      width: 56,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryColor.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.inventory_2, color: AppTheme.primaryColor, size: 24),
+                    ),
+            ),
+            const SizedBox(width: 12),
+
+            // Инфо
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item['name'] ?? '',
+                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (sku != null && sku.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(sku, style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+                    ),
+                  const SizedBox(height: 8),
+
+                  // Кол-во + цена
+                  Row(
+                    children: [
+                      // Stepper
+                      Container(
+                        decoration: BoxDecoration(
+                          border: Border.all(color: AppTheme.borderColor),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _stepperBtn(Icons.remove, () {
+                              setState(() {
+                                final q = quantity - 1;
+                                if (q <= 0) {
+                                  selectedItems.removeAt(index);
+                                } else {
+                                  selectedItems[index] = {...item, 'quantity': q};
+                                }
+                              });
+                            }),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              child: Text('$quantity', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                            ),
+                            _stepperBtn(Icons.add, () {
+                              setState(() {
+                                selectedItems[index] = {...item, 'quantity': quantity + 1};
+                              });
+                            }),
+                          ],
+                        ),
+                      ),
+                      const Spacer(),
+                      Text(
+                        '${NumberFormat('#,###', 'ru_RU').format(subtotal)} ₸',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            // Удалить
+            InkWell(
+              borderRadius: BorderRadius.circular(20),
+              onTap: () => setState(() => selectedItems.removeAt(index)),
+              child: const Padding(
+                padding: EdgeInsets.all(4),
+                child: Icon(Icons.close, size: 18, color: Colors.red),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _stepperBtn(IconData icon, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.all(6),
+        child: Icon(icon, size: 18),
+      ),
+    );
+  }
+
+  Widget _buildMobileBottomPanel(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 8, offset: const Offset(0, -2))],
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Итого
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Итого (${selectedItems.length} поз.)',
+                      style: const TextStyle(fontSize: 15, color: AppTheme.textSecondary)),
+                  Text(
+                    '${NumberFormat('#,###', 'ru_RU').format(totalAmount)} ₸',
+                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppTheme.primaryColor),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              // Статус + Оплата
+              Row(
+                children: [
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
+                      value: selectedStatus,
+                      decoration: const InputDecoration(
+                        labelText: 'Статус',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: 'pending', child: Text('Ожидание')),
+                        DropdownMenuItem(value: 'processing', child: Text('В работе')),
+                        DropdownMenuItem(value: 'reserved', child: Text('Бронь')),
+                        DropdownMenuItem(value: 'ready', child: Text('Готов')),
+                        DropdownMenuItem(value: 'completed', child: Text('Завершен')),
+                        DropdownMenuItem(value: 'cancelled', child: Text('Отменен')),
+                      ],
+                      onChanged: (value) {
+                        setState(() {
+                          selectedStatus = value!;
+                          if (selectedStatus == 'reserved') {
+                            reserveEnabled = true;
+                            _setReserveUntilFromDays();
+                          } else {
+                            reserveEnabled = false;
+                            reserveUntil = null;
+                          }
+                        });
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
+                      value: selectedPaymentStatus,
+                      decoration: const InputDecoration(
+                        labelText: 'Оплата',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: 'pending', child: Text('Не оплачен')),
+                        DropdownMenuItem(value: 'partially_paid', child: Text('Частично')),
+                        DropdownMenuItem(value: 'paid', child: Text('Оплачен')),
+                      ],
+                      onChanged: (v) => setState(() => selectedPaymentStatus = v!),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ========================= DESKTOP: AlertDialog =========================
+
+  Widget _buildDesktopDialog(BuildContext context) {
     return AlertDialog(
       title: Text(widget.isEdit ? 'Редактировать заказ' : 'Новый заказ'),
       content: SizedBox(
-        width: isMobile 
-            ? MediaQuery.of(context).size.width * 0.9
-            : 700,
-        height: isMobile
-            ? MediaQuery.of(context).size.height * 0.8
-            : 600,
+        width: 700,
+        height: 600,
         child: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Выбор товаров
-            if (isMobile) ...[
-              Text(
-                'Товары в заказе',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: _showAddItemDialog,
-                  icon: const Icon(Icons.add, size: 18),
-                  label: const Text('Добавить товар'),
-                ),
-              ),
-            ] else ...[
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -982,10 +1330,7 @@ class _OrderDialogState extends State<_OrderDialog> {
                 ),
               ],
             ),
-            ],
             const SizedBox(height: 12),
-
-            // Список выбранных товаров
             Container(
               height: 250,
               decoration: BoxDecoration(
@@ -994,28 +1339,16 @@ class _OrderDialogState extends State<_OrderDialog> {
               ),
               child: Column(
                 children: [
-                  // Поле для сканирования / ввода штрихкода
                   TextField(
                     controller: _barcodeController,
                     focusNode: _barcodeFocusNode,
-                    decoration: InputDecoration(
+                    decoration: const InputDecoration(
                       labelText: 'Штрихкод / артикул',
                       hintText: 'Поднесите сканер и отсканируйте товар',
-                      prefixIcon: const Icon(Icons.qr_code_scanner),
-                      suffixIcon: selectedItems.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.clear),
-                              onPressed: () {
-                                _barcodeController.clear();
-                                _barcodeFocusNode.requestFocus();
-                              },
-                            )
-                          : null,
+                      prefixIcon: Icon(Icons.qr_code_scanner),
                       border: InputBorder.none,
                     ),
-                    onChanged: (value) {
-                      _barcodeScanner.handleInput(value);
-                    },
+                    onChanged: (value) => _barcodeScanner.handleInput(value),
                     onEditingComplete: () {
                       _barcodeScanner.clearBuffer();
                       _barcodeController.clear();
@@ -1028,16 +1361,10 @@ class _OrderDialogState extends State<_OrderDialog> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(
-                            Icons.shopping_cart_outlined,
-                            size: 48,
-                            color: Colors.grey.shade400,
-                          ),
+                          Icon(Icons.shopping_cart_outlined, size: 48, color: Colors.grey.shade400),
                           const SizedBox(height: 8),
-                          Text(
-                                  'Сканируйте товар или добавьте его вручную',
-                            style: TextStyle(color: Colors.grey.shade600),
-                          ),
+                          Text('Сканируйте товар или добавьте вручную',
+                              style: TextStyle(color: Colors.grey.shade600)),
                         ],
                       ),
                     )
@@ -1048,143 +1375,80 @@ class _OrderDialogState extends State<_OrderDialog> {
                         final price = double.tryParse(item['price'].toString()) ?? 0;
                         final quantity = item['quantity'] as int;
                         final subtotal = price * quantity;
-                              final imageUrl = item['imageUrl'] as String?;
-                              final sku = item['sku'] as String?;
-
+                        final imageUrl = item['imageUrl'] as String?;
+                        final sku = item['sku'] as String?;
                         return ListTile(
-                                leading: imageUrl != null
-                                    ? ClipRRect(
-                                        borderRadius: BorderRadius.circular(8),
-                                        child: CachedNetworkImage(
-                                          imageUrl: imageUrl.startsWith('http')
-                                              ? imageUrl
-                                              : 'http://78.140.246.83:3000$imageUrl',
-                                          width: 48,
-                                          height: 48,
-                                          fit: BoxFit.cover,
-                                          maxWidthDiskCache: 200,
-                                          maxHeightDiskCache: 200,
-                                          memCacheWidth: 200,
-                                          memCacheHeight: 200,
-                                          placeholder: (context, url) => Container(
-                                            width: 48,
-                                            height: 48,
-                                            color: Colors.grey.shade200,
-                                            child: const Center(
-                                              child: CircularProgressIndicator(strokeWidth: 2),
-                                            ),
-                                          ),
-                                          errorWidget: (context, url, error) {
-                                            return Container(
-                                              width: 48,
-                                              height: 48,
-                                              color: Colors.grey.shade200,
-                                              child: const Icon(Icons.image_not_supported,
-                                                  color: Colors.grey),
-                                            );
-                                          },
-                                        ),
-                                      )
-                                    : CircleAvatar(
-                            backgroundColor: AppTheme.primaryColor.withOpacity(0.1),
-                                        child: const Icon(Icons.inventory_2,
-                                            color: AppTheme.primaryColor),
-                          ),
-                                title: Text(
-                                  item['name'],
-                                  overflow: TextOverflow.ellipsis,
-                                  maxLines: 1,
+                          leading: imageUrl != null
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: CachedNetworkImage(
+                                    imageUrl: imageUrl.startsWith('http')
+                                        ? imageUrl
+                                        : 'http://78.140.246.83:3000$imageUrl',
+                                    width: 48, height: 48, fit: BoxFit.cover,
+                                    maxWidthDiskCache: 200, maxHeightDiskCache: 200,
+                                    memCacheWidth: 200, memCacheHeight: 200,
+                                    placeholder: (_, __) => Container(width: 48, height: 48, color: Colors.grey.shade200,
+                                        child: const Center(child: CircularProgressIndicator(strokeWidth: 2))),
+                                    errorWidget: (_, __, ___) => Container(width: 48, height: 48,
+                                        color: Colors.grey.shade200,
+                                        child: const Icon(Icons.image_not_supported, color: Colors.grey)),
+                                  ),
+                                )
+                              : CircleAvatar(
+                                  backgroundColor: AppTheme.primaryColor.withOpacity(0.1),
+                                  child: const Icon(Icons.inventory_2, color: AppTheme.primaryColor),
                                 ),
-                                subtitle: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                            '${NumberFormat('#,###', 'ru_RU').format(price)} ₸ × $quantity',
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    if (sku != null && sku.isNotEmpty)
-                                      Text(
-                                        'Артикул: $sku',
-                                        style: const TextStyle(
-                                          fontSize: 12,
-                                          color: AppTheme.textSecondary,
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                  ],
+                          title: Text(item['name'], overflow: TextOverflow.ellipsis, maxLines: 1),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text('${NumberFormat('#,###', 'ru_RU').format(price)} ₸ × $quantity',
+                                  overflow: TextOverflow.ellipsis),
+                              if (sku != null && sku.isNotEmpty)
+                                Text('Артикул: $sku',
+                                    style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                                    overflow: TextOverflow.ellipsis),
+                            ],
                           ),
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                                    IconButton(
-                                      icon: const Icon(Icons.remove_circle_outline),
-                                      onPressed: () {
-                                        setState(() {
-                                          final q = (item['quantity'] as int? ?? 1) - 1;
-                                          if (q <= 0) {
-                                            selectedItems.removeAt(index);
-                                          } else {
-                                            selectedItems[index] = {
-                                              ...item,
-                                              'quantity': q,
-                                            };
-                                          }
-                                        });
-                                      },
-                                      tooltip: 'Уменьшить количество',
-                                    ),
-                                    Text(
-                                      '$quantity',
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.add_circle_outline),
-                                      onPressed: () {
-                                        setState(() {
-                                          final q = (item['quantity'] as int? ?? 1) + 1;
-                                          selectedItems[index] = {
-                                            ...item,
-                                            'quantity': q,
-                                          };
-                                        });
-                                      },
-                                      tooltip: 'Увеличить количество',
-                                    ),
-                                    Flexible(
-                                      child: Text(
-                                '${NumberFormat('#,###', 'ru_RU').format(subtotal)} ₸',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                ),
-                                        overflow: TextOverflow.ellipsis,
-                              ),
-                                    ),
-                                    const SizedBox(width: 4),
                               IconButton(
-                                icon: const Icon(Icons.delete_outline, color: Colors.red),
+                                icon: const Icon(Icons.remove_circle_outline),
                                 onPressed: () {
                                   setState(() {
-                                    selectedItems.removeAt(index);
+                                    final q = (item['quantity'] as int? ?? 1) - 1;
+                                    if (q <= 0) { selectedItems.removeAt(index); }
+                                    else { selectedItems[index] = {...item, 'quantity': q}; }
                                   });
                                 },
-                                tooltip: 'Удалить',
+                              ),
+                              Text('$quantity', style: const TextStyle(fontWeight: FontWeight.w600)),
+                              IconButton(
+                                icon: const Icon(Icons.add_circle_outline),
+                                onPressed: () {
+                                  setState(() { selectedItems[index] = {...item, 'quantity': quantity + 1}; });
+                                },
+                              ),
+                              Text('${NumberFormat('#,###', 'ru_RU').format(subtotal)} ₸',
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                              const SizedBox(width: 4),
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline, color: Colors.red),
+                                onPressed: () => setState(() => selectedItems.removeAt(index)),
                               ),
                             ],
                           ),
                         );
                       },
-                          ),
+                    ),
                   ),
                 ],
-                    ),
+              ),
             ),
-
             const SizedBox(height: 16),
-            // Общая сумма
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -1195,93 +1459,22 @@ class _OrderDialogState extends State<_OrderDialog> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    'Итого:',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
-                  Text(
-                    '${NumberFormat('#,###', 'ru_RU').format(totalAmount)} ₸',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.primaryColor,
-                        ),
-                  ),
+                  Text('Итого:', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+                  Text('${NumberFormat('#,###', 'ru_RU').format(totalAmount)} ₸',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.bold, color: AppTheme.primaryColor)),
                 ],
               ),
             ),
-
             const SizedBox(height: 16),
             _buildReserveSection(),
             const SizedBox(height: 24),
-
-            // Статусы и примечания
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final isMobile = constraints.maxWidth < 600;
-                
-                if (isMobile) {
-                  return Column(
-                    children: [
-                      DropdownButtonFormField<String>(
-                        value: selectedStatus,
-                        decoration: const InputDecoration(
-                          labelText: 'Статус',
-                          border: OutlineInputBorder(),
-                        ),
-                        items: const [
-                          DropdownMenuItem(value: 'pending', child: Text('Ожидание')),
-                          DropdownMenuItem(value: 'processing', child: Text('В работе')),
-                          DropdownMenuItem(value: 'reserved', child: Text('Забронирован')),
-                          DropdownMenuItem(value: 'ready', child: Text('Готов к выдаче')),
-                          DropdownMenuItem(value: 'completed', child: Text('Завершен')),
-                          DropdownMenuItem(value: 'cancelled', child: Text('Отменен')),
-                        ],
-                        onChanged: (value) {
-                          setState(() {
-                            selectedStatus = value!;
-                            if (selectedStatus == 'reserved') {
-                              reserveEnabled = true;
-                              _setReserveUntilFromDays();
-                            } else {
-                              reserveEnabled = false;
-                              reserveUntil = null;
-                            }
-                          });
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      DropdownButtonFormField<String>(
-                        value: selectedPaymentStatus,
-                        decoration: const InputDecoration(
-                          labelText: 'Статус оплаты',
-                          border: OutlineInputBorder(),
-                        ),
-                        items: const [
-                          DropdownMenuItem(value: 'pending', child: Text('Не оплачен')),
-                          DropdownMenuItem(value: 'partially_paid', child: Text('Частично')),
-                          DropdownMenuItem(value: 'paid', child: Text('Оплачен')),
-                        ],
-                        onChanged: (value) {
-                          setState(() {
-                            selectedPaymentStatus = value!;
-                          });
-                        },
-                      ),
-                    ],
-                  );
-                }
-                
-                return Row(
+            Row(
               children: [
                 Expanded(
                   child: DropdownButtonFormField<String>(
                     value: selectedStatus,
-                    decoration: const InputDecoration(
-                      labelText: 'Статус',
-                      border: OutlineInputBorder(),
-                    ),
+                    decoration: const InputDecoration(labelText: 'Статус', border: OutlineInputBorder()),
                     items: const [
                       DropdownMenuItem(value: 'pending', child: Text('Ожидание')),
                       DropdownMenuItem(value: 'processing', child: Text('В работе')),
@@ -1293,13 +1486,8 @@ class _OrderDialogState extends State<_OrderDialog> {
                     onChanged: (value) {
                       setState(() {
                         selectedStatus = value!;
-                        if (selectedStatus == 'reserved') {
-                          reserveEnabled = true;
-                          _setReserveUntilFromDays();
-                        } else {
-                          reserveEnabled = false;
-                          reserveUntil = null;
-                        }
+                        if (selectedStatus == 'reserved') { reserveEnabled = true; _setReserveUntilFromDays(); }
+                        else { reserveEnabled = false; reserveUntil = null; }
                       });
                     },
                   ),
@@ -1308,33 +1496,21 @@ class _OrderDialogState extends State<_OrderDialog> {
                 Expanded(
                   child: DropdownButtonFormField<String>(
                     value: selectedPaymentStatus,
-                    decoration: const InputDecoration(
-                      labelText: 'Статус оплаты',
-                      border: OutlineInputBorder(),
-                    ),
+                    decoration: const InputDecoration(labelText: 'Статус оплаты', border: OutlineInputBorder()),
                     items: const [
                       DropdownMenuItem(value: 'pending', child: Text('Не оплачен')),
                       DropdownMenuItem(value: 'partially_paid', child: Text('Частично')),
                       DropdownMenuItem(value: 'paid', child: Text('Оплачен')),
                     ],
-                    onChanged: (value) {
-                      setState(() {
-                        selectedPaymentStatus = value!;
-                      });
-                    },
+                    onChanged: (v) => setState(() => selectedPaymentStatus = v!),
                   ),
                 ),
               ],
-                );
-              },
             ),
             const SizedBox(height: 16),
             TextField(
               controller: notesController,
-              decoration: const InputDecoration(
-                labelText: 'Примечания',
-                border: OutlineInputBorder(),
-              ),
+              decoration: const InputDecoration(labelText: 'Примечания', border: OutlineInputBorder()),
               maxLines: 2,
             ),
           ],
@@ -1342,10 +1518,7 @@ class _OrderDialogState extends State<_OrderDialog> {
         ),
       ),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Отмена'),
-        ),
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
         FilledButton(
           onPressed: selectedItems.isEmpty ? null : _createOrder,
           child: Text(widget.isEdit ? 'Сохранить' : 'Создать заказ'),
@@ -1355,7 +1528,6 @@ class _OrderDialogState extends State<_OrderDialog> {
   }
 
   void _showAddItemDialog() {
-    // Фильтруем товары с quantity > 0
     final availableItemsFiltered = widget.availableItems
         .where((item) => (item['quantity'] as int) > 0)
         .toList();
@@ -1367,108 +1539,29 @@ class _OrderDialogState extends State<_OrderDialog> {
       return;
     }
 
-    Map<String, dynamic>? selectedItem;
-    int quantity = 1;
-
-    showDialog(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) {
-          final isMobile = MediaQuery.of(context).size.width < 768;
-          
-          return AlertDialog(
-          title: const Text('Добавить товар'),
-          content: SizedBox(
-              width: isMobile ? MediaQuery.of(context).size.width * 0.8 : 400,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                DropdownButtonFormField<Map<String, dynamic>>(
-                  value: selectedItem,
-                  decoration: const InputDecoration(
-                    labelText: 'Выберите товар',
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                  ),
-                  isExpanded: true,
-                  items: availableItemsFiltered.map((item) {
-                    final price = double.tryParse(item['price'].toString()) ?? 0;
-                    return DropdownMenuItem(
-                      value: item,
-                      child: Text(
-                        '${item['name']} - ${NumberFormat('#,###', 'ru_RU').format(price)} ₸ (${item['quantity']})',
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 1,
-                      ),
-                    );
-                  }).toList(),
-                  selectedItemBuilder: (context) {
-                    return availableItemsFiltered.map((item) {
-                      final price = double.tryParse(item['price'].toString()) ?? 0;
-                      return Text(
-                        '${item['name']} - ${NumberFormat('#,###', 'ru_RU').format(price)} ₸',
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 1,
-                      );
-                    }).toList();
-                  },
-                  onChanged: (value) {
-                    setDialogState(() {
-                      selectedItem = value;
-                      quantity = 1; // Reset quantity
-                    });
-                  },
-                ),
-                const SizedBox(height: 16),
-                if (selectedItem != null)
-                  TextField(
-                    decoration: InputDecoration(
-                      labelText: 'Количество',
-                      border: const OutlineInputBorder(),
-                      helperText: 'Доступно: ${selectedItem!['quantity']}',
-                    ),
-                    keyboardType: TextInputType.number,
-                    onChanged: (value) {
-                      quantity = int.tryParse(value) ?? 1;
-                    },
-                    controller: TextEditingController(text: quantity.toString()),
-                  ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Отмена'),
-            ),
-            FilledButton(
-              onPressed: selectedItem == null
-                  ? null
-                  : () {
-                      if (quantity <= 0 || quantity > (selectedItem!['quantity'] as int)) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Некорректное количество')),
-                        );
-                        return;
-                      }
-
-                      setState(() {
-                        selectedItems.add({
-                          'id': selectedItem!['id'],
-                          'name': selectedItem!['name'],
-                          'price': selectedItem!['price'],
-                          'quantity': quantity,
-                        });
-                      });
-                      Navigator.pop(dialogContext);
-                    },
-              child: const Text('Добавить'),
-            ),
-          ],
-        );
-        },
-      ),
+    final isMobile = MediaQuery.of(context).size.width < 768;
+    final addItemWidget = _AddItemToOrderDialog(
+      availableItems: availableItemsFiltered,
+      onAdd: (item, quantity) {
+        setState(() {
+          selectedItems.add({
+            'id': item['id'],
+            'name': item['name'],
+            'price': item['price'],
+            'quantity': quantity,
+          });
+        });
+        Navigator.pop(context);
+      },
     );
+
+    if (isMobile) {
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => addItemWidget),
+      );
+    } else {
+      showDialog(context: context, builder: (_) => addItemWidget);
+    }
   }
 
   Future<void> _createOrder() async {
@@ -1515,3 +1608,225 @@ class _OrderDialogState extends State<_OrderDialog> {
 
 }
 
+class _AddItemToOrderDialog extends StatefulWidget {
+  final List<Map<String, dynamic>> availableItems;
+  final void Function(Map<String, dynamic> item, int quantity) onAdd;
+
+  const _AddItemToOrderDialog({
+    required this.availableItems,
+    required this.onAdd,
+  });
+
+  @override
+  State<_AddItemToOrderDialog> createState() => _AddItemToOrderDialogState();
+}
+
+class _AddItemToOrderDialogState extends State<_AddItemToOrderDialog> {
+  Map<String, dynamic>? _selectedItem;
+  final _quantityController = TextEditingController(text: '1');
+
+  @override
+  void dispose() {
+    _quantityController.dispose();
+    super.dispose();
+  }
+
+  void _onItemChanged(Map<String, dynamic>? value) {
+    setState(() {
+      _selectedItem = value;
+      _quantityController.text = '1';
+    });
+  }
+
+  void _submit() {
+    if (_selectedItem == null) return;
+    final quantity = int.tryParse(_quantityController.text) ?? 1;
+    final maxQty = _selectedItem!['quantity'] as int;
+    if (quantity <= 0 || quantity > maxQty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Некорректное количество')),
+      );
+      return;
+    }
+    widget.onAdd(_selectedItem!, quantity);
+  }
+
+  Widget _buildContent() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        DropdownButtonFormField<Map<String, dynamic>>(
+          value: _selectedItem,
+          decoration: const InputDecoration(
+            labelText: 'Выберите товар',
+            border: OutlineInputBorder(),
+            isDense: true,
+          ),
+          isExpanded: true,
+          items: widget.availableItems.map((item) {
+            final price = double.tryParse(item['price'].toString()) ?? 0;
+            return DropdownMenuItem(
+              value: item,
+              child: Text(
+                '${item['name']} - ${NumberFormat('#,###', 'ru_RU').format(price)} ₸ (${item['quantity']})',
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+            );
+          }).toList(),
+          selectedItemBuilder: (context) {
+            return widget.availableItems.map((item) {
+              final price = double.tryParse(item['price'].toString()) ?? 0;
+              return Text(
+                '${item['name']} - ${NumberFormat('#,###', 'ru_RU').format(price)} ₸',
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              );
+            }).toList();
+          },
+          onChanged: _onItemChanged,
+        ),
+        const SizedBox(height: 16),
+        if (_selectedItem != null)
+          TextField(
+            controller: _quantityController,
+            decoration: InputDecoration(
+              labelText: 'Количество',
+              border: const OutlineInputBorder(),
+              helperText: 'Доступно: ${_selectedItem!['quantity']}',
+            ),
+            keyboardType: TextInputType.number,
+            onChanged: (_) => setState(() {}),
+          ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 768;
+    if (isMobile) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Добавить товар'),
+          leading: IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+          actions: [
+            FilledButton(
+              onPressed: _selectedItem == null ? null : _submit,
+              child: const Text('Добавить'),
+            ),
+          ],
+        ),
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: _buildContent(),
+        ),
+      );
+    }
+    return AlertDialog(
+      title: const Text('Добавить товар'),
+      content: SizedBox(
+        width: 400,
+        child: _buildContent(),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
+        FilledButton(
+          onPressed: _selectedItem == null ? null : _submit,
+          child: const Text('Добавить'),
+        ),
+      ],
+    );
+  }
+}
+
+/// Полноэкранная страница камеры для сканирования штрих-кода / QR-кода.
+/// Возвращает отсканированный код через Navigator.pop().
+class _BarcodeScannerPage extends StatefulWidget {
+  const _BarcodeScannerPage();
+
+  @override
+  State<_BarcodeScannerPage> createState() => _BarcodeScannerPageState();
+}
+
+class _BarcodeScannerPageState extends State<_BarcodeScannerPage> {
+  final MobileScannerController _controller = MobileScannerController(
+    detectionSpeed: DetectionSpeed.normal,
+    facing: CameraFacing.back,
+  );
+  bool _returned = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onDetect(BarcodeCapture capture) {
+    if (_returned) return;
+    final barcode = capture.barcodes.firstOrNull;
+    if (barcode == null || barcode.rawValue == null || barcode.rawValue!.isEmpty) return;
+    _returned = true;
+    Navigator.of(context).pop(barcode.rawValue);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        title: const Text('Сканирование'),
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.flash_on),
+            onPressed: () => _controller.toggleTorch(),
+            tooltip: 'Фонарик',
+          ),
+          IconButton(
+            icon: const Icon(Icons.cameraswitch),
+            onPressed: () => _controller.switchCamera(),
+            tooltip: 'Переключить камеру',
+          ),
+        ],
+      ),
+      body: Stack(
+        children: [
+          MobileScanner(
+            controller: _controller,
+            onDetect: _onDetect,
+          ),
+          Center(
+            child: Container(
+              width: 260,
+              height: 260,
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.white54, width: 2),
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: 60,
+            left: 0,
+            right: 0,
+            child: Text(
+              'Наведите камеру на штрих-код или QR-код',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.8),
+                fontSize: 15,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

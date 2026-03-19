@@ -7,6 +7,9 @@ import 'package:autohub_b2b/models/user_model.dart';
 import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/services/auth/secure_storage_service.dart';
 import 'package:autohub_b2b/screens/profile/edit_profile_screen.dart';
+import 'package:autohub_b2b/screens/legal/privacy_policy_screen.dart';
+import 'package:autohub_b2b/screens/legal/terms_of_use_screen.dart';
+import 'package:autohub_b2b/utils/dialog_helper.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -234,9 +237,48 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   leading: const Icon(Icons.settings),
                   title: const Text('Настройки'),
                   trailing: const Icon(Icons.chevron_right),
+                  onTap: () {},
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // Правовая информация
+          Card(
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.privacy_tip_outlined),
+                  title: const Text('Политика конфиденциальности'),
+                  trailing: const Icon(Icons.chevron_right),
                   onTap: () {
-                    // Настройки будут реализованы позже
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => const PrivacyPolicyScreen(),
+                      ),
+                    );
                   },
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.description_outlined),
+                  title: const Text('Пользовательское соглашение'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => const TermsOfUseScreen(),
+                      ),
+                    );
+                  },
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.info_outline),
+                  title: const Text('О приложении'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => _showAboutAppDialog(context),
                 ),
               ],
             ),
@@ -251,6 +293,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
             style: FilledButton.styleFrom(
               backgroundColor: Colors.red,
               padding: const EdgeInsets.symmetric(vertical: 16),
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          // Удалить аккаунт (Apple requirement)
+          Center(
+            child: TextButton(
+              onPressed: () => _showDeleteAccountDialog(context),
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.red.shade300,
+              ),
+              child: const Text('Удалить аккаунт'),
+            ),
+          ),
+
+          const SizedBox(height: 8),
+          const Center(
+            child: Text(
+              'AutoHub B2B v1.0.0',
+              style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
             ),
           ),
         ],
@@ -307,29 +370,68 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return '${date.day}.${date.month}.${date.year}';
   }
 
-  void _showLogoutDialog(BuildContext context) {
-    showDialog(
+  void _showDeleteAccountDialog(BuildContext context) {
+    DialogHelper.showConfirm(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Выход из аккаунта'),
-        content: const Text('Вы уверены, что хотите выйти из аккаунта?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              context.read<AuthBloc>().add(AuthSignOutRequested());
-            },
-            style: FilledButton.styleFrom(
-              backgroundColor: Colors.red,
+      title: 'Удалить аккаунт?',
+      message: 'Это действие необратимо. Все ваши данные, включая товары, '
+          'заказы, клиенты и аналитику, будут безвозвратно удалены.\n\n'
+          'Для подтверждения удаления отправьте запрос на eracode11@gmail.com '
+          'с указанием email аккаунта. Данные будут удалены в течение 30 дней.',
+      confirmText: 'Удалить аккаунт',
+      isDestructive: true,
+      onConfirm: (ctx) async {
+        Navigator.pop(ctx);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Для удаления аккаунта отправьте запрос на eracode11@gmail.com',
+              ),
+              duration: Duration(seconds: 5),
             ),
-            child: const Text('Выйти'),
-          ),
-        ],
-      ),
+          );
+        }
+      },
+    );
+  }
+
+  void _showAboutAppDialog(BuildContext context) {
+    showAboutDialog(
+      context: context,
+      applicationName: 'AutoHub B2B',
+      applicationVersion: '1.0.0',
+      applicationLegalese: '© 2026 ТОО «AutoHub». Все права защищены.',
+      children: [
+        const SizedBox(height: 16),
+        const Text(
+          'B2B-платформа для управления автобизнесом: '
+          'авторазборы, автосервисы, автомойки.',
+          style: TextStyle(fontSize: 14),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          'Email: eracode11@gmail.com',
+          style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+        ),
+      ],
+    );
+  }
+
+  void _showLogoutDialog(BuildContext context) {
+    final authBloc = context.read<AuthBloc>();
+    DialogHelper.showConfirm(
+      context: context,
+      title: 'Выход из аккаунта',
+      message: 'Вы уверены, что хотите выйти из аккаунта?',
+      confirmText: 'Выйти',
+      isDestructive: true,
+      onConfirm: (ctx) async {
+        Navigator.pop(ctx);
+        if (context.mounted) {
+          authBloc.add(AuthSignOutRequested());
+        }
+      },
     );
   }
 }

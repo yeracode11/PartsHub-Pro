@@ -1,3 +1,5 @@
+import 'package:dio/dio.dart';
+
 import '../models/warehouse_model.dart';
 import 'api/api_client.dart';
 
@@ -97,6 +99,8 @@ class WarehouseService {
       final response = await _apiClient.dio.get('/api/warehouse-transfers');
       final List<dynamic> data = response.data;
       return data.map((json) => WarehouseTransfer.fromJson(json)).toList();
+    } on DioException catch (e) {
+      rethrow;
     } catch (e) {
       throw Exception('Failed to load transfers: $e');
     }

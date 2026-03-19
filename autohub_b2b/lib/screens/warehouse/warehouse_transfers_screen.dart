@@ -1,5 +1,9 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import '../../models/warehouse_model.dart';
+import '../../models/item_model.dart';
+import '../../widgets/unauthorized_placeholder.dart';
+import 'package:autohub_b2b/widgets/offline_placeholder.dart';
 import '../../services/warehouse_service.dart';
 import '../../services/items_service.dart';
 
@@ -15,6 +19,9 @@ class _WarehouseTransfersScreenState extends State<WarehouseTransfersScreen> {
   final ItemsService _itemsService = ItemsService();
   List<WarehouseTransfer> _transfers = [];
   bool _isLoading = true;
+  bool _isForbidden = false;
+  String? _forbiddenMessage;
+  bool _isOffline = false;
 
   @override
   void initState() {
@@ -23,19 +30,53 @@ class _WarehouseTransfersScreenState extends State<WarehouseTransfersScreen> {
   }
 
   Future<void> _loadTransfers() async {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _isForbidden = false;
+      _isOffline = false;
+    });
     try {
       final transfers = await _warehouseService.getTransfers();
       setState(() {
         _transfers = transfers;
         _isLoading = false;
       });
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 403) {
+        setState(() {
+          _isForbidden = true;
+          _forbiddenMessage = (e.response?.data is Map<String, dynamic>
+                  ? (e.response?.data['message'] as String?)
+                  : null) ??
+              'У вас нет доступа к разделу «Перемещения». Войдите под владельцем или менеджером.';
+          _isLoading = false;
+        });
+      } else if (isNetworkError(e)) {
+        setState(() {
+          _isOffline = true;
+          _isLoading = false;
+        });
+      } else {
+        setState(() => _isLoading = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Ошибка загрузки: $e')),
+          );
+        }
+      }
     } catch (e) {
-      setState(() => _isLoading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка загрузки: $e')),
-        );
+      if (isNetworkError(e)) {
+        setState(() {
+          _isOffline = true;
+          _isLoading = false;
+        });
+      } else {
+        setState(() => _isLoading = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Ошибка загрузки: $e')),
+          );
+        }
       }
     }
   }
@@ -47,145 +88,24 @@ class _WarehouseTransfersScreenState extends State<WarehouseTransfersScreen> {
 
       if (!mounted) return;
 
-      String? fromWarehouseId;
-      String? toWarehouseId;
-      int? itemId;
-      int quantity = 1;
-      final notesController = TextEditingController();
-
-      showDialog(
-        context: context,
-        builder: (context) => StatefulBuilder(
-          builder: (context, setDialogState) {
-            final isMobile = MediaQuery.of(context).size.width < 600;
-
-            return AlertDialog(
-              title: const Text('Создать перемещение'),
-              content: SizedBox(
-                width: isMobile ? MediaQuery.of(context).size.width * 0.9 : 500,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      DropdownButtonFormField<String>(
-                        value: fromWarehouseId,
-                        decoration: const InputDecoration(
-                          labelText: 'Склад источник *',
-                          border: OutlineInputBorder(),
-                        ),
-                        items: warehouses.map((w) {
-                          return DropdownMenuItem(
-                            value: w.id,
-                            child: Text(w.name),
-                          );
-                        }).toList(),
-                        onChanged: (value) {
-                          setDialogState(() => fromWarehouseId = value);
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      DropdownButtonFormField<String>(
-                        value: toWarehouseId,
-                        decoration: const InputDecoration(
-                          labelText: 'Склад назначения *',
-                          border: OutlineInputBorder(),
-                        ),
-                        items: warehouses
-                            .where((w) => w.id != fromWarehouseId)
-                            .map((w) {
-                          return DropdownMenuItem(
-                            value: w.id,
-                            child: Text(w.name),
-                          );
-                        }).toList(),
-                        onChanged: (value) {
-                          setDialogState(() => toWarehouseId = value);
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      DropdownButtonFormField<int>(
-                        value: itemId,
-                        decoration: const InputDecoration(
-                          labelText: 'Товар *',
-                          border: OutlineInputBorder(),
-                        ),
-                        items: items.map((item) {
-                          return DropdownMenuItem(
-                            value: item.id,
-                            child: Text(item.name),
-                          );
-                        }).toList(),
-                        onChanged: (value) {
-                          setDialogState(() => itemId = value);
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        initialValue: quantity.toString(),
-                        decoration: const InputDecoration(
-                          labelText: 'Количество *',
-                          border: OutlineInputBorder(),
-                        ),
-                        keyboardType: TextInputType.number,
-                        onChanged: (value) {
-                          setDialogState(() => quantity = int.tryParse(value) ?? 1);
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      TextField(
-                        controller: notesController,
-                        decoration: const InputDecoration(
-                          labelText: 'Примечание',
-                          border: OutlineInputBorder(),
-                        ),
-                        maxLines: 3,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Отмена'),
-                ),
-                ElevatedButton(
-                  onPressed: () async {
-                    if (fromWarehouseId == null || toWarehouseId == null || itemId == null) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Заполните все обязательные поля')),
-                      );
-                      return;
-                    }
-
-                    try {
-                      await _warehouseService.createTransfer(
-                        fromWarehouseId: fromWarehouseId!,
-                        toWarehouseId: toWarehouseId!,
-                        itemId: itemId!,
-                        quantity: quantity,
-                        notes: notesController.text.isEmpty ? null : notesController.text,
-                      );
-
-                      if (mounted) {
-                        Navigator.pop(context);
-                        _loadTransfers();
-                      }
-                    } catch (e) {
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Ошибка: $e')),
-                        );
-                      }
-                    }
-                  },
-                  child: const Text('Создать'),
-                ),
-              ],
-            );
-          },
-        ),
+      final isMobile = MediaQuery.of(context).size.width < 768;
+      final formWidget = _TransferFormDialog(
+        warehouses: warehouses,
+        items: items,
+        warehouseService: _warehouseService,
+        onSuccess: () {
+          Navigator.pop(context);
+          _loadTransfers();
+        },
       );
+
+      if (isMobile) {
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => formWidget),
+        );
+      } else {
+        showDialog(context: context, builder: (_) => formWidget);
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -220,9 +140,13 @@ class _WarehouseTransfersScreenState extends State<WarehouseTransfersScreen> {
           ),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _transfers.isEmpty
+      body: _isForbidden
+          ? UnauthorizedPlaceholder(message: _forbiddenMessage)
+          : _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _isOffline
+              ? OfflinePlaceholder(onRetry: _loadTransfers)
+              : _transfers.isEmpty
               ? Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -341,6 +265,168 @@ class _WarehouseTransfersScreenState extends State<WarehouseTransfersScreen> {
 
   String _formatDate(DateTime date) {
     return '${date.day}.${date.month}.${date.year} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
+  }
+}
+
+class _TransferFormDialog extends StatefulWidget {
+  final List<Warehouse> warehouses;
+  final List<ItemModel> items;
+  final WarehouseService warehouseService;
+  final VoidCallback onSuccess;
+
+  const _TransferFormDialog({
+    required this.warehouses,
+    required this.items,
+    required this.warehouseService,
+    required this.onSuccess,
+  });
+
+  @override
+  State<_TransferFormDialog> createState() => _TransferFormDialogState();
+}
+
+class _TransferFormDialogState extends State<_TransferFormDialog> {
+  String? _fromWarehouseId;
+  String? _toWarehouseId;
+  int? _itemId;
+  final _quantityController = TextEditingController(text: '1');
+  final _notesController = TextEditingController();
+
+  @override
+  void dispose() {
+    _quantityController.dispose();
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (_fromWarehouseId == null || _toWarehouseId == null || _itemId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Заполните все обязательные поля')),
+      );
+      return;
+    }
+    final quantity = int.tryParse(_quantityController.text) ?? 1;
+    if (quantity <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Укажите корректное количество')),
+      );
+      return;
+    }
+    try {
+      await widget.warehouseService.createTransfer(
+        fromWarehouseId: _fromWarehouseId!,
+        toWarehouseId: _toWarehouseId!,
+        itemId: _itemId!,
+        quantity: quantity,
+        notes: _notesController.text.isEmpty ? null : _notesController.text,
+      );
+      if (mounted) {
+        widget.onSuccess();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Перемещение создано')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка: $e')),
+        );
+      }
+    }
+  }
+
+  Widget _buildFormContent() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        DropdownButtonFormField<String>(
+          value: _fromWarehouseId,
+          decoration: const InputDecoration(
+            labelText: 'Склад источник *',
+            border: OutlineInputBorder(),
+          ),
+          items: widget.warehouses.map((w) => DropdownMenuItem(value: w.id, child: Text(w.name))).toList(),
+          onChanged: (v) => setState(() {
+            _fromWarehouseId = v;
+            if (_toWarehouseId == v) _toWarehouseId = null;
+          }),
+        ),
+        const SizedBox(height: 16),
+        DropdownButtonFormField<String>(
+          value: _toWarehouseId,
+          decoration: const InputDecoration(
+            labelText: 'Склад назначения *',
+            border: OutlineInputBorder(),
+          ),
+          items: widget.warehouses
+              .where((w) => w.id != _fromWarehouseId)
+              .map((w) => DropdownMenuItem(value: w.id, child: Text(w.name)))
+              .toList(),
+          onChanged: (v) => setState(() => _toWarehouseId = v),
+        ),
+        const SizedBox(height: 16),
+        DropdownButtonFormField<int>(
+          value: _itemId,
+          decoration: const InputDecoration(
+            labelText: 'Товар *',
+            border: OutlineInputBorder(),
+          ),
+          items: widget.items.map((item) => DropdownMenuItem(value: item.id, child: Text(item.name ?? 'Без названия'))).toList(),
+          onChanged: (v) => setState(() => _itemId = v),
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _quantityController,
+          decoration: const InputDecoration(
+            labelText: 'Количество *',
+            border: OutlineInputBorder(),
+          ),
+          keyboardType: TextInputType.number,
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _notesController,
+          decoration: const InputDecoration(
+            labelText: 'Примечание',
+            border: OutlineInputBorder(),
+          ),
+          maxLines: 3,
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 768;
+    if (isMobile) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Создать перемещение'),
+          leading: IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+          actions: [
+            FilledButton(onPressed: _save, child: const Text('Создать')),
+          ],
+        ),
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: _buildFormContent(),
+        ),
+      );
+    }
+    return AlertDialog(
+      title: const Text('Создать перемещение'),
+      content: SizedBox(
+        width: 500,
+        child: SingleChildScrollView(child: _buildFormContent()),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
+        ElevatedButton(onPressed: _save, child: const Text('Создать')),
+      ],
+    );
   }
 }
 

@@ -74,10 +74,13 @@ class DashboardError extends DashboardState {
   /// true, если ошибка вызвана отсутствием авторизации (HTTP 403)
   final bool isForbidden;
 
-  const DashboardError(this.message, {this.isForbidden = false});
+  /// true, если ошибка вызвана отсутствием интернета
+  final bool isOffline;
+
+  const DashboardError(this.message, {this.isForbidden = false, this.isOffline = false});
 
   @override
-  List<Object?> get props => [message, isForbidden];
+  List<Object?> get props => [message, isForbidden, isOffline];
 }
 
 /// Обновление данных (сохраняя старые данные)

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../models/warehouse_model.dart';
 import '../../services/warehouse_service.dart';
 import 'package:autohub_b2b/widgets/unauthorized_placeholder.dart';
+import 'package:autohub_b2b/widgets/offline_placeholder.dart';
+import 'package:autohub_b2b/utils/dialog_helper.dart';
 import 'package:dio/dio.dart';
 
 class WarehousesScreen extends StatefulWidget {
@@ -18,6 +20,7 @@ class _WarehousesScreenState extends State<WarehousesScreen> {
   bool _isLoading = true;
   bool _isForbidden = false;
   String? _forbiddenMessage;
+  bool _isOffline = false;
 
   @override
   void initState() {
@@ -30,6 +33,7 @@ class _WarehousesScreenState extends State<WarehousesScreen> {
       _isLoading = true;
       _isForbidden = false;
       _forbiddenMessage = null;
+      _isOffline = false;
     });
     try {
       final warehouses = await _warehouseService.getWarehouses();
@@ -46,17 +50,23 @@ class _WarehousesScreenState extends State<WarehousesScreen> {
         _isLoading = false;
       });
     } on DioException catch (e) {
-      setState(() => _isLoading = false);
       if (e.response?.statusCode == 403) {
         if (mounted) {
           setState(() {
             _isForbidden = true;
+            _isLoading = false;
             _forbiddenMessage =
                 (e.response?.data is Map<String, dynamic> ? (e.response?.data['message'] as String?) : null) ??
                     'У вас нет доступа к разделу "Склады". Войдите под владельцем или менеджером.';
           });
         }
+      } else if (isNetworkError(e)) {
+        setState(() {
+          _isOffline = true;
+          _isLoading = false;
+        });
       } else {
+        setState(() => _isLoading = false);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Ошибка загрузки складов: $e')),
@@ -64,155 +74,48 @@ class _WarehousesScreenState extends State<WarehousesScreen> {
         }
       }
     } catch (e) {
-      setState(() => _isLoading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка загрузки складов: $e')),
-        );
+      if (isNetworkError(e)) {
+        setState(() {
+          _isOffline = true;
+          _isLoading = false;
+        });
+      } else {
+        setState(() => _isLoading = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Ошибка загрузки складов: $e')),
+          );
+        }
       }
     }
   }
 
   void _showWarehouseDialog([Warehouse? warehouse]) {
-    final nameController = TextEditingController(text: warehouse?.name ?? '');
-    final addressController = TextEditingController(text: warehouse?.address ?? '');
-    final phoneController = TextEditingController(text: warehouse?.phone ?? '');
-    final contactController = TextEditingController(text: warehouse?.contactPerson ?? '');
-    bool isActive = warehouse?.isActive ?? true;
-
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) {
-          final isMobile = MediaQuery.of(context).size.width < 600;
-          
-          return AlertDialog(
-            title: Text(warehouse == null ? 'Добавить склад' : 'Редактировать склад'),
-            content: SizedBox(
-              width: isMobile ? MediaQuery.of(context).size.width * 0.9 : 500,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: nameController,
-                      decoration: const InputDecoration(
-                        labelText: 'Название склада *',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: addressController,
-                      decoration: const InputDecoration(
-                        labelText: 'Адрес',
-                        border: OutlineInputBorder(),
-                      ),
-                      maxLines: 2,
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: phoneController,
-                      decoration: const InputDecoration(
-                        labelText: 'Телефон',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: contactController,
-                      decoration: const InputDecoration(
-                        labelText: 'Контактное лицо',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    SwitchListTile(
-                      title: const Text('Активен'),
-                      value: isActive,
-                      onChanged: (value) {
-                        setDialogState(() => isActive = value);
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Отмена'),
-              ),
-              ElevatedButton(
-                onPressed: () async {
-                  if (nameController.text.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Введите название склада')),
-                    );
-                    return;
-                  }
-
-                  try {
-                    if (warehouse == null) {
-                      await _warehouseService.createWarehouse(
-                        name: nameController.text,
-                        address: addressController.text.isEmpty ? null : addressController.text,
-                        phone: phoneController.text.isEmpty ? null : phoneController.text,
-                        contactPerson: contactController.text.isEmpty ? null : contactController.text,
-                        isActive: isActive,
-                      );
-                    } else {
-                      await _warehouseService.updateWarehouse(
-                        warehouse.id,
-                        name: nameController.text,
-                        address: addressController.text.isEmpty ? null : addressController.text,
-                        phone: phoneController.text.isEmpty ? null : phoneController.text,
-                        contactPerson: contactController.text.isEmpty ? null : contactController.text,
-                        isActive: isActive,
-                      );
-                    }
-
-                    if (mounted) {
-                      Navigator.pop(context);
-                      _loadWarehouses();
-                    }
-                  } catch (e) {
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Ошибка: $e')),
-                      );
-                    }
-                  }
-                },
-                child: Text(warehouse == null ? 'Создать' : 'Сохранить'),
-              ),
-            ],
-          );
-        },
-      ),
+    final isMobile = MediaQuery.of(context).size.width < 768;
+    final formWidget = _WarehouseFormDialog(
+      warehouse: warehouse,
+      warehouseService: _warehouseService,
+      onSuccess: () {
+        Navigator.pop(context);
+        _loadWarehouses();
+      },
     );
+    if (isMobile) {
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => formWidget),
+      );
+    } else {
+      showDialog(context: context, builder: (_) => formWidget);
+    }
   }
 
   Future<void> _deleteWarehouse(Warehouse warehouse) async {
-    final confirm = await showDialog<bool>(
+    final confirm = await DialogHelper.showConfirmSimple(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Удаление склада'),
-        content: Text('Вы уверены, что хотите удалить склад "${warehouse.name}"?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Отмена'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-            ),
-            child: const Text('Удалить'),
-          ),
-        ],
-      ),
+      title: 'Удаление склада',
+      message: 'Вы уверены, что хотите удалить склад "${warehouse.name}"?',
+      confirmText: 'Удалить',
+      isDestructive: true,
     );
 
     if (confirm == true) {
@@ -252,7 +155,9 @@ class _WarehousesScreenState extends State<WarehousesScreen> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _warehouses.isEmpty
+          : _isOffline
+              ? OfflinePlaceholder(onRetry: _loadWarehouses)
+              : _warehouses.isEmpty
               ? Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -379,6 +284,160 @@ class _WarehousesScreenState extends State<WarehousesScreen> {
         onPressed: () => _showWarehouseDialog(),
         child: const Icon(Icons.add),
       ),
+    );
+  }
+}
+
+class _WarehouseFormDialog extends StatefulWidget {
+  final Warehouse? warehouse;
+  final WarehouseService warehouseService;
+  final VoidCallback onSuccess;
+
+  const _WarehouseFormDialog({
+    this.warehouse,
+    required this.warehouseService,
+    required this.onSuccess,
+  });
+
+  @override
+  State<_WarehouseFormDialog> createState() => _WarehouseFormDialogState();
+}
+
+class _WarehouseFormDialogState extends State<_WarehouseFormDialog> {
+  late final TextEditingController _nameController;
+  late final TextEditingController _addressController;
+  late final TextEditingController _phoneController;
+  late final TextEditingController _contactController;
+  late bool _isActive;
+
+  @override
+  void initState() {
+    super.initState();
+    final w = widget.warehouse;
+    _nameController = TextEditingController(text: w?.name ?? '');
+    _addressController = TextEditingController(text: w?.address ?? '');
+    _phoneController = TextEditingController(text: w?.phone ?? '');
+    _contactController = TextEditingController(text: w?.contactPerson ?? '');
+    _isActive = w?.isActive ?? true;
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _addressController.dispose();
+    _phoneController.dispose();
+    _contactController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (_nameController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Введите название склада')),
+      );
+      return;
+    }
+    try {
+      if (widget.warehouse == null) {
+        await widget.warehouseService.createWarehouse(
+          name: _nameController.text,
+          address: _addressController.text.isEmpty ? null : _addressController.text,
+          phone: _phoneController.text.isEmpty ? null : _phoneController.text,
+          contactPerson: _contactController.text.isEmpty ? null : _contactController.text,
+          isActive: _isActive,
+        );
+      } else {
+        await widget.warehouseService.updateWarehouse(
+          widget.warehouse!.id,
+          name: _nameController.text,
+          address: _addressController.text.isEmpty ? null : _addressController.text,
+          phone: _phoneController.text.isEmpty ? null : _phoneController.text,
+          contactPerson: _contactController.text.isEmpty ? null : _contactController.text,
+          isActive: _isActive,
+        );
+      }
+      if (mounted) {
+        widget.onSuccess();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(widget.warehouse == null ? 'Склад создан' : 'Склад обновлен')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка: $e')),
+        );
+      }
+    }
+  }
+
+  Widget _buildFormContent() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextField(
+          controller: _nameController,
+          decoration: const InputDecoration(labelText: 'Название склада *', border: OutlineInputBorder()),
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _addressController,
+          decoration: const InputDecoration(labelText: 'Адрес', border: OutlineInputBorder()),
+          maxLines: 2,
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _phoneController,
+          decoration: const InputDecoration(labelText: 'Телефон', border: OutlineInputBorder()),
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _contactController,
+          decoration: const InputDecoration(labelText: 'Контактное лицо', border: OutlineInputBorder()),
+        ),
+        const SizedBox(height: 16),
+        SwitchListTile(
+          title: const Text('Активен'),
+          value: _isActive,
+          onChanged: (v) => setState(() => _isActive = v),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isEdit = widget.warehouse != null;
+    final isMobile = MediaQuery.of(context).size.width < 768;
+    if (isMobile) {
+      return Scaffold(
+        appBar: AppBar(
+          title: Text(isEdit ? 'Редактировать склад' : 'Добавить склад'),
+          leading: IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+          actions: [
+            FilledButton(
+              onPressed: _save,
+              child: Text(isEdit ? 'Сохранить' : 'Создать'),
+            ),
+          ],
+        ),
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: _buildFormContent(),
+        ),
+      );
+    }
+    return AlertDialog(
+      title: Text(isEdit ? 'Редактировать склад' : 'Добавить склад'),
+      content: SizedBox(
+        width: 500,
+        child: SingleChildScrollView(child: _buildFormContent()),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
+        ElevatedButton(onPressed: _save, child: Text(isEdit ? 'Сохранить' : 'Создать')),
+      ],
     );
   }
 }

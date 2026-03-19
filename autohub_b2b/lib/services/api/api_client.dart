@@ -1,8 +1,8 @@
 import 'package:dio/dio.dart';
 import 'package:autohub_b2b/services/auth/secure_storage_service.dart';
 import 'package:autohub_b2b/config/environment.dart';
+import 'package:autohub_b2b/services/connectivity_service.dart';
 
-/// Глобальный API клиент с автоматическим добавлением JWT токена
 class ApiClient {
   static final ApiClient _instance = ApiClient._internal();
   factory ApiClient() => _instance;
@@ -16,9 +16,9 @@ class ApiClient {
     dio = Dio(
       BaseOptions(
         baseUrl: Environment.apiBaseUrl.replaceAll('/api', ''),
-        connectTimeout: const Duration(seconds: 60), // Увеличено до 60 секунд
-        receiveTimeout: const Duration(seconds: 60), // Увеличено до 60 секунд
-        sendTimeout: const Duration(seconds: 60), // Таймаут отправки
+        connectTimeout: const Duration(seconds: 8),
+        receiveTimeout: const Duration(seconds: 30),
+        sendTimeout: const Duration(seconds: 30),
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
@@ -30,7 +30,6 @@ class ApiClient {
   }
 
   void _setupInterceptors() {
-    // Interceptor для добавления JWT токена
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
@@ -42,14 +41,18 @@ class ApiClient {
           return handler.next(options);
         },
         onResponse: (response, handler) {
+          ConnectivityService().reportOnline();
           return handler.next(response);
         },
         onError: (error, handler) async {
-          // Обработка 401 - токен истек или невалиден
           if (error.response?.statusCode == 401) {
             try {
               await _storage.clearAll();
             } catch (_) {}
+          }
+
+          if (_isNetworkError(error)) {
+            ConnectivityService().reportOffline();
           }
 
           return handler.next(error);
@@ -57,5 +60,15 @@ class ApiClient {
       ),
     );
   }
-}
 
+  bool _isNetworkError(DioException error) {
+    switch (error.type) {
+      case DioExceptionType.connectionError:
+      case DioExceptionType.connectionTimeout:
+      case DioExceptionType.sendTimeout:
+        return true;
+      default:
+        return false;
+    }
+  }
+}

@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:autohub_b2b/core/theme.dart';
+import 'package:autohub_b2b/widgets/unauthorized_placeholder.dart';
 import 'package:autohub_b2b/models/customer_model.dart';
 import 'package:intl/intl.dart';
 import 'package:dio/dio.dart';
 import 'package:autohub_b2b/services/api/api_client.dart';
+import 'package:autohub_b2b/repositories/customers_repository.dart';
+import 'package:autohub_b2b/services/service_locator.dart';
+import 'package:autohub_b2b/utils/dialog_helper.dart';
 
 class CrmScreen extends StatefulWidget {
   const CrmScreen({super.key});
@@ -15,10 +19,13 @@ class CrmScreen extends StatefulWidget {
 class _CrmScreenState extends State<CrmScreen> {
   final dio = ApiClient().dio;
   final _searchController = TextEditingController();
+  final CustomersRepository _customersRepo = ServiceLocator().customersRepository;
   List<CustomerModel> customers = [];
   List<CustomerModel> filteredCustomers = [];
   bool isLoading = true;
   String? error;
+  bool isForbidden = false;
+  String? forbiddenMessage;
 
   @override
   void initState() {
@@ -30,22 +37,33 @@ class _CrmScreenState extends State<CrmScreen> {
     setState(() {
       isLoading = true;
       error = null;
+      isForbidden = false;
     });
 
     try {
-      final response = await dio.get('/api/customers');
-      final List<dynamic> data = response.data;
+      final loadedCustomers = await _customersRepo.getCustomers();
 
       setState(() {
-        customers = data.map((json) => CustomerModel.fromJson(json)).toList();
+        customers = loadedCustomers;
         filteredCustomers = customers;
         isLoading = false;
       });
     } catch (e) {
-      setState(() {
-        error = e.toString();
-        isLoading = false;
-      });
+      if (e is DioException && e.response?.statusCode == 403) {
+        setState(() {
+          isForbidden = true;
+          forbiddenMessage = (e.response?.data is Map<String, dynamic>
+                  ? (e.response?.data['message'] as String?)
+                  : null) ??
+              'У вас нет доступа к разделу «CRM». Войдите под владельцем или менеджером.';
+          isLoading = false;
+        });
+      } else {
+        setState(() {
+          error = e.toString();
+          isLoading = false;
+        });
+      }
     }
   }
 
@@ -154,6 +172,10 @@ class _CrmScreenState extends State<CrmScreen> {
   }
 
   Widget _buildCustomersList() {
+    if (isForbidden) {
+      return UnauthorizedPlaceholder(message: forbiddenMessage);
+    }
+
     if (isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -392,174 +414,41 @@ class _CrmScreenState extends State<CrmScreen> {
   }
 
   void _showCustomerDialog(BuildContext context, {CustomerModel? customer}) {
-    final isEdit = customer != null;
-    final nameController = TextEditingController(text: customer?.name ?? '');
-    final phoneController = TextEditingController(text: customer?.phone ?? '');
-    final emailController = TextEditingController(text: customer?.email ?? '');
-    final carModelController =
-        TextEditingController(text: customer?.carModel ?? '');
-    final notesController = TextEditingController(text: customer?.notes ?? '');
-
-    showDialog(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(isEdit ? 'Редактировать клиента' : 'Добавить клиента'),
-        content: SizedBox(
-          width: 500,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Имя *',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.person),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: phoneController,
-                  decoration: const InputDecoration(
-                    labelText: 'Телефон',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.phone),
-                  ),
-                  keyboardType: TextInputType.phone,
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: emailController,
-                  decoration: const InputDecoration(
-                    labelText: 'Email',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.email),
-                  ),
-                  keyboardType: TextInputType.emailAddress,
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: carModelController,
-                  decoration: const InputDecoration(
-                    labelText: 'Модель автомобиля',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.directions_car),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: notesController,
-                  decoration: const InputDecoration(
-                    labelText: 'Примечания',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.notes),
-                  ),
-                  maxLines: 3,
-                ),
-              ],
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              if (nameController.text.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Укажите имя клиента')),
-                );
-                return;
-              }
-
-              final data = {
-                'name': nameController.text,
-                'phone': phoneController.text.isEmpty
-                    ? null
-                    : phoneController.text,
-                'email': emailController.text.isEmpty
-                    ? null
-                    : emailController.text,
-                'carModel': carModelController.text.isEmpty
-                    ? null
-                    : carModelController.text,
-                'notes':
-                    notesController.text.isEmpty ? null : notesController.text,
-              };
-
-              try {
-                if (isEdit) {
-                  await dio.put('/api/customers/${customer.id}', data: data);
-                } else {
-                  await dio.post('/api/customers', data: data);
-                }
-
-                if (context.mounted) {
-                  Navigator.pop(dialogContext);
-                  _loadCustomers();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(isEdit
-                          ? 'Клиент обновлен'
-                          : 'Клиент добавлен'),
-                    ),
-                  );
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Ошибка: $e')),
-                  );
-                }
-              }
-            },
-            child: Text(isEdit ? 'Сохранить' : 'Добавить'),
-          ),
-        ],
-      ),
+    final isMobile = MediaQuery.of(context).size.width < 768;
+    final formWidget = _CustomerFormDialog(
+      customer: customer,
+      dio: dio,
+      onSuccess: () {
+        Navigator.pop(context);
+        _loadCustomers();
+      },
     );
+    if (isMobile) {
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => formWidget),
+      );
+    } else {
+      showDialog(context: context, builder: (_) => formWidget);
+    }
   }
 
   void _showDeleteDialog(BuildContext context, CustomerModel customer) {
-    showDialog(
+    DialogHelper.showConfirm(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Удалить клиента?'),
-        content: Text('Вы уверены что хотите удалить "${customer.name}"?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              try {
-                await dio.delete('/api/customers/${customer.id}');
-                if (context.mounted) {
-                  Navigator.pop(dialogContext);
-                  _loadCustomers();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Клиент удален')),
-                  );
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Ошибка: $e')),
-                  );
-                }
-              }
-            },
-            style: FilledButton.styleFrom(
-              backgroundColor: Colors.red,
-            ),
-            child: const Text('Удалить'),
-          ),
-        ],
-      ),
+      title: 'Удалить клиента?',
+      message: 'Вы уверены что хотите удалить "${customer.name}"?',
+      confirmText: 'Удалить',
+      isDestructive: true,
+      onConfirm: (ctx) async {
+        await dio.delete('/api/customers/${customer.id}');
+        if (context.mounted) {
+          Navigator.pop(ctx);
+          _loadCustomers();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Клиент удален')),
+          );
+        }
+      },
     );
   }
 
@@ -567,6 +456,176 @@ class _CrmScreenState extends State<CrmScreen> {
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+}
+
+class _CustomerFormDialog extends StatefulWidget {
+  final CustomerModel? customer;
+  final Dio dio;
+  final VoidCallback onSuccess;
+
+  const _CustomerFormDialog({
+    this.customer,
+    required this.dio,
+    required this.onSuccess,
+  });
+
+  @override
+  State<_CustomerFormDialog> createState() => _CustomerFormDialogState();
+}
+
+class _CustomerFormDialogState extends State<_CustomerFormDialog> {
+  late final TextEditingController _nameController;
+  late final TextEditingController _phoneController;
+  late final TextEditingController _emailController;
+  late final TextEditingController _carModelController;
+  late final TextEditingController _notesController;
+
+  @override
+  void initState() {
+    super.initState();
+    final c = widget.customer;
+    _nameController = TextEditingController(text: c?.name ?? '');
+    _phoneController = TextEditingController(text: c?.phone ?? '');
+    _emailController = TextEditingController(text: c?.email ?? '');
+    _carModelController = TextEditingController(text: c?.carModel ?? '');
+    _notesController = TextEditingController(text: c?.notes ?? '');
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _phoneController.dispose();
+    _emailController.dispose();
+    _carModelController.dispose();
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (_nameController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Укажите имя клиента')),
+      );
+      return;
+    }
+    final data = {
+      'name': _nameController.text,
+      'phone': _phoneController.text.isEmpty ? null : _phoneController.text,
+      'email': _emailController.text.isEmpty ? null : _emailController.text,
+      'carModel': _carModelController.text.isEmpty ? null : _carModelController.text,
+      'notes': _notesController.text.isEmpty ? null : _notesController.text,
+    };
+    try {
+      if (widget.customer != null) {
+        await widget.dio.put('/api/customers/${widget.customer!.id}', data: data);
+      } else {
+        await widget.dio.post('/api/customers', data: data);
+      }
+      if (mounted) {
+        widget.onSuccess();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(widget.customer != null ? 'Клиент обновлен' : 'Клиент добавлен')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка: $e')),
+        );
+      }
+    }
+  }
+
+  Widget _buildFormContent() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextField(
+          controller: _nameController,
+          decoration: const InputDecoration(
+            labelText: 'Имя *',
+            border: OutlineInputBorder(),
+            prefixIcon: Icon(Icons.person),
+          ),
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _phoneController,
+          decoration: const InputDecoration(
+            labelText: 'Телефон',
+            border: OutlineInputBorder(),
+            prefixIcon: Icon(Icons.phone),
+          ),
+          keyboardType: TextInputType.phone,
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _emailController,
+          decoration: const InputDecoration(
+            labelText: 'Email',
+            border: OutlineInputBorder(),
+            prefixIcon: Icon(Icons.email),
+          ),
+          keyboardType: TextInputType.emailAddress,
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _carModelController,
+          decoration: const InputDecoration(
+            labelText: 'Модель автомобиля',
+            border: OutlineInputBorder(),
+            prefixIcon: Icon(Icons.directions_car),
+          ),
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _notesController,
+          decoration: const InputDecoration(
+            labelText: 'Примечания',
+            border: OutlineInputBorder(),
+            prefixIcon: Icon(Icons.notes),
+          ),
+          maxLines: 3,
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isEdit = widget.customer != null;
+    final isMobile = MediaQuery.of(context).size.width < 768;
+    if (isMobile) {
+      return Scaffold(
+        appBar: AppBar(
+          title: Text(isEdit ? 'Редактировать клиента' : 'Добавить клиента'),
+          leading: IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+          actions: [
+            FilledButton(
+              onPressed: _save,
+              child: Text(isEdit ? 'Сохранить' : 'Добавить'),
+            ),
+          ],
+        ),
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: _buildFormContent(),
+        ),
+      );
+    }
+    return AlertDialog(
+      title: Text(isEdit ? 'Редактировать клиента' : 'Добавить клиента'),
+      content: SizedBox(
+        width: 500,
+        child: SingleChildScrollView(child: _buildFormContent()),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
+        FilledButton(onPressed: _save, child: Text(isEdit ? 'Сохранить' : 'Добавить')),
+      ],
+    );
   }
 }
 

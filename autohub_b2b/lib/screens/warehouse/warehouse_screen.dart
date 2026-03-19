@@ -14,6 +14,9 @@ import 'package:autohub_b2b/screens/warehouse/item_edit_screen.dart';
 import 'package:autohub_b2b/screens/warehouse/printer_settings_screen.dart';
 import 'package:autohub_b2b/services/hardware/thermal_printer_service.dart';
 import 'package:autohub_b2b/widgets/unauthorized_placeholder.dart';
+import 'package:autohub_b2b/repositories/items_repository.dart';
+import 'package:autohub_b2b/services/service_locator.dart';
+import 'package:autohub_b2b/utils/dialog_helper.dart';
 
 class WarehouseScreen extends StatefulWidget {
   const WarehouseScreen({super.key});
@@ -26,6 +29,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
   final dio = ApiClient().dio;
   final _searchController = TextEditingController();
   final WarehouseService _warehouseService = WarehouseService();
+  final ItemsRepository _itemsRepo = ServiceLocator().itemsRepository;
   
   List<ItemModel> items = [];
   List<ItemModel> filteredItems = [];
@@ -110,11 +114,9 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
     setState(() {
       isLoading = true;
       error = null;
-      // не сбрасываем isForbidden здесь, чтобы не мигала заглушка
     });
 
     try {
-      // Подготовка query параметров из activeFilters
       final queryParams = <String, dynamic>{};
       activeFilters.forEach((key, value) {
         if (value != null) {
@@ -122,32 +124,17 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
         }
       });
 
-      final response = await dio.get('/api/items', queryParameters: queryParams);
-      final List<dynamic> data = response.data;
+      final loadedItems = await _itemsRepo.getItems(
+        filters: queryParams.isNotEmpty ? queryParams : null,
+      );
 
       if (!mounted) return;
-      
-      try {
-        final parsedItems = data.map((json) {
-          try {
-            return ItemModel.fromJson(json);
-          } catch (e) {
-            rethrow;
-          }
-        }).toList();
 
-        setState(() {
-          items = parsedItems;
-          filteredItems = items;
-          isLoading = false;
-        });
-      } catch (parseError) {
-        if (!mounted) return;
-        setState(() {
-          error = 'Ошибка обработки данных: $parseError';
-          isLoading = false;
-        });
-      }
+      setState(() {
+        items = loadedItems;
+        filteredItems = items;
+        isLoading = false;
+      });
     } on DioException catch (e) {
       if (!mounted) return;
 
@@ -189,13 +176,21 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
   }
 
   void _showFiltersDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => ItemsFilterWidget(
-        warehouses: warehouses,
-        onApplyFilters: _applyFilters,
-      ),
+    final isMobile = MediaQuery.of(context).size.width < 768;
+    final filterWidget = ItemsFilterWidget(
+      warehouses: warehouses,
+      onApplyFilters: _applyFilters,
     );
+    if (isMobile) {
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => filterWidget),
+      );
+    } else {
+      showDialog(
+        context: context,
+        builder: (context) => filterWidget,
+      );
+    }
   }
 
   void _applyFilters(Map<String, dynamic> filters) {
@@ -1359,229 +1354,41 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
   }
 
   void _showItemDialog(BuildContext context, {ItemModel? item}) {
-    final isEdit = item != null;
-    final nameController = TextEditingController(text: item?.name ?? '');
-    final skuController = TextEditingController(text: item?.sku ?? '');
-    final priceController =
-        TextEditingController(text: item?.price.toString() ?? '');
-    final quantityController =
-        TextEditingController(text: item?.quantity.toString() ?? '');
-    final descriptionController =
-        TextEditingController(text: item?.description ?? '');
-    final warehouseCellController =
-        TextEditingController(text: item?.warehouseCell ?? '');
-
-    // Категории товаров (как в B2C, но без "Все")
-    final List<String> categories = [
-      'Двигатель',
-      'Трансмиссия',
-      'Тормозная система',
-      'Подвеска',
-      'Электрика',
-      'Кузов',
-      'Салон',
-      'Оптика',
-      'Фильтры',
-      'Расходники',
-    ];
-    
-    String? selectedCategory = item?.category;
-
-    showDialog(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: Text(isEdit ? 'Редактировать товар' : 'Добавить товар'),
-          content: SizedBox(
-            width: 500,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: nameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Название *',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: skuController,
-                    decoration: const InputDecoration(
-                      labelText: 'Артикул',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  DropdownButtonFormField<String>(
-                    value: selectedCategory,
-                    decoration: const InputDecoration(
-                      labelText: 'Категория',
-                      border: OutlineInputBorder(),
-                    ),
-                    hint: const Text('Выберите категорию'),
-                    items: categories.map((category) {
-                      return DropdownMenuItem(
-                        value: category,
-                        child: Text(category),
-                      );
-                    }).toList(),
-                    onChanged: (value) {
-                      setDialogState(() {
-                        selectedCategory = value;
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: priceController,
-                          decoration: const InputDecoration(
-                            labelText: 'Цена *',
-                            border: OutlineInputBorder(),
-                            suffixText: '₸',
-                          ),
-                          keyboardType: TextInputType.number,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: TextField(
-                          controller: quantityController,
-                          decoration: const InputDecoration(
-                            labelText: 'Количество *',
-                            border: OutlineInputBorder(),
-                          ),
-                          keyboardType: TextInputType.number,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: descriptionController,
-                    decoration: const InputDecoration(
-                      labelText: 'Описание',
-                      border: OutlineInputBorder(),
-                    ),
-                    maxLines: 3,
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: warehouseCellController,
-                    decoration: const InputDecoration(
-                      labelText: 'Ячейка склада',
-                      hintText: 'Например: A-1-2',
-                      prefixIcon: Icon(Icons.location_on),
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Отмена'),
-            ),
-            FilledButton(
-              onPressed: () async {
-              if (nameController.text.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Укажите название товара')),
-                );
-                return;
-              }
-
-              final data = {
-                'name': nameController.text,
-                'sku': skuController.text.isEmpty ? null : skuController.text,
-                'category': selectedCategory,
-                'price': double.tryParse(priceController.text) ?? 0,
-                'quantity': int.tryParse(quantityController.text) ?? 0,
-                'description': descriptionController.text.isEmpty
-                    ? null
-                    : descriptionController.text,
-                'warehouseCell': warehouseCellController.text.isEmpty
-                    ? null
-                    : warehouseCellController.text.trim(),
-                'condition': 'new',
-              };
-
-              try {
-                if (isEdit) {
-                  await dio.put('/api/items/${item!.id}', data: data);
-                } else {
-                  await dio.post('/api/items', data: data);
-                }
-
-                if (context.mounted) {
-                  Navigator.pop(dialogContext);
-                  _loadItems();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                          isEdit ? 'Товар обновлен' : 'Товар добавлен'),
-                    ),
-                  );
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Ошибка: $e')),
-                  );
-                }
-              }
-            },
-            child: Text(isEdit ? 'Сохранить' : 'Добавить'),
-          ),
-        ],
-      ),
-    ),
+    final isMobile = MediaQuery.of(context).size.width < 768;
+    final formWidget = _ItemFormDialog(
+      item: item,
+      dio: dio,
+      onSuccess: () {
+        Navigator.pop(context);
+        _loadItems();
+      },
     );
+    if (isMobile) {
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => formWidget),
+      );
+    } else {
+      showDialog(context: context, builder: (_) => formWidget);
+    }
   }
 
   void _showDeleteDialog(BuildContext context, ItemModel item) {
-    showDialog(
+    DialogHelper.showConfirm(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Удалить товар?'),
-        content: Text('Вы уверены что хотите удалить "${item.name ?? 'Без названия'}"?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              try {
-                await dio.delete('/api/items/${item.id}');
-                if (context.mounted) {
-                  Navigator.pop(dialogContext);
-                  _loadItems();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Товар удален')),
-                  );
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Ошибка: $e')),
-                  );
-                }
-              }
-            },
-            style: FilledButton.styleFrom(
-              backgroundColor: Colors.red,
-            ),
-            child: const Text('Удалить'),
-          ),
-        ],
-      ),
+      title: 'Удалить товар?',
+      message: 'Вы уверены что хотите удалить "${item.name ?? 'Без названия'}"?',
+      confirmText: 'Удалить',
+      isDestructive: true,
+      onConfirm: (ctx) async {
+        await dio.delete('/api/items/${item.id}');
+        if (context.mounted) {
+          Navigator.pop(ctx);
+          _loadItems();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Товар удален')),
+          );
+        }
+      },
     );
   }
 
@@ -1922,6 +1729,195 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+}
+
+class _ItemFormDialog extends StatefulWidget {
+  final ItemModel? item;
+  final Dio dio;
+  final VoidCallback onSuccess;
+
+  const _ItemFormDialog({
+    this.item,
+    required this.dio,
+    required this.onSuccess,
+  });
+
+  @override
+  State<_ItemFormDialog> createState() => _ItemFormDialogState();
+}
+
+class _ItemFormDialogState extends State<_ItemFormDialog> {
+  static const _categories = [
+    'Двигатель', 'Трансмиссия', 'Тормозная система', 'Подвеска',
+    'Электрика', 'Кузов', 'Салон', 'Оптика', 'Фильтры', 'Расходники',
+  ];
+
+  late final TextEditingController _nameController;
+  late final TextEditingController _skuController;
+  late final TextEditingController _priceController;
+  late final TextEditingController _quantityController;
+  late final TextEditingController _descriptionController;
+  late final TextEditingController _warehouseCellController;
+  String? _selectedCategory;
+
+  @override
+  void initState() {
+    super.initState();
+    final item = widget.item;
+    _nameController = TextEditingController(text: item?.name ?? '');
+    _skuController = TextEditingController(text: item?.sku ?? '');
+    _priceController = TextEditingController(text: item?.price.toString() ?? '');
+    _quantityController = TextEditingController(text: item?.quantity.toString() ?? '');
+    _descriptionController = TextEditingController(text: item?.description ?? '');
+    _warehouseCellController = TextEditingController(text: item?.warehouseCell ?? '');
+    _selectedCategory = item?.category;
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _skuController.dispose();
+    _priceController.dispose();
+    _quantityController.dispose();
+    _descriptionController.dispose();
+    _warehouseCellController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (_nameController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Укажите название товара')),
+      );
+      return;
+    }
+    final data = {
+      'name': _nameController.text,
+      'sku': _skuController.text.isEmpty ? null : _skuController.text,
+      'category': _selectedCategory,
+      'price': double.tryParse(_priceController.text) ?? 0,
+      'quantity': int.tryParse(_quantityController.text) ?? 0,
+      'description': _descriptionController.text.isEmpty ? null : _descriptionController.text,
+      'warehouseCell': _warehouseCellController.text.isEmpty ? null : _warehouseCellController.text.trim(),
+      'condition': 'new',
+    };
+    try {
+      if (widget.item != null) {
+        await widget.dio.put('/api/items/${widget.item!.id}', data: data);
+      } else {
+        await widget.dio.post('/api/items', data: data);
+      }
+      if (mounted) {
+        widget.onSuccess();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(widget.item != null ? 'Товар обновлен' : 'Товар добавлен')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка: $e')),
+        );
+      }
+    }
+  }
+
+  Widget _buildFormContent() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextField(
+          controller: _nameController,
+          decoration: const InputDecoration(labelText: 'Название *', border: OutlineInputBorder()),
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _skuController,
+          decoration: const InputDecoration(labelText: 'Артикул', border: OutlineInputBorder()),
+        ),
+        const SizedBox(height: 16),
+        DropdownButtonFormField<String>(
+          value: _selectedCategory,
+          decoration: const InputDecoration(labelText: 'Категория', border: OutlineInputBorder()),
+          hint: const Text('Выберите категорию'),
+          items: _categories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+          onChanged: (v) => setState(() => _selectedCategory = v),
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _priceController,
+                decoration: const InputDecoration(labelText: 'Цена *', border: OutlineInputBorder(), suffixText: '₸'),
+                keyboardType: TextInputType.number,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: TextField(
+                controller: _quantityController,
+                decoration: const InputDecoration(labelText: 'Количество *', border: OutlineInputBorder()),
+                keyboardType: TextInputType.number,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _descriptionController,
+          decoration: const InputDecoration(labelText: 'Описание', border: OutlineInputBorder()),
+          maxLines: 3,
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _warehouseCellController,
+          decoration: const InputDecoration(
+            labelText: 'Ячейка склада',
+            hintText: 'Например: A-1-2',
+            prefixIcon: Icon(Icons.location_on),
+            border: OutlineInputBorder(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isEdit = widget.item != null;
+    final isMobile = MediaQuery.of(context).size.width < 768;
+    if (isMobile) {
+      return Scaffold(
+        appBar: AppBar(
+          title: Text(isEdit ? 'Редактировать товар' : 'Добавить товар'),
+          leading: IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+          actions: [
+            FilledButton(
+              onPressed: _save,
+              child: Text(isEdit ? 'Сохранить' : 'Добавить'),
+            ),
+          ],
+        ),
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: _buildFormContent(),
+        ),
+      );
+    }
+    return AlertDialog(
+      title: Text(isEdit ? 'Редактировать товар' : 'Добавить товар'),
+      content: SizedBox(
+        width: 500,
+        child: SingleChildScrollView(child: _buildFormContent()),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
+        FilledButton(onPressed: _save, child: Text(isEdit ? 'Сохранить' : 'Добавить')),
+      ],
+    );
   }
 }
 

@@ -1,7 +1,9 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/services/api/api_client.dart';
 import 'package:autohub_b2b/widgets/unauthorized_placeholder.dart';
+import 'package:autohub_b2b/widgets/offline_placeholder.dart';
 import 'package:dio/dio.dart';
 import 'package:intl/intl.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -21,6 +23,7 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
   bool isLoading = true;
   bool isWhatsAppReady = false;
   bool isForbidden = false;
+  bool _isOffline = false;
   String? qrCode;
   String? statusMessage;
   String? forbiddenMessage;
@@ -54,7 +57,10 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
   }
 
   Future<void> _loadInitialData() async {
-    setState(() => isLoading = true);
+    setState(() {
+      isLoading = true;
+      _isOffline = false;
+    });
 
     try {
       // Проверяем статус WhatsApp
@@ -76,6 +82,12 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
             forbiddenMessage =
                 (e.response?.data is Map<String, dynamic> ? (e.response?.data['message'] as String?) : null) ??
                     'У вас нет доступа к модулю WhatsApp. Войдите под владельцем или менеджером.';
+          });
+        }
+      } else if (isNetworkError(e)) {
+        if (mounted) {
+          setState(() {
+            _isOffline = true;
           });
         }
       } else {
@@ -438,6 +450,10 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
   Widget build(BuildContext context) {
     if (isLoading) {
       return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_isOffline) {
+      return OfflinePlaceholder(onRetry: _loadInitialData);
     }
 
     if (isForbidden) {
@@ -967,126 +983,212 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
   }
 
   void _showQRDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Авторизация WhatsApp'),
-        content: SizedBox(
-          width: 450,
-          child: SingleChildScrollView(
+    final isMobile = MediaQuery.of(context).size.width < 768;
+    final qrWidget = _WhatsAppQRDialog(
+      qrCode: qrCode,
+      onRefresh: _refreshQr,
+      onCheckStatus: () {
+        Navigator.pop(context);
+        _checkWhatsAppStatus();
+      },
+    );
+    if (isMobile) {
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => qrWidget),
+      );
+    } else {
+      showDialog(context: context, builder: (_) => qrWidget);
+    }
+  }
+}
+
+class _WhatsAppQRDialog extends StatelessWidget {
+  final String? qrCode;
+  final VoidCallback onRefresh;
+  final VoidCallback onCheckStatus;
+
+  /// Green API возвращает base64-изображение (data:image/png;base64,...).
+  /// Альтернативно — строку для кодирования в QR (QrImageView).
+  static Widget _buildQrWidget(String qrCode, double size) {
+    if (qrCode.startsWith('data:image') && qrCode.contains('base64,')) {
+      try {
+        final base64 = qrCode.split('base64,').last;
+        final bytes = base64Decode(base64);
+        return Image.memory(
+          bytes,
+          width: size,
+          height: size,
+          fit: BoxFit.contain,
+        );
+      } catch (_) {
+        return QrImageView(
+          data: qrCode,
+          version: QrVersions.auto,
+          size: size,
+          gapless: false,
+          backgroundColor: Colors.white,
+          errorCorrectionLevel: QrErrorCorrectLevel.H,
+          eyeStyle: const QrEyeStyle(
+            eyeShape: QrEyeShape.square,
+            color: Colors.black,
+          ),
+          dataModuleStyle: const QrDataModuleStyle(
+            dataModuleShape: QrDataModuleShape.square,
+            color: Colors.black,
+          ),
+        );
+      }
+    }
+    return QrImageView(
+      data: qrCode,
+      version: QrVersions.auto,
+      size: size,
+      gapless: false,
+      backgroundColor: Colors.white,
+      errorCorrectionLevel: QrErrorCorrectLevel.H,
+      eyeStyle: const QrEyeStyle(
+        eyeShape: QrEyeShape.square,
+        color: Colors.black,
+      ),
+      dataModuleStyle: const QrDataModuleStyle(
+        dataModuleShape: QrDataModuleShape.square,
+        color: Colors.black,
+      ),
+    );
+  }
+
+  const _WhatsAppQRDialog({
+    required this.qrCode,
+    required this.onRefresh,
+    required this.onCheckStatus,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 768;
+    final qrSize = isMobile ? 280.0 : 360.0;
+
+    Widget content = SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text(
+            'Откройте WhatsApp на телефоне:',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          ),
+          const SizedBox(height: 16),
+          const Align(
+            alignment: Alignment.centerLeft,
             child: Column(
-              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Откройте WhatsApp на телефоне:',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                ),
-                const SizedBox(height: 16),
-                const Align(
-                  alignment: Alignment.centerLeft,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('1. Перейдите в Настройки → Связанные устройства'),
-                      SizedBox(height: 4),
-                      Text('2. Нажмите "Связать устройство"'),
-                      SizedBox(height: 4),
-                      Text('3. Отсканируйте этот QR код:'),
-                    ],
+                Text('1. Перейдите в Настройки → Связанные устройства'),
+                SizedBox(height: 4),
+                Text('2. Нажмите "Связать устройство"'),
+                SizedBox(height: 4),
+                Text('3. Отсканируйте этот QR код:'),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          if (qrCode != null)
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 10,
+                    spreadRadius: 2,
                   ),
-                ),
-                const SizedBox(height: 24),
-                if (qrCode != null)
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 10,
-                          spreadRadius: 2,
-                        ),
-                      ],
-                    ),
-                    child: QrImageView(
-                      data: qrCode!,
-                      version: QrVersions.auto,
-                      size: 360.0,
-                      gapless: false,
-                      backgroundColor: Colors.white,
-                      errorCorrectionLevel: QrErrorCorrectLevel.H,
-                      eyeStyle: const QrEyeStyle(
-                        eyeShape: QrEyeShape.square,
-                        color: Colors.black,
-                      ),
-                      dataModuleStyle: const QrDataModuleStyle(
-                        dataModuleShape: QrDataModuleShape.square,
-                        color: Colors.black,
-                      ),
-                    ),
-                  )
-                else
-                  Container(
-                    height: 250,
-                    width: 250,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Center(
-                      child: CircularProgressIndicator(),
-                    ),
-                  ),
-                const SizedBox(height: 24),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.shade50,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.blue.shade200),
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.info_outline, color: Colors.blue, size: 20),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'После сканирования нажмите "Проверить статус"',
-                          style: TextStyle(fontSize: 12, color: Colors.blue),
-                        ),
-                      ),
-                    ],
+                ],
+              ),
+              child: _WhatsAppQRDialog._buildQrWidget(qrCode!, qrSize),
+            )
+          else
+            Container(
+              height: qrSize,
+              width: qrSize,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Center(child: CircularProgressIndicator()),
+            ),
+          const SizedBox(height: 24),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.blue.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.blue.shade200),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.info_outline, color: Colors.blue, size: 20),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'После сканирования нажмите "Проверить статус"',
+                    style: TextStyle(fontSize: 12, color: Colors.blue),
                   ),
                 ),
               ],
             ),
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Закрыть'),
-          ),
-          TextButton(
-            onPressed: _refreshQr,
-            child: const Text('Обновить QR'),
-          ),
-          ElevatedButton.icon(
-            onPressed: () {
-              Navigator.pop(context);
-              _checkWhatsAppStatus();
-            },
-            icon: const Icon(Icons.refresh),
-            label: const Text('Проверить статус'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF25D366),
-              foregroundColor: Colors.white,
-            ),
-          ),
         ],
       ),
+    );
+
+    if (isMobile) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Авторизация WhatsApp'),
+          leading: IconButton(
+            icon: const Icon(Icons.close),
+            onPressed: () => Navigator.pop(context),
+          ),
+          actions: [
+            TextButton(onPressed: onRefresh, child: const Text('Обновить QR')),
+            FilledButton.icon(
+              onPressed: () {
+                Navigator.pop(context);
+                onCheckStatus();
+              },
+              icon: const Icon(Icons.refresh),
+              label: const Text('Проверить статус'),
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF25D366),
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        ),
+        body: Padding(padding: const EdgeInsets.all(16), child: content),
+      );
+    }
+
+    return AlertDialog(
+      title: const Text('Авторизация WhatsApp'),
+      content: SizedBox(width: 450, child: content),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Закрыть')),
+        TextButton(onPressed: onRefresh, child: const Text('Обновить QR')),
+        ElevatedButton.icon(
+          onPressed: () {
+            Navigator.pop(context);
+            onCheckStatus();
+          },
+          icon: const Icon(Icons.refresh),
+          label: const Text('Проверить статус'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF25D366),
+            foregroundColor: Colors.white,
+          ),
+        ),
+      ],
     );
   }
 }

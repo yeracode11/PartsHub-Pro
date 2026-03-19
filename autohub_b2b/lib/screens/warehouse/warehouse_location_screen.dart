@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:autohub_b2b/core/theme.dart';
+import 'package:autohub_b2b/widgets/unauthorized_placeholder.dart';
+import 'package:autohub_b2b/widgets/offline_placeholder.dart';
 import 'package:autohub_b2b/services/api/api_client.dart';
 import 'package:dio/dio.dart';
 
@@ -16,6 +18,9 @@ class _WarehouseLocationScreenState extends State<WarehouseLocationScreen> {
   List<Map<String, dynamic>> _locations = [];
   bool _isLoading = true;
   String? _error;
+  bool _isForbidden = false;
+  String? _forbiddenMessage;
+  bool _isOffline = false;
 
   @override
   void initState() {
@@ -35,6 +40,8 @@ class _WarehouseLocationScreenState extends State<WarehouseLocationScreen> {
     setState(() {
       _isLoading = true;
       _error = null;
+      _isForbidden = false;
+      _isOffline = false;
     });
 
     try {
@@ -70,11 +77,26 @@ class _WarehouseLocationScreenState extends State<WarehouseLocationScreen> {
       });
     } catch (e) {
       if (!mounted) return;
-      
-      setState(() {
-        _error = e.toString();
-        _isLoading = false;
-      });
+      if (e is DioException && e.response?.statusCode == 403) {
+        setState(() {
+          _isForbidden = true;
+          _forbiddenMessage = (e.response?.data is Map<String, dynamic>
+                  ? (e.response?.data['message'] as String?)
+                  : null) ??
+              'У вас нет доступа к разделу «Расположение». Войдите под владельцем или менеджером.';
+          _isLoading = false;
+        });
+      } else if (isNetworkError(e)) {
+        setState(() {
+          _isOffline = true;
+          _isLoading = false;
+        });
+      } else {
+        setState(() {
+          _error = e.toString();
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -101,9 +123,13 @@ class _WarehouseLocationScreenState extends State<WarehouseLocationScreen> {
           ),
         ),
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
+      body: _isForbidden
+          ? UnauthorizedPlaceholder(message: _forbiddenMessage)
+          : _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _isOffline
+              ? OfflinePlaceholder(onRetry: _loadLocations)
+              : _error != null
               ? Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,

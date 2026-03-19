@@ -27,6 +27,10 @@ import 'package:autohub_b2b/screens/profile/profile_screen.dart';
 import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/models/user_model.dart';
 import 'package:autohub_b2b/services/auth/secure_storage_service.dart';
+import 'package:autohub_b2b/screens/onboarding/onboarding_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:autohub_b2b/services/service_locator.dart';
+import 'package:autohub_b2b/widgets/offline_banner.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -40,8 +44,12 @@ void main() async {
     unawaited(autoUpdater.checkForUpdates());
   }
 
-  // Инициализация базы данных
+  // Инициализация базы данных и сервисов
   final database = AppDatabase();
+  await ServiceLocator().init(database);
+
+  // Фоновая синхронизация при старте (если онлайн)
+  unawaited(ServiceLocator().syncService.syncAll());
 
   runApp(AutoHubApp(database: database));
 }
@@ -78,29 +86,62 @@ class AutoHubApp extends StatelessWidget {
   }
 }
 
-// Обертка для управления навигацией на основе состояния авторизации
-class AuthWrapper extends StatelessWidget {
+class AuthWrapper extends StatefulWidget {
   const AuthWrapper({super.key});
 
   @override
+  State<AuthWrapper> createState() => _AuthWrapperState();
+}
+
+class _AuthWrapperState extends State<AuthWrapper> {
+  bool _loading = true;
+  bool _showOnboarding = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkOnboarding();
+  }
+
+  Future<void> _checkOnboarding() async {
+    final prefs = await SharedPreferences.getInstance();
+    final completed = prefs.getBool('onboarding_completed') ?? false;
+    if (mounted) {
+      setState(() {
+        _showOnboarding = !completed;
+        _loading = false;
+      });
+    }
+  }
+
+  void _onOnboardingComplete() {
+    setState(() => _showOnboarding = false);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (_loading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_showOnboarding) {
+      return OnboardingScreen(onComplete: _onOnboardingComplete);
+    }
+
     return BlocBuilder<AuthBloc, AuthState>(
       builder: (context, state) {
-        // Загрузка
         if (state is AuthInitial || state is AuthLoading) {
           return const Scaffold(
-            body: Center(
-              child: CircularProgressIndicator(),
-            ),
+            body: Center(child: CircularProgressIndicator()),
           );
         }
-        
-        // Авторизован - показываем главный экран
+
         if (state is AuthAuthenticated) {
           return const MainScreen();
         }
-        
-        // Не авторизован или ошибка - показываем экран входа
+
         return const LoginScreen();
       },
     );
@@ -250,9 +291,16 @@ class _MainScreenState extends State<MainScreen> {
             ),
           ),
         ),
-        body: _selectedIndex == 1 
-            ? _getWarehouseScreen() 
-            : _screens[_selectedIndex],
+        body: Column(
+          children: [
+            const OfflineBanner(),
+            Expanded(
+              child: _selectedIndex == 1
+                  ? _getWarehouseScreen()
+                  : _screens[_selectedIndex],
+            ),
+          ],
+        ),
         bottomNavigationBar: _buildBottomNavigationBar(),
       );
     } else {
@@ -482,9 +530,16 @@ class _MainScreenState extends State<MainScreen> {
             
             // Основной контент
             Expanded(
-              child: _selectedIndex == 1 
-                  ? _getWarehouseScreen() 
-                  : _screens[_selectedIndex],
+              child: Column(
+                children: [
+                  const OfflineBanner(),
+                  Expanded(
+                    child: _selectedIndex == 1
+                        ? _getWarehouseScreen()
+                        : _screens[_selectedIndex],
+                  ),
+                ],
+              ),
             ),
           ],
         ),

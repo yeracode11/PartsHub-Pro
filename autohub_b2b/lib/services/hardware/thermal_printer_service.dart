@@ -4,8 +4,9 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:typed_data';
-import 'dart:io' show Platform;
+import 'dart:io' show Platform, Socket, InternetAddress;
 import 'dart:async';
+import 'dart:convert';
 // Bluetooth printer support only for Android
 import 'package:blue_thermal_printer/blue_thermal_printer.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -30,16 +31,24 @@ class ThermalPrinterService {
   Printer? _selectedPrinter;
   bool _isConnected = false;
   String? _printerName;
-  String? _printerUrl; // URL принтера для сохранения
+  String? _printerUrl;
   pw.Font? _cyrillicFont;
   
-  // Для Bluetooth на мобильных устройствах
+  // Bluetooth (Android only)
   BlueThermalPrinter? _bluetoothPrinter;
   BluetoothDevice? _bluetoothDevice;
+
+  // WiFi TCP (все платформы, включая iOS)
+  String? _wifiIp;
+  int _wifiPort = 9100;
+  bool _isWifi = false;
   
   // Ключи для SharedPreferences
   static const String _prefKeyPrinterName = 'saved_printer_name';
   static const String _prefKeyPrinterUrl = 'saved_printer_url';
+  static const String _prefKeyPrinterType = 'saved_printer_type';
+  static const String _prefKeyPrinterIp = 'saved_printer_ip';
+  static const String _prefKeyPrinterPort = 'saved_printer_port';
 
   /// Подключение к принтеру
   /// 
@@ -103,22 +112,20 @@ class ThermalPrinterService {
     _printerName = null;
     _printerUrl = null;
     _selectedPrinter = null;
+    _wifiIp = null;
+    _isWifi = false;
     
     if (clearSettings) {
       await clearPrinterSettings();
-      print('🗑️ Принтер отвязан и настройки очищены');
     }
     
-    // Отключаемся от Bluetooth принтера, если подключены
     if (_bluetoothPrinter != null) {
       try {
         final isConnected = await _bluetoothPrinter!.isConnected;
         if (isConnected == true) {
           await _bluetoothPrinter!.disconnect();
         }
-      } catch (e) {
-        print('⚠️ Ошибка отключения от Bluetooth принтера: $e');
-      }
+      } catch (_) {}
       _bluetoothPrinter = null;
       _bluetoothDevice = null;
     }
@@ -180,7 +187,18 @@ class ThermalPrinterService {
     await Future.delayed(Duration.zero);
     
     try {
-      // Если подключен Bluetooth принтер, используем ESC/POS
+      // WiFi TCP (TSPL) — работает на iOS, Android, Desktop
+      if (_isWifi && _wifiIp != null) {
+        return await _printLabelWifi(
+          itemName: itemName,
+          sku: sku,
+          price: price,
+          warehouseCell: warehouseCell,
+          quantity: quantity,
+        );
+      }
+
+      // Bluetooth ESC/POS (Android only)
       if (_bluetoothPrinter != null) {
         final isConnected = await _bluetoothPrinter!.isConnected;
         if (isConnected == true) {
@@ -194,7 +212,7 @@ class ThermalPrinterService {
         }
       }
 
-      // Для десктопных принтеров используем PDF
+      // Системные принтеры (Desktop) — PDF
       // Создаем PDF документ с наклейками
       final pdf = pw.Document();
       
@@ -416,7 +434,12 @@ class ThermalPrinterService {
     await Future.delayed(Duration.zero);
     
     try {
-      // Если подключен Bluetooth принтер, используем ESC/POS
+      // WiFi TCP (TSPL)
+      if (_isWifi && _wifiIp != null) {
+        return await _printTestPageWifi();
+      }
+
+      // Bluetooth ESC/POS (Android only)
       if (_bluetoothPrinter != null) {
         final isConnected = await _bluetoothPrinter!.isConnected;
         if (isConnected == true) {
@@ -424,7 +447,7 @@ class ThermalPrinterService {
         }
       }
 
-      // Для десктопных принтеров используем PDF
+      // Системные принтеры (Desktop) — PDF
       final pdf = pw.Document();
       
       // Загружаем шрифт с поддержкой кириллицы (если доступен)
@@ -583,109 +606,205 @@ class ThermalPrinterService {
     }
   }
 
+  // ===================== WiFi TCP (работает на iOS, Android, Desktop) =====================
+
+  /// Подключение к принтеру по WiFi (TCP порт 9100).
+  /// Работает на всех платформах, включая iOS.
+  Future<bool> connectWifi(String ip, {int port = 9100}) async {
+    try {
+      // Проверяем доступность принтера
+      final socket = await Socket.connect(
+        InternetAddress(ip),
+        port,
+        timeout: const Duration(seconds: 5),
+      );
+      await socket.close();
+
+      // Отключаемся от предыдущего
+      if (_isConnected) await disconnect();
+
+      _wifiIp = ip;
+      _wifiPort = port;
+      _isWifi = true;
+      _isConnected = true;
+      _printerName = 'WiFi: $ip:$port';
+      _printerUrl = 'tcp://$ip:$port';
+
+      await savePrinterSettings();
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Отправка raw-байт на WiFi-принтер через TCP-сокет
+  Future<bool> _sendToWifi(List<int> data) async {
+    if (_wifiIp == null) return false;
+    try {
+      final socket = await Socket.connect(
+        InternetAddress(_wifiIp!),
+        _wifiPort,
+        timeout: const Duration(seconds: 5),
+      );
+      socket.add(data);
+      await socket.flush();
+      await socket.close();
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Печать наклейки на WiFi-принтере с помощью TSPL (язык Xprinter XP-420B).
+  /// Поддерживает кириллицу, QR-код, штрих-код.
+  Future<bool> _printLabelWifi({
+    required String itemName,
+    required String? sku,
+    required double price,
+    String? warehouseCell,
+    int quantity = 1,
+  }) async {
+    final widthDots = (paperWidthMm * 8).toInt(); // 203 DPI ≈ 8 dot/mm
+    final heightDots = (paperHeightMm * 8).toInt();
+
+    final buf = StringBuffer();
+
+    for (int i = 0; i < quantity; i++) {
+      buf.writeln('SIZE $paperWidthMm mm, $paperHeightMm mm');
+      buf.writeln('GAP 2 mm, 0 mm');
+      buf.writeln('DIRECTION 1,0');
+      buf.writeln('CLS');
+      buf.writeln('CODEPAGE UTF-8');
+
+      int y = 24;
+      const leftText = 200;
+
+      // QR-код слева
+      if (sku != null && sku.isNotEmpty) {
+        buf.writeln('QRCODE 24,$y,L,6,A,0,"$sku"');
+      }
+
+      // Название товара (крупный шрифт)
+      final safeName = itemName.replaceAll('"', "'");
+      buf.writeln('TEXT $leftText,$y,"4",0,1,1,"$safeName"');
+      y += 60;
+
+      // Артикул
+      if (sku != null && sku.isNotEmpty) {
+        buf.writeln('TEXT $leftText,$y,"3",0,1,1,"Art: $sku"');
+        y += 40;
+      }
+
+      // Ячейка хранения
+      if (warehouseCell != null && warehouseCell.isNotEmpty) {
+        final safeCell = warehouseCell.replaceAll('"', "'");
+        buf.writeln('TEXT $leftText,$y,"3",0,1,1,"Cell: $safeCell"');
+        y += 40;
+      }
+
+      // Цена (крупный)
+      buf.writeln('TEXT $leftText,$y,"4",0,1,1,"${price.toStringAsFixed(0)} T"');
+
+      buf.writeln('PRINT 1,1');
+    }
+
+    return await _sendToWifi(utf8.encode(buf.toString()));
+  }
+
+  /// Тестовая печать на WiFi-принтере
+  Future<bool> _printTestPageWifi() async {
+    final buf = StringBuffer();
+    buf.writeln('SIZE $paperWidthMm mm, $paperHeightMm mm');
+    buf.writeln('GAP 2 mm, 0 mm');
+    buf.writeln('DIRECTION 1,0');
+    buf.writeln('CLS');
+    buf.writeln('CODEPAGE UTF-8');
+    buf.writeln('TEXT 24,24,"4",0,1,1,"TEST PRINTER"');
+    buf.writeln('TEXT 24,100,"3",0,1,1,"WiFi: $_wifiIp:$_wifiPort"');
+    buf.writeln('TEXT 24,160,"3",0,1,1,"${paperWidthMm.toInt()}x${paperHeightMm.toInt()} mm"');
+    buf.writeln('QRCODE 24,230,L,6,A,0,"AUTOHUB-TEST"');
+    buf.writeln('TEXT 200,260,"3",0,1,1,"AutoHub B2B"');
+    buf.writeln('PRINT 1,1');
+    return await _sendToWifi(utf8.encode(buf.toString()));
+  }
+
+  bool get isWifi => _isWifi;
+  String? get wifiIp => _wifiIp;
+  int get wifiPort => _wifiPort;
+
   /// Подключение к Bluetooth принтеру (для мобильных устройств)
   Future<bool> connectBluetooth(BluetoothDevice device) async {
     try {
-      // iOS не поддерживает Bluetooth принтеры через эту библиотеку
-      if (Platform.isIOS) {
-        print('⚠️ Bluetooth принтеры не поддерживаются на iOS. Используйте AirPrint или сетевые принтеры.');
-        return false;
-      }
-      
-      // Проверяем разрешения на Android
-      if (Platform.isAndroid) {
-        final bluetoothStatus = await Permission.bluetooth.request();
-        if (!bluetoothStatus.isGranted) {
-          print('❌ Нет разрешения на использование Bluetooth');
-          return false;
-        }
-        
-        // Для Android 12+ нужны дополнительные разрешения
-        if (await Permission.bluetoothScan.isDenied) {
-          await Permission.bluetoothScan.request();
-        }
-        if (await Permission.bluetoothConnect.isDenied) {
-          await Permission.bluetoothConnect.request();
-        }
+      if (Platform.isIOS) return false;
+
+      if (!await _requestBluetoothPermissions()) return false;
+
+      // Отключаемся от текущего, если был
+      if (_bluetoothPrinter != null) {
+        try {
+          final wasConnected = await _bluetoothPrinter!.isConnected;
+          if (wasConnected == true) await _bluetoothPrinter!.disconnect();
+        } catch (_) {}
       }
 
-      // Создаем объект принтера
       _bluetoothPrinter = BlueThermalPrinter.instance;
-      
-      // Подключаемся
       final result = await _bluetoothPrinter!.connect(device);
-      
+
       if (result == true) {
         _isConnected = true;
         _printerName = device.name ?? device.address;
         _bluetoothDevice = device;
-        print('✅ Подключено к Bluetooth принтеру: $_printerName');
+        await savePrinterSettings();
         return true;
       } else {
-        print('❌ Ошибка подключения к Bluetooth принтеру');
         _bluetoothPrinter = null;
         return false;
       }
     } catch (e) {
-      print('❌ Ошибка подключения к Bluetooth принтеру: $e');
       _bluetoothPrinter = null;
       return false;
     }
   }
 
-  /// Поиск Bluetooth принтеров (для мобильных устройств)
-  Future<List<BluetoothDevice>> scanBluetoothPrinters() async {
+  /// Запрос Bluetooth-разрешений на Android
+  Future<bool> _requestBluetoothPermissions() async {
+    if (!Platform.isAndroid) return true;
+    final bt = await Permission.bluetooth.request();
+    if (!bt.isGranted) return false;
+    if (await Permission.bluetoothScan.isDenied) {
+      await Permission.bluetoothScan.request();
+    }
+    if (await Permission.bluetoothConnect.isDenied) {
+      await Permission.bluetoothConnect.request();
+    }
+    if (await Permission.location.isDenied) {
+      await Permission.location.request();
+    }
+    return true;
+  }
+
+  /// Поиск всех спаренных Bluetooth-устройств.
+  /// Не фильтрует по ключевым словам — возвращает всё, чтобы пользователь
+  /// сам мог выбрать свой принтер (многие дешёвые модели имеют нестандартные имена).
+  Future<List<BluetoothDevice>> scanBluetoothDevices() async {
     try {
-      // Проверяем разрешения на Android
-      if (Platform.isAndroid) {
-        final bluetoothStatus = await Permission.bluetooth.request();
-        if (!bluetoothStatus.isGranted) {
-          print('❌ Нет разрешения на использование Bluetooth');
-          return [];
-        }
-        
-        if (await Permission.bluetoothScan.isDenied) {
-          await Permission.bluetoothScan.request();
-        }
-      }
-      
-      // Для iOS Bluetooth работает по-другому, и библиотека может не поддерживать iOS
-      if (Platform.isIOS) {
-        print('⚠️ Bluetooth принтеры на iOS могут не поддерживаться. Используйте AirPrint или сетевые принтеры.');
-        return [];
-      }
+      if (Platform.isIOS) return [];
 
-      // Создаем объект принтера для поиска
+      if (!await _requestBluetoothPermissions()) return [];
+
       final printer = BlueThermalPrinter.instance;
-      
-      // Проверяем, включен ли Bluetooth
       final isOn = await printer.isOn;
-      if (isOn != true) {
-        print('⚠️ Bluetooth выключен');
-        return [];
-      }
+      if (isOn != true) return [];
 
-      // Ищем устройства
       final devices = await printer.getBondedDevices();
-      
-      // Фильтруем только принтеры (обычно в названии есть "printer", "print", "POS", "Xprinter", "Epson" и т.д.)
-      final printerKeywords = ['printer', 'print', 'pos', 'xprinter', 'epson', 'star', 'bixolon', 'zjiang'];
-      final printers = devices.where((device) {
-        final name = (device.name ?? '').toLowerCase();
-        return printerKeywords.any((keyword) => name.contains(keyword));
-      }).toList();
-
-      print('✅ Найдено ${printers.length} Bluetooth принтеров');
-      return printers;
+      return devices;
     } catch (e) {
-      print('❌ Ошибка поиска Bluetooth принтеров: $e');
-      // На iOS может быть ошибка, если библиотека не поддерживает iOS
-      if (Platform.isIOS) {
-        print('⚠️ Bluetooth принтеры не поддерживаются на iOS. Используйте AirPrint.');
-      }
       return [];
     }
   }
+
+  /// Обратная совместимость
+  Future<List<BluetoothDevice>> scanBluetoothPrinters() => scanBluetoothDevices();
 
   /// Получить список доступных принтеров
   /// 
@@ -698,22 +817,20 @@ class ThermalPrinterService {
     try {
       final List<Map<String, dynamic>> allPrinters = [];
 
-      // Для Android ищем Bluetooth принтеры
-      // iOS не поддерживает Bluetooth принтеры через эту библиотеку, используйте AirPrint
       if (Platform.isAndroid) {
         try {
-          final bluetoothPrinters = await scanBluetoothPrinters();
-          for (final device in bluetoothPrinters) {
+          final bluetoothDevices = await scanBluetoothDevices();
+          for (final device in bluetoothDevices) {
             allPrinters.add({
-              'name': device.name ?? device.address,
+              'name': device.name ?? device.address ?? 'Устройство',
               'address': device.address,
               'connectionType': 'Bluetooth',
               'isBluetooth': true,
-              'device': device, // Сохраняем объект устройства для подключения
+              'device': device,
             });
           }
         } catch (e) {
-          print('⚠️ Ошибка поиска Bluetooth принтеров: $e');
+          print('⚠️ Ошибка поиска Bluetooth устройств: $e');
         }
       }
       
@@ -792,34 +909,35 @@ class ThermalPrinterService {
       final prefs = await SharedPreferences.getInstance();
       if (_printerName != null) {
         await prefs.setString(_prefKeyPrinterName, _printerName!);
-        print('💾 Настройки принтера сохранены: $_printerName');
       }
       if (_printerUrl != null) {
         await prefs.setString(_prefKeyPrinterUrl, _printerUrl!);
       }
-    } catch (e) {
-      print('❌ Ошибка сохранения настроек принтера: $e');
-    }
+      if (_isWifi && _wifiIp != null) {
+        await prefs.setString(_prefKeyPrinterType, 'wifi');
+        await prefs.setString(_prefKeyPrinterIp, _wifiIp!);
+        await prefs.setInt(_prefKeyPrinterPort, _wifiPort);
+      } else if (_bluetoothPrinter != null) {
+        await prefs.setString(_prefKeyPrinterType, 'bluetooth');
+      } else {
+        await prefs.setString(_prefKeyPrinterType, 'system');
+      }
+    } catch (_) {}
   }
 
   /// Загрузка сохраненных настроек принтера
   Future<Map<String, String?>> loadPrinterSettings() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final name = prefs.getString(_prefKeyPrinterName);
-      final url = prefs.getString(_prefKeyPrinterUrl);
-      
-      if (name != null) {
-        print('📥 Загружены настройки принтера: $name');
-      }
-      
       return {
-        'name': name,
-        'url': url,
+        'name': prefs.getString(_prefKeyPrinterName),
+        'url': prefs.getString(_prefKeyPrinterUrl),
+        'type': prefs.getString(_prefKeyPrinterType),
+        'ip': prefs.getString(_prefKeyPrinterIp),
+        'port': prefs.getInt(_prefKeyPrinterPort)?.toString(),
       };
-    } catch (e) {
-      print('❌ Ошибка загрузки настроек принтера: $e');
-      return {'name': null, 'url': null};
+    } catch (_) {
+      return {};
     }
   }
 
@@ -829,41 +947,47 @@ class ThermalPrinterService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_prefKeyPrinterName);
       await prefs.remove(_prefKeyPrinterUrl);
-      print('🗑️ Настройки принтера очищены');
-    } catch (e) {
-      print('❌ Ошибка очистки настроек принтера: $e');
-    }
+      await prefs.remove(_prefKeyPrinterType);
+      await prefs.remove(_prefKeyPrinterIp);
+      await prefs.remove(_prefKeyPrinterPort);
+    } catch (_) {}
   }
 
   /// Автоматическое подключение к сохраненному принтеру
   Future<bool> autoConnectToSavedPrinter() async {
     try {
       final settings = await loadPrinterSettings();
+      final savedType = settings['type'];
       final savedName = settings['name'];
-      
-      if (savedName == null) {
-        print('ℹ️ Нет сохраненного принтера для автоподключения');
+
+      if (savedName == null) return false;
+
+      // WiFi auto-reconnect
+      if (savedType == 'wifi') {
+        final ip = settings['ip'];
+        final port = int.tryParse(settings['port'] ?? '') ?? 9100;
+        if (ip != null) {
+          return await connectWifi(ip, port: port);
+        }
         return false;
       }
 
-      print('🔄 Попытка автоподключения к сохраненному принтеру: $savedName');
-      
-      // Получаем список доступных принтеров
-      final printers = await Printing.listPrinters();
-      final savedPrinter = printers.where((p) => p.name == savedName).firstOrNull;
-      
-      if (savedPrinter != null) {
-        _selectedPrinter = savedPrinter;
-        _printerName = savedPrinter.name;
-        _isConnected = true;
-        print('✅ Автоматически подключено к: $_printerName');
-        return true;
-      } else {
-        print('⚠️ Сохраненный принтер "$savedName" не найден');
-        return false;
+      // System printer auto-reconnect (Desktop)
+      if (savedType == 'system' || savedType == null) {
+        try {
+          final printers = await Printing.listPrinters();
+          final savedPrinter = printers.where((p) => p.name == savedName).firstOrNull;
+          if (savedPrinter != null) {
+            _selectedPrinter = savedPrinter;
+            _printerName = savedPrinter.name;
+            _isConnected = true;
+            return true;
+          }
+        } catch (_) {}
       }
-    } catch (e) {
-      print('❌ Ошибка автоподключения: $e');
+
+      return false;
+    } catch (_) {
       return false;
     }
   }
@@ -875,6 +999,9 @@ class ThermalPrinterService {
       'printerName': _printerName,
       'printerUrl': _printerUrl,
       'isBluetooth': _bluetoothPrinter != null,
+      'isWifi': _isWifi,
+      'wifiIp': _wifiIp,
+      'wifiPort': _wifiPort,
       'bluetoothDevice': _bluetoothDevice?.name,
     };
   }

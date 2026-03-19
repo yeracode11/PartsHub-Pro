@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:autohub_b2b/core/theme.dart';
+import 'package:autohub_b2b/utils/dialog_helper.dart';
+import 'package:autohub_b2b/widgets/unauthorized_placeholder.dart';
+import 'package:autohub_b2b/widgets/offline_placeholder.dart';
 import 'package:autohub_b2b/services/api/api_client.dart';
 import 'package:autohub_b2b/models/vehicle_model.dart';
 import 'package:dio/dio.dart';
@@ -19,6 +22,9 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
   List<VehicleModel> filteredVehicles = [];
   bool isLoading = true;
   String searchQuery = '';
+  bool isForbidden = false;
+  String? forbiddenMessage;
+  bool isOffline = false;
 
   @override
   void initState() {
@@ -27,7 +33,11 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
   }
 
   Future<void> _loadVehicles() async {
-    setState(() => isLoading = true);
+    setState(() {
+      isLoading = true;
+      isForbidden = false;
+      isOffline = false;
+    });
 
     try {
       final response = await dio.get('/api/vehicles');
@@ -39,14 +49,30 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
         isLoading = false;
       });
     } catch (e) {
-      setState(() => isLoading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Ошибка загрузки: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+      if (e is DioException && e.response?.statusCode == 403) {
+        setState(() {
+          isForbidden = true;
+          forbiddenMessage = (e.response?.data is Map<String, dynamic>
+                  ? (e.response?.data['message'] as String?)
+                  : null) ??
+              'У вас нет доступа к разделу «Автомобили». Войдите под владельцем или менеджером.';
+          isLoading = false;
+        });
+      } else if (isNetworkError(e)) {
+        setState(() {
+          isOffline = true;
+          isLoading = false;
+        });
+      } else {
+        setState(() => isLoading = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Ошибка загрузки: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     }
   }
@@ -78,36 +104,30 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
   }
 
   void _showVehicleDialog(VehicleModel? vehicle) {
-    showDialog(
-      context: context,
-      builder: (context) => _VehicleDialog(
-        vehicle: vehicle,
-        onSave: () {
-          Navigator.pop(context);
-          _loadVehicles();
-        },
-      ),
+    final isMobile = MediaQuery.of(context).size.width < 768;
+    final dialog = _VehicleDialog(
+      vehicle: vehicle,
+      onSave: () {
+        Navigator.pop(context);
+        _loadVehicles();
+      },
     );
+    if (isMobile) {
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => dialog),
+      );
+    } else {
+      showDialog(context: context, builder: (_) => dialog);
+    }
   }
 
   Future<void> _deleteVehicle(VehicleModel vehicle) async {
-    final confirm = await showDialog<bool>(
+    final confirm = await DialogHelper.showConfirmSimple(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Удалить автомобиль?'),
-        content: Text('Вы уверены, что хотите удалить ${vehicle.displayName}?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Отмена'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Удалить'),
-          ),
-        ],
-      ),
+      title: 'Удалить автомобиль?',
+      message: 'Вы уверены, что хотите удалить ${vehicle.displayName}?',
+      confirmText: 'Удалить',
+      isDestructive: true,
     );
 
     if (confirm == true) {
@@ -240,9 +260,13 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
 
           // Список автомобилей
           Expanded(
-            child: isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : filteredVehicles.isEmpty
+            child: isForbidden
+                ? UnauthorizedPlaceholder(message: forbiddenMessage)
+                : isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : isOffline
+                    ? OfflinePlaceholder(onRetry: _loadVehicles)
+                    : filteredVehicles.isEmpty
                     ? Center(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -729,19 +753,70 @@ class _VehicleDialogState extends State<_VehicleDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 768;
+    if (isMobile) return _buildMobileLayout(context);
+    return _buildDesktopDialog(context);
+  }
+
+  Widget _buildMobileLayout(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppTheme.backgroundColor,
+      appBar: AppBar(
+        title: Text(widget.vehicle == null ? 'Добавить автомобиль' : 'Редактировать автомобиль'),
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          onPressed: () => Navigator.pop(context),
+        ),
+        actions: [
+          FilledButton(
+            onPressed: _save,
+            child: const Text('Сохранить'),
+          ),
+        ],
+      ),
+      body: Form(
+        key: _formKey,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: _buildFormFields(),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDesktopDialog(BuildContext context) {
     return AlertDialog(
       title: Text(widget.vehicle == null ? 'Добавить автомобиль' : 'Редактировать автомобиль'),
       content: SizedBox(
-        width: MediaQuery.of(context).size.width < 768
-            ? MediaQuery.of(context).size.width * 0.9
-            : 600,
+        width: 600,
         child: Form(
           key: _formKey,
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
-              children: [
-                // Владелец
+              children: _buildFormFields(),
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Отмена'),
+        ),
+        ElevatedButton(
+          onPressed: _save,
+          child: const Text('Сохранить'),
+        ),
+      ],
+    );
+  }
+
+  List<Widget> _buildFormFields() => [
+        // Владелец
                 if (isLoadingCustomers)
                   const CircularProgressIndicator()
                 else
@@ -1060,23 +1135,7 @@ class _VehicleDialogState extends State<_VehicleDialog> {
                   decoration: const InputDecoration(labelText: 'Примечания'),
                   maxLines: 3,
                 ),
-              ],
-            ),
-          ),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Отмена'),
-        ),
-        ElevatedButton(
-          onPressed: _save,
-          child: const Text('Сохранить'),
-        ),
-      ],
-    );
-  }
+              ];
 
   @override
   void dispose() {

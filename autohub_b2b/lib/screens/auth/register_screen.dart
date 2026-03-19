@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter/services.dart';
 import 'package:autohub_b2b/blocs/auth/auth_bloc.dart';
 import 'package:autohub_b2b/blocs/auth/auth_event.dart';
 import 'package:autohub_b2b/blocs/auth/auth_state.dart';
+import 'package:autohub_b2b/screens/legal/privacy_policy_screen.dart';
+import 'package:autohub_b2b/screens/legal/terms_of_use_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -22,6 +25,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _organizationNameController = TextEditingController();
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+  bool _agreedToTerms = false;
   String? _selectedBusinessType;
 
   final List<Map<String, String>> _businessTypes = [
@@ -270,6 +274,100 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       return null;
                     },
                   ),
+
+                  const SizedBox(height: 16),
+
+                  // Согласие с условиями
+                  FormField<bool>(
+                    initialValue: _agreedToTerms,
+                    validator: (value) {
+                      if (value != true) {
+                        return 'Необходимо принять условия';
+                      }
+                      return null;
+                    },
+                    builder: (formState) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: Checkbox(
+                                  value: _agreedToTerms,
+                                  onChanged: (v) {
+                                    setState(() => _agreedToTerms = v ?? false);
+                                    formState.didChange(v);
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: RichText(
+                                  text: TextSpan(
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.grey[700],
+                                      height: 1.4,
+                                    ),
+                                    children: [
+                                      const TextSpan(text: 'Я принимаю '),
+                                      TextSpan(
+                                        text: 'Пользовательское соглашение',
+                                        style: TextStyle(
+                                          color: Theme.of(context).primaryColor,
+                                          decoration: TextDecoration.underline,
+                                        ),
+                                        recognizer: TapGestureRecognizer()
+                                          ..onTap = () {
+                                            Navigator.of(context).push(
+                                              MaterialPageRoute(
+                                                builder: (_) => const TermsOfUseScreen(),
+                                              ),
+                                            );
+                                          },
+                                      ),
+                                      const TextSpan(text: ' и '),
+                                      TextSpan(
+                                        text: 'Политику конфиденциальности',
+                                        style: TextStyle(
+                                          color: Theme.of(context).primaryColor,
+                                          decoration: TextDecoration.underline,
+                                        ),
+                                        recognizer: TapGestureRecognizer()
+                                          ..onTap = () {
+                                            Navigator.of(context).push(
+                                              MaterialPageRoute(
+                                                builder: (_) => const PrivacyPolicyScreen(),
+                                              ),
+                                            );
+                                          },
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (formState.hasError)
+                            Padding(
+                              padding: const EdgeInsets.only(left: 32, top: 4),
+                              child: Text(
+                                formState.errorText!,
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.error,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                        ],
+                      );
+                    },
+                  ),
+
                   const SizedBox(height: 24),
 
                   // Кнопка регистрации

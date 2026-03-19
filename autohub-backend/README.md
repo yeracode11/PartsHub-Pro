@@ -31,6 +31,22 @@
 $ npm install
 ```
 
+### Green API (WhatsApp)
+
+Для работы модуля WhatsApp нужен токен Green API. Создайте `.env` на основе `.env.example`:
+
+```bash
+cp .env.example .env
+```
+
+Добавьте в `.env`:
+```
+GREEN_API_TOKEN_INSTANCE=ваш_токен_из_консоли_green_api
+```
+
+Токен можно взять в [личном кабинете Green API](https://console.green-api.com) или из ссылки QR:
+`https://qr.green-api.com/waInstance{idInstance}/{apiTokenInstance}`
+
 ## Compile and run the project
 
 ```bash
