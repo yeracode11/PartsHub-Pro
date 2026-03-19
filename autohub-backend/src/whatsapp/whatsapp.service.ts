@@ -281,6 +281,18 @@ export class WhatsAppService implements OnModuleInit {
   }
 
   private async refreshState(userId: string): Promise<void> {
+    if (!this.apiTokenInstance) {
+      const current = this.userStates.get(userId) ?? this.getDefaultState();
+      this.userStates.set(userId, {
+        ...current,
+        isReady: false,
+        needsReauth: true,
+        lastError: 'GREEN_API_TOKEN_INSTANCE не задан. Добавьте токен в .env',
+      });
+      await this.tryRefreshQr(userId);
+      return;
+    }
+
     try {
       const stateResponse = await this.greenApiGet('getStateInstance');
       const state = String(stateResponse?.stateInstance || '').toLowerCase();
@@ -316,9 +328,39 @@ export class WhatsAppService implements OnModuleInit {
   }
 
   private async tryRefreshQr(userId: string): Promise<void> {
+    const current = this.userStates.get(userId) ?? this.getDefaultState();
+
+    if (!this.apiTokenInstance) {
+      this.userStates.set(userId, {
+        ...current,
+        qrCode: null,
+        lastError:
+          current.lastError ||
+          'GREEN_API_TOKEN_INSTANCE не задан. Добавьте токен в .env',
+      });
+      return;
+    }
+
+    // 1. Сначала пробуем qr.green-api.com — надёжный источник QR
+    const qrImageUrl = `https://qr.green-api.com/waInstance${this.idInstance}/${this.apiTokenInstance}`;
+    try {
+      const imgResponse = await axios.get(qrImageUrl, {
+        responseType: 'arraybuffer',
+        timeout: 15000,
+      });
+      if (imgResponse.data && imgResponse.data.length > 0) {
+        const base64 = Buffer.from(imgResponse.data).toString('base64');
+        const qrCode = `data:image/png;base64,${base64}`;
+        this.userStates.set(userId, { ...current, qrCode });
+        return;
+      }
+    } catch (_) {
+      // Продолжаем к API
+    }
+
+    // 2. Fallback: API метод qr
     try {
       const qrResponse = await this.greenApiGet('qr');
-      // Green API: type='qrCode', message=base64 image
       let qrCode: string | null = null;
       if (qrResponse?.type === 'qrCode' && qrResponse?.message) {
         qrCode = qrResponse.message.startsWith('data:')
@@ -333,49 +375,20 @@ export class WhatsAppService implements OnModuleInit {
       }
 
       if (qrCode) {
-        const current = this.userStates.get(userId) ?? this.getDefaultState();
         this.userStates.set(userId, { ...current, qrCode });
         return;
       }
-
-      // Fallback: fetch QR image from qr.green-api.com
-      if (this.apiTokenInstance) {
-        const qrImageUrl = `https://qr.green-api.com/waInstance${this.idInstance}/${this.apiTokenInstance}`;
-        try {
-          const imgResponse = await axios.get(qrImageUrl, {
-            responseType: 'arraybuffer',
-            timeout: 15000,
-          });
-          if (imgResponse.data && imgResponse.data.length > 0) {
-            const base64 = Buffer.from(imgResponse.data).toString('base64');
-            qrCode = `data:image/png;base64,${base64}`;
-            const current = this.userStates.get(userId) ?? this.getDefaultState();
-            this.userStates.set(userId, { ...current, qrCode });
-            return;
-          }
-        } catch (_) {
-          // Ignore, use error below
-        }
-      }
-
-      const current = this.userStates.get(userId) ?? this.getDefaultState();
-      this.userStates.set(userId, {
-        ...current,
-        qrCode: null,
-        lastError:
-          current.lastError ||
-          `QR недоступен через API. Авторизуйте инстанс ${this.instanceName} в Green API.`,
-      });
     } catch (_) {
-      const current = this.userStates.get(userId) ?? this.getDefaultState();
-      this.userStates.set(userId, {
-        ...current,
-        qrCode: null,
-        lastError:
-          current.lastError ||
-          `QR недоступен через API. Авторизуйте инстанс ${this.instanceName} в Green API.`,
-      });
+      // Игнорируем
     }
+
+    this.userStates.set(userId, {
+      ...current,
+      qrCode: null,
+      lastError:
+        current.lastError ||
+        `QR недоступен. Авторизуйте инстанс ${this.instanceName} в Green API кабинете.`,
+    });
   }
 
   private async greenApiPost(

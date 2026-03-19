@@ -168,27 +168,41 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
         Navigator.pop(context); // Закрываем диалог прогресса
         
         final qrFromReconnect = response.data['qrCode'];
+        final success = response.data['success'] ?? false;
+        final msg = response.data['message'] ?? '';
+        
         setState(() {
           qrCode = qrFromReconnect;
           isWhatsAppReady = false;
+          if (msg.isNotEmpty) statusMessage = msg;
         });
         
         if (qrFromReconnect != null) {
           _showQRDialog(qrCodeOverride: qrFromReconnect);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Отсканируйте QR код для авторизации'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        } else if (success) {
+          await _checkWhatsAppStatus();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('WhatsApp переподключен'),
+              backgroundColor: Colors.green,
+            ),
+          );
         } else {
           await _checkWhatsAppStatus();
-        }
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              qrFromReconnect != null
-                  ? 'Отсканируйте QR код для авторизации'
-                  : 'WhatsApp переподключен',
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(msg.isNotEmpty ? msg : 'Ошибка переподключения'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 5),
             ),
-            backgroundColor: Colors.green,
-          ),
-        );
+          );
+        }
       }
     } catch (e) {
       if (mounted) {

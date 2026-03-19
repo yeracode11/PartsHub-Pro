@@ -23,64 +23,96 @@ export class WhatsAppController {
   constructor(private readonly whatsappService: WhatsAppService) {}
 
   /**
-   * Проверка статуса WhatsApp клиента
+   * Проверка статуса WhatsApp клиента.
+   * При отсутствии состояния вызывает инициализацию (refreshState), чтобы получить актуальный статус.
    */
   @Get('status')
-  getStatus(@CurrentUser() user: any) {
+  async getStatus(@CurrentUser() user: any) {
     const userId = user.userId || user.id;
-    const isReady = this.whatsappService.isClientReady(userId);
-    const qrCode = this.whatsappService.getQRCode(userId);
-    const needsReauth = this.whatsappService.needsReauth(userId);
-    const lastError = this.whatsappService.getLastError(userId);
 
-    return {
-      ready: isReady,
-      needsAuth: qrCode !== null || needsReauth,
-      lastError,
-      message: isReady
-        ? 'WhatsApp готов к работе'
-        : qrCode || needsReauth
-          ? 'Требуется авторизация в Green API'
-          : lastError
-            ? `Ошибка подключения: ${lastError}`
-            : 'Инициализация...',
-    };
+    try {
+      // Инициализируем сессию, если ещё нет состояния — иначе будет бесконечная "Инициализация..."
+      const hasState = this.whatsappService.isClientReady(userId) ||
+        this.whatsappService.getLastError(userId) != null ||
+        this.whatsappService.getQRCode(userId) != null;
+      if (!hasState) {
+        await this.whatsappService.initializeUserSession(userId).catch((err) => {
+          this.logger.warn(`Status init: ${err?.message || err}`);
+        });
+      }
+
+      const isReady = this.whatsappService.isClientReady(userId);
+      const qrCode = this.whatsappService.getQRCode(userId);
+      const needsReauth = this.whatsappService.needsReauth(userId);
+      const lastError = this.whatsappService.getLastError(userId);
+
+      return {
+        ready: isReady,
+        needsAuth: qrCode !== null || needsReauth,
+        lastError,
+        message: isReady
+          ? 'WhatsApp готов к работе'
+          : qrCode || needsReauth
+            ? 'Требуется авторизация в Green API'
+            : lastError
+              ? `Ошибка подключения: ${lastError}`
+              : 'Инициализация...',
+      };
+    } catch (err: any) {
+      this.logger.error(`Status error: ${err?.message}`, err?.stack);
+      return {
+        ready: false,
+        needsAuth: true,
+        lastError: err?.message || 'Ошибка проверки статуса',
+        message: `Ошибка: ${err?.message || 'Не удалось проверить статус'}`,
+      };
+    }
   }
 
   /**
-   * Получить QR код для авторизации
+   * Получить QR код для авторизации.
+   * Не выбрасывает 500 — всегда возвращает 200 с qrCode или сообщением об ошибке.
    */
   @Get('qr')
   async getQRCode(@CurrentUser() user: any) {
     const userId = user.userId || user.id;
-    
-    // Инициализируем сессию, если её еще нет
-    await this.whatsappService.initializeUserSession(userId).catch(err => {
-      this.logger.error('Ошибка инициализации сессии', err.stack);
-    });
-    
-    let qrCode = this.whatsappService.getQRCode(userId);
 
-    if (!qrCode && !this.whatsappService.isClientReady(userId)) {
-      // Принудительно запрашиваем новый QR при неготовом клиенте
-      await this.whatsappService.forceReauth(userId, 'qr_request').catch(err => {
-        this.logger.error('Ошибка повторной авторизации WhatsApp', err.stack);
+    try {
+      await this.whatsappService.initializeUserSession(userId).catch((err) => {
+        this.logger.warn(`QR init: ${err?.message || err}`);
       });
-      qrCode = this.whatsappService.getQRCode(userId);
-    }
 
-    if (!qrCode) {
+      let qrCode = this.whatsappService.getQRCode(userId);
+
+      if (!qrCode && !this.whatsappService.isClientReady(userId)) {
+        await this.whatsappService.forceReauth(userId, 'qr_request').catch((err) => {
+          this.logger.warn(`QR forceReauth: ${err?.message || err}`);
+        });
+        qrCode = this.whatsappService.getQRCode(userId);
+      }
+
+      const lastError = this.whatsappService.getLastError(userId);
+
+      if (!qrCode) {
+        return {
+          qrCode: null,
+          message:
+            lastError ||
+            'QR недоступен через API. Авторизуйте инстанс в Green API кабинете.',
+        };
+      }
+
+      return {
+        qrCode,
+        message: 'Отсканируйте QR код для авторизации Green API',
+      };
+    } catch (err: any) {
+      this.logger.error(`QR error: ${err?.message}`, err?.stack);
       return {
         qrCode: null,
-        message:
-          'QR недоступен через API. Авторизуйте инстанс в Green API кабинете.',
+        message: err?.message || 'Не удалось получить QR код',
       };
     }
-
-    return {
-      qrCode,
-      message: 'Отсканируйте QR код для авторизации Green API',
-    };
   }
 
   /**
@@ -192,7 +224,8 @@ export class WhatsAppController {
   }
 
   /**
-   * Принудительное переподключение WhatsApp (logout + получение нового QR)
+   * Принудительное переподключение WhatsApp (logout + получение нового QR).
+   * Всегда возвращает 200 с success/message/qrCode — без 500.
    */
   @Post('reconnect')
   @Roles(UserRole.OWNER, UserRole.MANAGER)
@@ -202,21 +235,23 @@ export class WhatsAppController {
     try {
       await this.whatsappService.reconnect(userId);
       const qrCode = this.whatsappService.getQRCode(userId);
+      const lastError = this.whatsappService.getLastError(userId);
 
       return {
-        success: true,
-        message: qrCode ? 'Отсканируйте QR код' : 'WhatsApp переподключен',
+        success: !!qrCode || this.whatsappService.isClientReady(userId),
+        message: qrCode ? 'Отсканируйте QR код' : lastError || 'WhatsApp переподключен',
         qrCode: qrCode || null,
       };
     } catch (error: any) {
       const msg = error?.message || 'Ошибка переподключения';
       this.logger.error(`Reconnect failed: ${msg}`, error?.stack);
 
-      const isConfigError = msg.includes('GREEN_API_TOKEN') || msg.includes('не задан');
-      throw new HttpException(
-        msg,
-        isConfigError ? HttpStatus.BAD_REQUEST : HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+      const qrCode = this.whatsappService.getQRCode(userId);
+      return {
+        success: false,
+        message: msg,
+        qrCode: qrCode || null,
+      };
     }
   }
 
