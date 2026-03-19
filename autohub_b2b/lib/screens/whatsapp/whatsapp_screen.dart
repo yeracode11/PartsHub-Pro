@@ -288,38 +288,54 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
         ),
       );
 
-      await dio.post('/api/whatsapp/logout');
-      
+      final response = await dio.post('/api/whatsapp/logout');
+      final data = response.data is Map ? response.data as Map<String, dynamic> : <String, dynamic>{};
+      final success = data['success'] ?? true;
+      final msg = (data['message'] ?? '').toString();
+
       if (mounted) {
         Navigator.pop(context); // Закрываем диалог прогресса
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Вы успешно вышли из WhatsApp'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        
+
+        if (success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Вы успешно вышли из WhatsApp'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(msg.isNotEmpty ? msg : 'Ошибка выхода'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+
         // Сбрасываем состояние
         setState(() {
           isWhatsAppReady = false;
           qrCode = null;
           statusMessage = 'Требуется авторизация';
         });
-        
-        // Обновляем статус (это создаст новую сессию и покажет QR код)
+
+        // Обновляем статус (создаст новую сессию и покажет QR код)
         await _checkWhatsAppStatus();
       }
     } catch (e) {
       if (mounted) {
         Navigator.pop(context); // Закрываем диалог прогресса
-        
+
+        final errMsg = e is DioException && e.response?.data is Map
+            ? (e.response!.data as Map)['message']?.toString()
+            : e.toString();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Ошибка выхода: $e'),
+            content: Text('Ошибка выхода: $errMsg'),
             backgroundColor: Colors.red,
           ),
         );
+        await _checkWhatsAppStatus();
       }
     }
   }

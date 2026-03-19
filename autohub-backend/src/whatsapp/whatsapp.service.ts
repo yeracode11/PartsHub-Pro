@@ -298,12 +298,35 @@ export class WhatsAppService implements OnModuleInit {
     });
   }
 
+  /**
+   * Разлогинивание инстанса (GET {{apiUrl}}/waInstance{{idInstance}}/logout/{{apiTokenInstance}})
+   */
   async logout(userId: string): Promise<void> {
-    try {
-      await this.greenClient.logout();
-    } catch (e) {
-      this.logger.warn(`⚠️ Green API logout warning: ${e.message}`);
+    if (!this.apiTokenInstance) {
+      this.setReadyState(userId, false, {
+        needsReauth: true,
+        lastError: 'GREEN_API_TOKEN_INSTANCE не задан',
+        qrCode: null,
+      });
+      return;
     }
+
+    const base = this.apiUrl.replace(/\/$/, '');
+    const url = `${base}/waInstance${this.idInstance}/logout/${this.apiTokenInstance}`;
+
+    try {
+      const { data } = await axios.get<{ isLogout?: boolean }>(url, {
+        timeout: 15000,
+      });
+      if (data?.isLogout !== true) {
+        this.logger.warn(`Green API logout: неожиданный ответ ${JSON.stringify(data)}`);
+      }
+    } catch (e: any) {
+      const msg = e?.response?.data?.message || e?.message || String(e);
+      this.logger.warn(`⚠️ Green API logout: ${msg}`);
+      throw new Error(`Не удалось выйти из WhatsApp: ${msg}`);
+    }
+
     this.setReadyState(userId, false, {
       needsReauth: true,
       lastError: 'Требуется авторизация в Green API',
