@@ -230,27 +230,32 @@ export class WhatsAppController {
   @Post('reconnect')
   @Roles(UserRole.OWNER, UserRole.MANAGER)
   async reconnect(@CurrentUser() user: any) {
-    const userId = user.userId || user.id;
+    const userId = user?.userId ?? user?.id ?? 'unknown';
 
     try {
       await this.whatsappService.reconnect(userId);
       const qrCode = this.whatsappService.getQRCode(userId);
       const lastError = this.whatsappService.getLastError(userId);
+      const isReady = this.whatsappService.isClientReady(userId);
 
       return {
-        success: !!qrCode || this.whatsappService.isClientReady(userId),
-        message: qrCode ? 'Отсканируйте QR код' : lastError || 'WhatsApp переподключен',
-        qrCode: qrCode || null,
+        success: !!qrCode || isReady,
+        message: qrCode ? 'Отсканируйте QR код' : (lastError || 'WhatsApp переподключен'),
+        qrCode: qrCode ?? null,
       };
     } catch (error: any) {
-      const msg = error?.message || 'Ошибка переподключения';
+      const msg = String(error?.message || error || 'Ошибка переподключения');
       this.logger.error(`Reconnect failed: ${msg}`, error?.stack);
 
-      const qrCode = this.whatsappService.getQRCode(userId);
+      let qrCode: string | null = null;
+      try {
+        qrCode = this.whatsappService.getQRCode(userId);
+      } catch (_) {}
+
       return {
         success: false,
         message: msg,
-        qrCode: qrCode || null,
+        qrCode: qrCode ?? null,
       };
     }
   }

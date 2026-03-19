@@ -260,9 +260,15 @@ export class WhatsAppService implements OnModuleInit {
 
   async reconnect(userId: string): Promise<void> {
     if (!this.apiTokenInstance) {
-      throw new Error(
-        'GREEN_API_TOKEN_INSTANCE не задан. Добавьте токен в .env (см. .env.example)',
-      );
+      const current = this.userStates.get(userId) ?? this.getDefaultState();
+      this.userStates.set(userId, {
+        ...current,
+        isReady: false,
+        needsReauth: true,
+        qrCode: null,
+        lastError: 'GREEN_API_TOKEN_INSTANCE не задан. Добавьте токен в .env',
+      });
+      return;
     }
     // Logout для получения нового QR (игнорируем ошибки — инстанс может быть уже не авторизован)
     try {
@@ -273,7 +279,19 @@ export class WhatsAppService implements OnModuleInit {
       );
     }
     await this.delay(3000);
-    await this.refreshState(userId);
+    try {
+      await this.refreshState(userId);
+    } catch (e: any) {
+      this.logger.warn(`Reconnect refreshState: ${e?.message || e}`);
+      const current = this.userStates.get(userId) ?? this.getDefaultState();
+      this.userStates.set(userId, {
+        ...current,
+        isReady: false,
+        needsReauth: true,
+        lastError: e?.message || 'Ошибка обновления статуса',
+      });
+      await this.tryRefreshQr(userId);
+    }
   }
 
   async destroy() {
