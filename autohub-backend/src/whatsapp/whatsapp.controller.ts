@@ -192,7 +192,7 @@ export class WhatsAppController {
   }
 
   /**
-   * Принудительное переподключение WhatsApp
+   * Принудительное переподключение WhatsApp (logout + получение нового QR)
    */
   @Post('reconnect')
   @Roles(UserRole.OWNER, UserRole.MANAGER)
@@ -201,10 +201,12 @@ export class WhatsAppController {
     
     try {
       await this.whatsappService.reconnect(userId);
+      const qrCode = this.whatsappService.getQRCode(userId);
       
       return {
         success: true,
-        message: 'WhatsApp переподключен',
+        message: qrCode ? 'Отсканируйте QR код' : 'WhatsApp переподключен',
+        qrCode: qrCode || null,
       };
     } catch (error) {
       throw new HttpException(

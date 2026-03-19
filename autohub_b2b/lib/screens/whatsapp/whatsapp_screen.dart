@@ -162,20 +162,33 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
         ),
       );
 
-      await dio.post('/api/whatsapp/reconnect');
+      final response = await dio.post('/api/whatsapp/reconnect');
       
       if (mounted) {
         Navigator.pop(context); // Закрываем диалог прогресса
         
+        final qrFromReconnect = response.data['qrCode'];
+        setState(() {
+          qrCode = qrFromReconnect;
+          isWhatsAppReady = false;
+        });
+        
+        if (qrFromReconnect != null) {
+          _showQRDialog(qrCodeOverride: qrFromReconnect);
+        } else {
+          await _checkWhatsAppStatus();
+        }
+        
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('WhatsApp переподключен'),
+          SnackBar(
+            content: Text(
+              qrFromReconnect != null
+                  ? 'Отсканируйте QR код для авторизации'
+                  : 'WhatsApp переподключен',
+            ),
             backgroundColor: Colors.green,
           ),
         );
-        
-        // Обновляем статус
-        await _checkWhatsAppStatus();
       }
     } catch (e) {
       if (mounted) {
@@ -982,10 +995,10 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
     );
   }
 
-  void _showQRDialog() {
+  void _showQRDialog({String? qrCodeOverride}) {
     final isMobile = MediaQuery.of(context).size.width < 768;
     final qrWidget = _WhatsAppQRDialog(
-      qrCode: qrCode,
+      qrCode: qrCodeOverride ?? qrCode,
       onRefresh: _refreshQr,
       onCheckStatus: () {
         Navigator.pop(context);

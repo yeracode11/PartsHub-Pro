@@ -259,7 +259,12 @@ export class WhatsAppService implements OnModuleInit {
   }
 
   async reconnect(userId: string): Promise<void> {
-    await this.greenApiPost('reboot');
+    // Сначала logout, чтобы получить новый QR для сканирования
+    try {
+      await this.greenApiPost('logout');
+    } catch (e) {
+      this.logger.warn(`⚠️ Green API logout before reconnect: ${e.message}`);
+    }
     await this.delay(2000);
     await this.refreshState(userId);
   }
