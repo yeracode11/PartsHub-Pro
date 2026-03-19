@@ -208,10 +208,15 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
           );
         } else {
           await _checkWhatsAppStatus();
-          final displayMsg = (response.statusCode == 500 &&
-                  (msg.isEmpty || msg.toLowerCase().contains('internal server')))
-              ? 'Ошибка сервера. Проверьте логи бэкенда (pm2 logs) и настройки Green API в .env'
-              : (msg.isNotEmpty ? msg : 'Ошибка переподключения');
+          String displayMsg;
+          if (response.statusCode == 404) {
+            displayMsg = 'Маршрут не найден (404). Проверьте API_BASE_URL и что бэкенд запущен на правильном порту.';
+          } else if (response.statusCode == 500 &&
+              (msg.isEmpty || msg.toLowerCase().contains('internal server'))) {
+            displayMsg = 'Ошибка сервера. Проверьте логи бэкенда (pm2 logs) и настройки Green API в .env';
+          } else {
+            displayMsg = msg.isNotEmpty ? msg : 'Ошибка переподключения';
+          }
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(displayMsg),
@@ -580,6 +585,7 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
                 onPressed: _checkAuthorizationStatusWithMessage,
                 icon: const Icon(Icons.verified_user_outlined),
                 label: const Text('Проверить статус авторизации'),
+                tooltip: 'Обновить статус и показать SnackBar (готов/требуется авторизация)',
               ),
               const SizedBox(width: 8),
               if (!isWhatsAppReady)

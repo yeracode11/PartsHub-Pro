@@ -253,7 +253,8 @@ export class WhatsAppService implements OnModuleInit {
 
   async logout(userId: string): Promise<void> {
     try {
-      await this.greenApiPost('logout');
+      // Green API: Logout — GET, не POST (см. https://green-api.com/docs/api/account/Logout/)
+      await this.greenApiGet('logout');
     } catch (e) {
       this.logger.warn(`⚠️ Green API logout warning: ${e.message}`);
     }
@@ -276,9 +277,9 @@ export class WhatsAppService implements OnModuleInit {
       });
       return;
     }
-    // Logout для получения нового QR (игнорируем ошибки — инстанс может быть уже не авторизован)
+    // Green API: Logout — GET (см. docs). Нужен перед получением QR, если инстанс авторизован.
     try {
-      await this.greenApiPost('logout');
+      await this.greenApiGet('logout');
     } catch (e: any) {
       this.logger.warn(
         `⚠️ Green API logout (игнорируем): ${e?.message || e?.response?.data?.message || String(e)}`,
@@ -365,10 +366,22 @@ export class WhatsAppService implements OnModuleInit {
       return;
     }
 
-    // 1. API метод qr — GET https://7105.api.greenapi.com/waInstance{id}/qr/{token}
-    //    Возвращает JSON с type:'qrCode', message: base64. Работает когда инстанс не авторизован.
+    // 1. API метод qr — GET {{apiUrl}}/waInstance{id}/qr/{token}
+    //    Документация: https://green-api.com/docs/api/account/QR/
     try {
-      const qrResponse = await this.greenApiGet('qr');
+      let qrResponse = await this.greenApiGet('qr');
+      const type = String(qrResponse?.type || '').toLowerCase();
+
+      // alreadyLogged — инстанс авторизован, нужен Logout перед QR
+      if (type === 'alreadylogged') {
+        this.logger.warn('QR: инстанс авторизован, выполняем Logout...');
+        try {
+          await this.greenApiGet('logout');
+          await this.delay(3000);
+          qrResponse = await this.greenApiGet('qr');
+        } catch (_) {}
+      }
+
       let qrCode: string | null = null;
       if (qrResponse?.type === 'qrCode' && qrResponse?.message) {
         qrCode = qrResponse.message.startsWith('data:')
@@ -376,7 +389,7 @@ export class WhatsAppService implements OnModuleInit {
           : `data:image/png;base64,${qrResponse.message}`;
       } else if (qrResponse?.qrCode) {
         qrCode = qrResponse.qrCode;
-      } else if (qrResponse?.message) {
+      } else if (qrResponse?.message && qrResponse?.type === 'qrCode') {
         qrCode = qrResponse.message.startsWith('data:')
           ? qrResponse.message
           : `data:image/png;base64,${qrResponse.message}`;
@@ -387,7 +400,7 @@ export class WhatsAppService implements OnModuleInit {
         return;
       }
     } catch (_) {
-      // API вернул ошибку (404 если инстанс авторизован — нужен Logout)
+      // API вернул ошибку
     }
 
     // 2. qrUrl для браузера — всегда доступна. API возвращает QR только когда инстанс не авторизован.

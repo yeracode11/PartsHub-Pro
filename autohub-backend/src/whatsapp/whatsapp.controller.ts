@@ -224,7 +224,8 @@ export class WhatsAppController {
 
   /**
    * Принудительное переподключение WhatsApp (logout + получение нового QR).
-   * Всегда возвращает 200 с success/message/qrCode — без 500.
+   * POST /api/whatsapp/reconnect
+   * Всегда возвращает 200 с success/message/qrCode/qrUrl — без 500.
    */
   @Post('reconnect')
   @Roles(UserRole.OWNER, UserRole.MANAGER)
