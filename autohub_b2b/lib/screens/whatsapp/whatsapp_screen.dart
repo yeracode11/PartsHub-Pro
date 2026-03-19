@@ -193,13 +193,21 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
     } catch (e) {
       if (mounted) {
         Navigator.pop(context); // Закрываем диалог прогресса
-        
+
+        final errMsg = e.toString().contains('GREEN_API_TOKEN')
+            ? 'Токен Green API не настроен. Добавьте GREEN_API_TOKEN_INSTANCE в .env'
+            : 'Ошибка переподключения: ${e.toString().split('\n').first}';
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Ошибка переподключения: $e'),
+            content: Text(errMsg),
             backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
           ),
         );
+
+        // Пробуем обновить статус (QR может быть доступен)
+        _checkWhatsAppStatus();
       }
     }
   }

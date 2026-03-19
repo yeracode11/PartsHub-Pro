@@ -259,13 +259,20 @@ export class WhatsAppService implements OnModuleInit {
   }
 
   async reconnect(userId: string): Promise<void> {
-    // Сначала logout, чтобы получить новый QR для сканирования
+    if (!this.apiTokenInstance) {
+      throw new Error(
+        'GREEN_API_TOKEN_INSTANCE не задан. Добавьте токен в .env (см. .env.example)',
+      );
+    }
+    // Logout для получения нового QR (игнорируем ошибки — инстанс может быть уже не авторизован)
     try {
       await this.greenApiPost('logout');
-    } catch (e) {
-      this.logger.warn(`⚠️ Green API logout before reconnect: ${e.message}`);
+    } catch (e: any) {
+      this.logger.warn(
+        `⚠️ Green API logout (игнорируем): ${e?.message || e?.response?.data?.message || String(e)}`,
+      );
     }
-    await this.delay(2000);
+    await this.delay(3000);
     await this.refreshState(userId);
   }
 
@@ -299,6 +306,12 @@ export class WhatsAppService implements OnModuleInit {
         needsReauth: true,
         lastError: message,
       });
+      // При ошибке getStateInstance пробуем получить QR (fallback через qr.green-api.com)
+      try {
+        await this.tryRefreshQr(userId);
+      } catch (_) {
+        // Игнорируем — QR может быть недоступен
+      }
     }
   }
 

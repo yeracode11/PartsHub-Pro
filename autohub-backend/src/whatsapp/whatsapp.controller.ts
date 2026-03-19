@@ -198,20 +198,24 @@ export class WhatsAppController {
   @Roles(UserRole.OWNER, UserRole.MANAGER)
   async reconnect(@CurrentUser() user: any) {
     const userId = user.userId || user.id;
-    
+
     try {
       await this.whatsappService.reconnect(userId);
       const qrCode = this.whatsappService.getQRCode(userId);
-      
+
       return {
         success: true,
         message: qrCode ? 'Отсканируйте QR код' : 'WhatsApp переподключен',
         qrCode: qrCode || null,
       };
-    } catch (error) {
+    } catch (error: any) {
+      const msg = error?.message || 'Ошибка переподключения';
+      this.logger.error(`Reconnect failed: ${msg}`, error?.stack);
+
+      const isConfigError = msg.includes('GREEN_API_TOKEN') || msg.includes('не задан');
       throw new HttpException(
-        error.message || 'Ошибка переподключения',
-        HttpStatus.INTERNAL_SERVER_ERROR,
+        msg,
+        isConfigError ? HttpStatus.BAD_REQUEST : HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
   }
