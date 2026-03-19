@@ -365,24 +365,8 @@ export class WhatsAppService implements OnModuleInit {
       return;
     }
 
-    // 1. Сначала пробуем qr.green-api.com — надёжный источник QR
-    const qrImageUrl = `https://qr.green-api.com/waInstance${this.idInstance}/${this.apiTokenInstance}`;
-    try {
-      const imgResponse = await axios.get(qrImageUrl, {
-        responseType: 'arraybuffer',
-        timeout: 15000,
-      });
-      if (imgResponse.data && imgResponse.data.length > 0) {
-        const base64 = Buffer.from(imgResponse.data).toString('base64');
-        const qrCode = `data:image/png;base64,${base64}`;
-        this.userStates.set(userId, { ...current, qrCode });
-        return;
-      }
-    } catch (_) {
-      // Продолжаем к API
-    }
-
-    // 2. Fallback: API метод qr
+    // 1. API метод qr — GET https://7105.api.greenapi.com/waInstance{id}/qr/{token}
+    //    Возвращает JSON с type:'qrCode', message: base64. Работает когда инстанс не авторизован.
     try {
       const qrResponse = await this.greenApiGet('qr');
       let qrCode: string | null = null;
@@ -403,15 +387,16 @@ export class WhatsAppService implements OnModuleInit {
         return;
       }
     } catch (_) {
-      // Игнорируем
+      // API вернул ошибку (404 если инстанс авторизован — нужен Logout)
     }
 
+    // 2. qrUrl для браузера — всегда доступна. API возвращает QR только когда инстанс не авторизован.
     this.userStates.set(userId, {
       ...current,
       qrCode: null,
       lastError:
         current.lastError ||
-        `QR недоступен. Авторизуйте инстанс ${this.instanceName} в Green API кабинете.`,
+        `QR через API недоступен (инстанс может быть авторизован). Нажмите «Переподключить» или откройте ссылку в браузере.`,
     });
   }
 
