@@ -1,5 +1,6 @@
 import { Injectable, Logger, OnModuleInit, Inject } from '@nestjs/common';
 import axios, { AxiosError } from 'axios';
+import { GreenApiClient } from '@green-api/whatsapp-api-client-js-v2';
 import { MessageHistoryService } from './message-history.service';
 import { MessageStatus } from './entities/message-history.entity';
 import { VehiclesService } from '../vehicles/vehicles.service';
@@ -24,6 +25,23 @@ export class WhatsAppService implements OnModuleInit {
   private readonly apiTokenInstance = process.env.GREEN_API_TOKEN_INSTANCE || '';
   private readonly instanceName =
     process.env.GREEN_API_INSTANCE_NAME || this.idInstance;
+
+  /** Green API SDK client с поддержкой кастомного apiUrl (для кластера 7105) */
+  private get greenClient(): GreenApiClient {
+    const id = parseInt(String(this.idInstance), 10);
+    const client = new GreenApiClient({
+      idInstance: id,
+      apiTokenInstance: this.apiTokenInstance,
+    });
+    if (this.apiUrl) {
+      const base = this.apiUrl.replace(/\/$/, '');
+      (client as any).client = axios.create({
+        baseURL: `${base}/waInstance${this.idInstance}`,
+        timeout: 60000,
+      });
+    }
+    return client;
+  }
 
   constructor(
     @Inject(MessageHistoryService)
@@ -101,10 +119,11 @@ export class WhatsAppService implements OnModuleInit {
     const formattedPhone = this.formatPhoneNumber(phone);
     const chatId = this.toChatId(formattedPhone);
 
+    const client = this.greenClient;
     let lastError: Error | null = null;
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
-        await this.greenApiPost('sendMessage', {
+        await client.sendMessage({
           chatId,
           message,
           linkPreview: false,
@@ -243,18 +262,16 @@ export class WhatsAppService implements OnModuleInit {
     const formattedPhone = this.formatPhoneNumber(phone);
     const chatId = this.toChatId(formattedPhone);
 
-    await this.greenApiPost('sendFileByUrl', {
+    await this.greenClient.sendFileByUrl({
       chatId,
-      urlFile: mediaUrl,
-      fileName: 'media-file',
+      file: { url: mediaUrl, fileName: 'media-file' },
       caption: caption || '',
     });
   }
 
   async logout(userId: string): Promise<void> {
     try {
-      // Green API: Logout — GET, не POST (см. https://green-api.com/docs/api/account/Logout/)
-      await this.greenApiGet('logout');
+      await this.greenClient.logout();
     } catch (e) {
       this.logger.warn(`⚠️ Green API logout warning: ${e.message}`);
     }
@@ -277,9 +294,8 @@ export class WhatsAppService implements OnModuleInit {
       });
       return;
     }
-    // Green API: Logout — GET (см. docs). Нужен перед получением QR, если инстанс авторизован.
     try {
-      await this.greenApiGet('logout');
+      await this.greenClient.logout();
     } catch (e: any) {
       this.logger.warn(
         `⚠️ Green API logout (игнорируем): ${e?.message || e?.response?.data?.message || String(e)}`,
@@ -319,7 +335,7 @@ export class WhatsAppService implements OnModuleInit {
     }
 
     try {
-      const stateResponse = await this.greenApiGet('getStateInstance');
+      const stateResponse = await this.greenClient.getStateInstance();
       const state = String(stateResponse?.stateInstance || '').toLowerCase();
       const ready = state === 'authorized';
       const current = this.userStates.get(userId) ?? this.getDefaultState();
@@ -366,30 +382,22 @@ export class WhatsAppService implements OnModuleInit {
       return;
     }
 
-    // 1. API метод qr — GET {{apiUrl}}/waInstance{id}/qr/{token}
-    //    Документация: https://green-api.com/docs/api/account/QR/
     try {
-      let qrResponse = await this.greenApiGet('qr');
+      const client = this.greenClient;
+      let qrResponse = await client.getQR();
       const type = String(qrResponse?.type || '').toLowerCase();
 
-      // alreadyLogged — инстанс авторизован, нужен Logout перед QR
       if (type === 'alreadylogged') {
         this.logger.warn('QR: инстанс авторизован, выполняем Logout...');
         try {
-          await this.greenApiGet('logout');
+          await client.logout();
           await this.delay(3000);
-          qrResponse = await this.greenApiGet('qr');
+          qrResponse = await client.getQR();
         } catch (_) {}
       }
 
       let qrCode: string | null = null;
       if (qrResponse?.type === 'qrCode' && qrResponse?.message) {
-        qrCode = qrResponse.message.startsWith('data:')
-          ? qrResponse.message
-          : `data:image/png;base64,${qrResponse.message}`;
-      } else if (qrResponse?.qrCode) {
-        qrCode = qrResponse.qrCode;
-      } else if (qrResponse?.message && qrResponse?.type === 'qrCode') {
         qrCode = qrResponse.message.startsWith('data:')
           ? qrResponse.message
           : `data:image/png;base64,${qrResponse.message}`;
@@ -411,27 +419,6 @@ export class WhatsAppService implements OnModuleInit {
         current.lastError ||
         `QR через API недоступен (инстанс может быть авторизован). Нажмите «Переподключить» или откройте ссылку в браузере.`,
     });
-  }
-
-  private async greenApiPost(
-    method: string,
-    data?: Record<string, unknown>,
-  ): Promise<any> {
-    if (!this.apiTokenInstance) {
-      throw new Error('GREEN_API_TOKEN_INSTANCE is not configured');
-    }
-    const url = `${this.apiUrl}/waInstance${this.idInstance}/${method}/${this.apiTokenInstance}`;
-    const response = await axios.post(url, data || {}, { timeout: 60000 });
-    return response.data;
-  }
-
-  private async greenApiGet(method: string): Promise<any> {
-    if (!this.apiTokenInstance) {
-      throw new Error('GREEN_API_TOKEN_INSTANCE is not configured');
-    }
-    const url = `${this.apiUrl}/waInstance${this.idInstance}/${method}/${this.apiTokenInstance}`;
-    const response = await axios.get(url, { timeout: 60000 });
-    return response.data;
   }
 
   private getDefaultState(): UserState {

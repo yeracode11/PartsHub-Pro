@@ -585,7 +585,6 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
                 onPressed: _checkAuthorizationStatusWithMessage,
                 icon: const Icon(Icons.verified_user_outlined),
                 label: const Text('Проверить статус авторизации'),
-                tooltip: 'Обновить статус и показать SnackBar (готов/требуется авторизация)',
               ),
               const SizedBox(width: 8),
               if (!isWhatsAppReady)
