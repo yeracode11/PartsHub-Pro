@@ -50,13 +50,13 @@ services:
       LOKI_HOST: ${LOKI_HOST:-http://78.140.246.83:3100}
       LOKI_SERVICE_NAME: ${LOKI_SERVICE_NAME:-autohub-backend}
       LOKI_ENV: ${LOKI_ENV:-production}
-      GREEN_API_URL: ${GREEN_API_URL:-https://7105.api.greenapi.com}
+      GREEN_API_URL: ${GREEN_API_URL:-https://api.green-api.com}
       GREEN_MEDIA_URL: ${GREEN_MEDIA_URL:-https://7105.media.greenapi.com}
       GREEN_API_ID_INSTANCE: ${GREEN_API_ID_INSTANCE:-7105313983}
       GREEN_API_INSTANCE_NAME: ${GREEN_API_INSTANCE_NAME:-7105313983}
       GREEN_API_TOKEN_INSTANCE: ${GREEN_API_TOKEN_INSTANCE:-}
     ports:
-      - "${BACKEND_PORT:-3002}:3000"
+      - "${BACKEND_PORT:-3001}:3000"
     volumes:
       - ./uploads:/app/uploads
     depends_on:

@@ -18,8 +18,9 @@ export class WhatsAppService implements OnModuleInit {
   private readonly logger = new Logger(WhatsAppService.name);
   private userStates: Map<string, UserState> = new Map();
 
+  /** apiUrl из личного кабинета Green API (https://api.green-api.com или https://XXXX.api.greenapi.com) */
   private readonly apiUrl =
-    process.env.GREEN_API_URL || 'https://7105.api.greenapi.com';
+    process.env.GREEN_API_URL || 'https://api.green-api.com';
   private readonly idInstance =
     process.env.GREEN_API_ID_INSTANCE || '7105313983';
   private readonly apiTokenInstance = process.env.GREEN_API_TOKEN_INSTANCE || '';
@@ -109,17 +110,45 @@ export class WhatsAppService implements OnModuleInit {
       );
     }
 
+    const formattedPhone = this.formatPhoneNumber(phone);
+    const chatId = this.toChatId(formattedPhone);
+    const client = this.greenClient;
+
+    // Если инстанс уже авторизован — отправляем сразу (как в примерах SDK)
+    if (this.isClientReady(userId)) {
+      try {
+        await client.sendMessage({
+          chatId,
+          message,
+          linkPreview: false,
+        });
+        return;
+      } catch (error) {
+        const msg = String((error as Error).message || '').toLowerCase();
+        if (
+          msg.includes('401') ||
+          msg.includes('404') ||
+          msg.includes('unauthorized') ||
+          msg.includes('not authorized') ||
+          msg.includes('not logged')
+        ) {
+          this.setReadyState(userId, false, {
+            needsReauth: true,
+            lastError: 'Инстанс Green API не авторизован или неверный URL.',
+          });
+        }
+        throw error;
+      }
+    }
+
+    // Иначе проверяем статус и при необходимости показываем QR
     await this.refreshState(userId);
     if (!this.isClientReady(userId)) {
       throw new Error(
-        'WhatsApp не готов в Green API. Выполните авторизацию инстанса.',
+        'WhatsApp не готов в Green API. Выполните авторизацию инстанса (отсканируйте QR в личном кабинете или по ссылке).',
       );
     }
 
-    const formattedPhone = this.formatPhoneNumber(phone);
-    const chatId = this.toChatId(formattedPhone);
-
-    const client = this.greenClient;
     let lastError: Error | null = null;
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
@@ -294,27 +323,48 @@ export class WhatsAppService implements OnModuleInit {
       });
       return;
     }
+
+    const current = this.userStates.get(userId) ?? this.getDefaultState();
+    const client = this.greenClient;
+
+    // 1. Проверяем состояние инстанса (если 404 — неверный GREEN_API_URL)
+    let state: string | null = null;
     try {
-      await this.greenClient.logout();
+      const stateRes = await client.getStateInstance();
+      state = String(stateRes?.stateInstance || '').toLowerCase();
     } catch (e: any) {
-      this.logger.warn(
-        `⚠️ Green API logout (игнорируем): ${e?.message || e?.response?.data?.message || String(e)}`,
-      );
+      const errMsg = e?.message || String(e);
+      const status = e?.response?.status ?? (e?.cause as any)?.response?.status;
+      const is404 =
+        String(errMsg).includes('404') || status === 404;
+      if (is404) {
+        this.userStates.set(userId, {
+          ...current,
+          isReady: false,
+          needsReauth: true,
+          qrCode: null,
+          lastError: `Green API вернул 404. Проверьте GREEN_API_URL в .env — он должен совпадать с apiUrl из личного кабинета (https://console.green-api.com). Для кластера 7105: https://7105.api.greenapi.com`,
+        });
+        return;
+      }
+      this.logger.warn(`Reconnect getStateInstance: ${errMsg}`);
     }
-    await this.delay(3000);
+
+    // 2. Если авторизован — делаем logout, затем получаем QR
+    if (state === 'authorized') {
+      try {
+        await client.logout();
+        await this.delay(3000);
+      } catch (e: any) {
+        this.logger.warn(`Reconnect logout (игнорируем): ${e?.message || e}`);
+      }
+    }
+
+    // 3. Обновляем статус и получаем QR
     try {
       await this.refreshState(userId);
-    } catch (e: any) {
-      this.logger.warn(`Reconnect refreshState: ${e?.message || e}`);
-      const current = this.userStates.get(userId) ?? this.getDefaultState();
-      this.userStates.set(userId, {
-        ...current,
-        isReady: false,
-        needsReauth: true,
-        lastError: e?.message || 'Ошибка обновления статуса',
-      });
-      await this.tryRefreshQr(userId);
-    }
+    } catch (_) {}
+    await this.tryRefreshQr(userId);
   }
 
   async destroy() {
