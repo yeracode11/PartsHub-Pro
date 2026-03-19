@@ -1,5 +1,5 @@
 import { Logger, Module } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
@@ -19,6 +19,7 @@ import { B2CModule } from './b2c/b2c.module';
 import { AutoDataModule } from './auto-data/auto-data.module';
 import { IncomingModule } from './incoming/incoming.module';
 import { WarehousesModule } from './warehouses/warehouses.module';
+import { WhatsAppExceptionFilter } from './whatsapp/whatsapp-exception.filter';
 
 const logger = new Logger('AppModule');
 
@@ -100,6 +101,12 @@ const logger = new Logger('AppModule');
     WarehousesModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_FILTER,
+      useClass: WhatsAppExceptionFilter,
+    },
+  ],
 })
 export class AppModule {}
