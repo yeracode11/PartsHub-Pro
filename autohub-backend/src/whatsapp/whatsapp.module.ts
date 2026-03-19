@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { WhatsAppController } from './whatsapp.controller';
 import { WhatsAppService } from './whatsapp.service';
+import { WhatsAppExceptionFilter } from './whatsapp-exception.filter';
 import { TemplatesController } from './templates.controller';
 import { TemplatesService } from './templates.service';
 import { MessageHistoryController } from './message-history.controller';
@@ -20,7 +21,7 @@ import { VehiclesModule } from '../vehicles/vehicles.module';
     TemplatesController,
     MessageHistoryController,
   ],
-  providers: [WhatsAppService, TemplatesService, MessageHistoryService],
+  providers: [WhatsAppService, TemplatesService, MessageHistoryService, WhatsAppExceptionFilter],
   exports: [WhatsAppService, TemplatesService, MessageHistoryService],
 })
 export class WhatsAppModule {}
