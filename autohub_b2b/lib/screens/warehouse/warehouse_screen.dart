@@ -17,6 +17,7 @@ import 'package:autohub_b2b/widgets/unauthorized_placeholder.dart';
 import 'package:autohub_b2b/repositories/items_repository.dart';
 import 'package:autohub_b2b/services/service_locator.dart';
 import 'package:autohub_b2b/utils/dialog_helper.dart';
+import 'package:autohub_b2b/utils/auth_guard.dart';
 
 class WarehouseScreen extends StatefulWidget {
   const WarehouseScreen({super.key});
@@ -202,6 +203,8 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
   }
 
   Future<void> _importFromExcel() async {
+    if (!await ensureAuthenticated(context)) return;
+    if (!context.mounted) return;
     FilePickerResult? result;
     try {
       result = await FilePicker.platform.pickFiles(
@@ -1353,7 +1356,9 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
     );
   }
 
-  void _showItemDialog(BuildContext context, {ItemModel? item}) {
+  Future<void> _showItemDialog(BuildContext context, {ItemModel? item}) async {
+    if (!await ensureAuthenticated(context)) return;
+    if (!context.mounted) return;
     final isMobile = MediaQuery.of(context).size.width < 768;
     final formWidget = _ItemFormDialog(
       item: item,
@@ -1372,7 +1377,9 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
     }
   }
 
-  void _showDeleteDialog(BuildContext context, ItemModel item) {
+  Future<void> _showDeleteDialog(BuildContext context, ItemModel item) async {
+    if (!await ensureAuthenticated(context)) return;
+    if (!context.mounted) return;
     DialogHelper.showConfirm(
       context: context,
       title: 'Удалить товар?',
@@ -1394,6 +1401,8 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
 
   /// Печать этикетки для товара
   Future<void> _printLabel(BuildContext context, ItemModel item) async {
+    if (!await ensureAuthenticated(context)) return;
+    if (!context.mounted) return;
     // Показываем диалог выбора количества этикеток
     int quantity = 1;
     final confirmed = await showDialog<bool>(
@@ -1536,6 +1545,8 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
 
   /// Массовая печать этикеток для выбранных товаров
   Future<void> _printSelectedLabels(BuildContext context) async {
+    if (!await ensureAuthenticated(context)) return;
+    if (!context.mounted) return;
     if (selectedItemIds.isEmpty) return;
 
     // Получаем выбранные товары
@@ -1686,6 +1697,8 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
   }
 
   Future<void> _editItem(BuildContext context, ItemModel item) async {
+    if (!await ensureAuthenticated(context)) return;
+    if (!context.mounted) return;
     final result = await Navigator.of(context).push<ItemModel>(
       MaterialPageRoute(
         builder: (context) => ItemEditScreen(item: item),

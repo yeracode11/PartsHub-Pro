@@ -71,6 +71,7 @@ dependencies:
   excel: ^4.0.6
   file_picker: ^10.3.10
   url_launcher: ^6.3.1
+  package_info_plus: ^9.0.0
 
 dev_dependencies:
   flutter_test:
@@ -81,8 +82,8 @@ dev_dependencies:
   drift_dev: ^2.20.3
   build_runner: ^2.4.13
   
-  # Icon generation
-  flutter_launcher_icons: ^0.13.1
+  # Icon generation (0.14+ — adaptive_icon_foreground_inset для размера на Android)
+  flutter_launcher_icons: ^0.14.4
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -127,11 +128,15 @@ flutter:
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
 
-# Icon configuration (optional - for automatic icon generation)
-# flutter_launcher_icons:
-#   android: false
-#   ios: false
-#   windows:
-#     generate: true
-#     image_path: "assets/icon/app_icon.png"
-#     icon_size: 256
+# Иконки для магазинов и сборок: исходник — логотип auto+
+# Сгенерировать: dart run flutter_launcher_icons
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icons/auto-plus-logo.png"
+  # Android 8+ adaptive icon: белый фон + тот же логотип
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/icons/auto-plus-logo.png"
+  # Меньше % = меньше «полей» вокруг графики = крупнее логотип на лаунчере (по умолчанию 16)
+  adaptive_icon_foreground_inset: 8
+  remove_alpha_ios: true

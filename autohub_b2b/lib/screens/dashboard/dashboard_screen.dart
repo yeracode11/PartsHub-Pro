@@ -377,11 +377,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
               if (!isMobile)
                 Row(
                   children: [
-                    _buildPeriodButton('7д', state.currentPeriod == '7d'),
+                    _buildPeriodButton(context, '7д', '7d', state.currentPeriod == '7d'),
                     const SizedBox(width: 8),
-                    _buildPeriodButton('30д', state.currentPeriod == '30d'),
+                    _buildPeriodButton(context, '30д', '30d', state.currentPeriod == '30d'),
                     const SizedBox(width: 8),
-                    _buildPeriodButton('90д', state.currentPeriod == '90d'),
+                    _buildPeriodButton(context, '90д', '90d', state.currentPeriod == '90d'),
                   ],
                 ),
             ],
@@ -390,11 +390,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
             const SizedBox(height: 12),
             Row(
               children: [
-                Expanded(child: _buildPeriodButton('7д', state.currentPeriod == '7d')),
+                Expanded(
+                  child: _buildPeriodButton(context, '7д', '7d', state.currentPeriod == '7d'),
+                ),
                 const SizedBox(width: 8),
-                Expanded(child: _buildPeriodButton('30д', state.currentPeriod == '30d')),
+                Expanded(
+                  child: _buildPeriodButton(context, '30д', '30d', state.currentPeriod == '30d'),
+                ),
                 const SizedBox(width: 8),
-                Expanded(child: _buildPeriodButton('90д', state.currentPeriod == '90d')),
+                Expanded(
+                  child: _buildPeriodButton(context, '90д', '90d', state.currentPeriod == '90d'),
+                ),
               ],
             ),
           ],
@@ -491,30 +497,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildPeriodButton(String label, bool isSelected) {
-    return GestureDetector(
-      onTap: () {
-        String period = '7d';
-        if (label == '30д') period = '30d';
-        if (label == '90д') period = '90d';
-        context
-            .read<DashboardBloc>()
-            .add(DashboardLoadRequested(salesPeriod: period));
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? AppTheme.primaryColor
-              : AppTheme.primaryColor.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isSelected ? Colors.white : AppTheme.primaryColor,
-            fontWeight: FontWeight.w600,
-            fontSize: 14,
+  Widget _buildPeriodButton(
+    BuildContext context,
+    String label,
+    String period,
+    bool isSelected,
+  ) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          context.read<DashboardBloc>().add(DashboardChartPeriodChanged(period));
+        },
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: isSelected
+                ? AppTheme.primaryColor
+                : AppTheme.primaryColor.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: isSelected ? Colors.white : AppTheme.primaryColor,
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+            ),
           ),
         ),
       ),

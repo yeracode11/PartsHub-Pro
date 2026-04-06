@@ -14,6 +14,7 @@ import 'package:autohub_b2b/services/api/api_client.dart';
 import 'package:autohub_b2b/repositories/orders_repository.dart';
 import 'package:autohub_b2b/services/service_locator.dart';
 import 'package:autohub_b2b/utils/dialog_helper.dart';
+import 'package:autohub_b2b/utils/auth_guard.dart';
 
 class SalesScreen extends StatefulWidget {
   const SalesScreen({super.key});
@@ -581,7 +582,9 @@ class _SalesScreenState extends State<SalesScreen> {
     );
   }
 
-  void _showOrderDialog(BuildContext context, {OrderModel? order}) async {
+  Future<void> _showOrderDialog(BuildContext context, {OrderModel? order}) async {
+    if (!await ensureAuthenticated(context)) return;
+    if (!context.mounted) return;
     if (order == null) {
       // Создание нового заказа
       final isEdit = false;

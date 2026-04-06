@@ -8,6 +8,7 @@ import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/services/auth/secure_storage_service.dart';
 import 'package:autohub_b2b/screens/profile/edit_profile_screen.dart';
 import 'package:autohub_b2b/screens/legal/privacy_policy_screen.dart';
+import 'package:autohub_b2b/screens/settings/settings_screen.dart';
 import 'package:autohub_b2b/screens/legal/terms_of_use_screen.dart';
 import 'package:autohub_b2b/utils/dialog_helper.dart';
 
@@ -237,7 +238,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   leading: const Icon(Icons.settings),
                   title: const Text('Настройки'),
                   trailing: const Icon(Icons.chevron_right),
-                  onTap: () {},
+                  onTap: () {
+                    Navigator.of(context).push<void>(
+                      MaterialPageRoute<void>(
+                        builder: (context) => const SettingsScreen(),
+                      ),
+                    );
+                  },
                 ),
               ],
             ),

@@ -8,6 +8,8 @@ import 'package:dio/dio.dart';
 import 'package:intl/intl.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:autohub_b2b/utils/auth_guard.dart';
+import 'package:autohub_b2b/screens/whatsapp/whatsapp_templates_tab.dart';
 
 class WhatsAppScreen extends StatefulWidget {
   const WhatsAppScreen({super.key});
@@ -158,6 +160,8 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
   }
 
   Future<void> _reconnectWhatsApp() async {
+    if (!await ensureAuthenticated(context)) return;
+    if (!context.mounted) return;
     try {
       // Показываем диалог прогресса
       showDialog(
@@ -254,6 +258,8 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
   }
 
   Future<void> _logoutWhatsApp() async {
+    if (!await ensureAuthenticated(context)) return;
+    if (!context.mounted) return;
     // Подтверждение выхода
     final confirmed = await showDialog<bool>(
       context: context,
@@ -423,6 +429,8 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
   }
 
   Future<void> _createDefaultTemplates() async {
+    if (!await ensureAuthenticated(context)) return;
+    if (!context.mounted) return;
     try {
       await dio.post('/api/whatsapp/templates/create-defaults');
       await _loadTemplates();
@@ -448,6 +456,8 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
   }
 
   Future<void> _sendBulkMessages(String template) async {
+    if (!await ensureAuthenticated(context)) return;
+    if (!context.mounted) return;
     if (selectedCustomers.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -526,6 +536,8 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
     }
   }
 
+  bool get _isMobile => MediaQuery.of(context).size.width < 768;
+
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
@@ -547,367 +559,412 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
       color: AppTheme.backgroundColor,
       child: Column(
         children: [
-          // Заголовок и статус
+          // Заголовок и статус — адаптивно
           Padding(
-          padding: const EdgeInsets.all(24),
-          child: Row(
-            children: [
-              const Icon(
-                Icons.chat_bubble_outline,
-                color: Color(0xFF25D366),
-                size: 32,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'WhatsApp Рассылка',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Container(
-                          width: 8,
-                          height: 8,
-                          decoration: BoxDecoration(
-                            color: isWhatsAppReady
-                                ? Colors.green
-                                : Colors.orange,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          statusMessage ?? 'Загрузка...',
-                          style: TextStyle(
-                            color: AppTheme.textSecondary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              if (!isWhatsAppReady && (qrCode != null || qrUrl != null))
-                ElevatedButton.icon(
-                  onPressed: () => _showQRDialog(),
-                  icon: const Icon(Icons.qr_code),
-                  label: const Text('Авторизация'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF25D366),
-                    foregroundColor: Colors.white,
-                  ),
-                ),
-              const SizedBox(width: 8),
-              OutlinedButton.icon(
-                onPressed: _checkAuthorizationStatusWithMessage,
-                icon: const Icon(Icons.verified_user_outlined),
-                label: const Text('Проверить статус авторизации'),
-              ),
-              const SizedBox(width: 8),
-              if (!isWhatsAppReady)
-                ElevatedButton.icon(
-                  onPressed: _reconnectWhatsApp,
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Переподключить'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.orange,
-                    foregroundColor: Colors.white,
-                  ),
-                ),
-              if (isWhatsAppReady)
-                ElevatedButton.icon(
-                  onPressed: _logoutWhatsApp,
-                  icon: const Icon(Icons.logout),
-                  label: const Text('Выйти'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                    foregroundColor: Colors.white,
-                  ),
-                ),
-              const SizedBox(width: 12),
-              IconButton(
-                icon: const Icon(Icons.refresh),
-                onPressed: _loadInitialData,
-                tooltip: 'Обновить',
-              ),
-            ],
+            padding: EdgeInsets.all(_isMobile ? 12 : 24),
+            child: _isMobile ? _buildHeaderMobile() : _buildHeaderDesktop(),
           ),
-        ),
 
-        // Табы
-        TabBar(
-          controller: _tabController,
-          tabs: const [
-            Tab(icon: Icon(Icons.send), text: 'Рассылка'),
-            Tab(icon: Icon(Icons.text_snippet), text: 'Шаблоны'),
-            Tab(icon: Icon(Icons.history), text: 'История'),
-          ],
-        ),
-
-        // Контент
-        Expanded(
-          child: TabBarView(
+          // Табы — на мобилке скроллируемые
+          TabBar(
             controller: _tabController,
-            children: [
-              _buildSendTab(),
-              _buildTemplatesTab(),
-              _buildHistoryTab(),
+            isScrollable: _isMobile,
+            labelStyle: TextStyle(fontSize: _isMobile ? 12 : 14),
+            tabs: const [
+              Tab(icon: Icon(Icons.send), text: 'Рассылка'),
+              Tab(icon: Icon(Icons.text_snippet), text: 'Шаблоны'),
+              Tab(icon: Icon(Icons.history), text: 'История'),
             ],
           ),
-        ),
+
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                _buildSendTab(),
+                _buildTemplatesTab(),
+                _buildHistoryTab(),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildSendTab() {
+  Widget _buildHeaderDesktop() {
     return Row(
       children: [
-        // Список клиентов
+        const Icon(Icons.chat_bubble_outline, color: Color(0xFF25D366), size: 32),
+        const SizedBox(width: 12),
         Expanded(
-          flex: 2,
-          child: Card(
-            margin: const EdgeInsets.all(16),
-            elevation: 4,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Получатели (${selectedCustomers.length} выбрано)',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      Row(
-                        children: [
-                          TextButton(
-                            onPressed: () {
-                              setState(() {
-                                selectedCustomers = customers
-                                    .map<int>((c) => c['id'] as int)
-                                    .toSet();
-                              });
-                            },
-                            child: const Text('Выбрать все'),
-                          ),
-                          TextButton(
-                            onPressed: () {
-                              setState(() {
-                                selectedCustomers.clear();
-                              });
-                            },
-                            child: const Text('Снять все'),
-                          ),
-                        ],
-                      ),
-                    ],
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('WhatsApp Рассылка', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: isWhatsAppReady ? Colors.green : Colors.orange,
+                      shape: BoxShape.circle,
+                    ),
                   ),
-                ),
-                const Divider(height: 1),
-                Expanded(
-                  child: customers.isEmpty
-                      ? Center(
-                          child: Text(
-                            'Нет клиентов',
-                            style: TextStyle(color: AppTheme.textSecondary),
-                          ),
-                        )
-                      : ListView.builder(
-                          itemCount: customers.length,
-                          itemBuilder: (context, index) {
-                            final customer = customers[index];
-                            final isSelected =
-                                selectedCustomers.contains(customer['id']);
-
-                            return CheckboxListTile(
-                              value: isSelected,
-                              onChanged: (value) {
-                                setState(() {
-                                  if (value == true) {
-                                    selectedCustomers.add(customer['id']);
-                                  } else {
-                                    selectedCustomers.remove(customer['id']);
-                                  }
-                                });
-                              },
-                              title: Text(customer['name']),
-                              subtitle: Text(customer['phone'] ?? 'Нет телефона'),
-                              secondary: CircleAvatar(
-                                backgroundColor:
-                                    AppTheme.primaryColor.withOpacity(0.1),
-                                child: const Icon(
-                                  Icons.person,
-                                  color: AppTheme.primaryColor,
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                ),
-              ],
-            ),
+                  const SizedBox(width: 8),
+                  Text(statusMessage ?? 'Загрузка...', style: TextStyle(color: AppTheme.textSecondary)),
+                ],
+              ),
+            ],
           ),
         ),
+        if (!isWhatsAppReady && (qrCode != null || qrUrl != null))
+          ElevatedButton.icon(
+            onPressed: () => _showQRDialog(),
+            icon: const Icon(Icons.qr_code),
+            label: const Text('Авторизация'),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF25D366), foregroundColor: Colors.white),
+          ),
+        const SizedBox(width: 8),
+        OutlinedButton.icon(
+          onPressed: _checkAuthorizationStatusWithMessage,
+          icon: const Icon(Icons.verified_user_outlined),
+          label: const Text('Проверить статус'),
+        ),
+        const SizedBox(width: 8),
+        if (!isWhatsAppReady)
+          ElevatedButton.icon(
+            onPressed: _reconnectWhatsApp,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Переподключить'),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, foregroundColor: Colors.white),
+          ),
+        if (isWhatsAppReady)
+          ElevatedButton.icon(
+            onPressed: _logoutWhatsApp,
+            icon: const Icon(Icons.logout),
+            label: const Text('Выйти'),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+          ),
+        const SizedBox(width: 8),
+        IconButton(icon: const Icon(Icons.refresh), onPressed: _loadInitialData, tooltip: 'Обновить'),
+      ],
+    );
+  }
 
-        // Выбор шаблона и отправка
-        Expanded(
-          flex: 1,
-          child: Card(
-            margin: const EdgeInsets.all(16),
-            elevation: 4,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(24),
+  Widget _buildHeaderMobile() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.chat_bubble_outline, color: Color(0xFF25D366), size: 28),
+            const SizedBox(width: 8),
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Шаблоны сообщений',
-                    style: Theme.of(context).textTheme.titleLarge,
+                  const Text('WhatsApp', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  Row(
+                    children: [
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          color: isWhatsAppReady ? Colors.green : Colors.orange,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          statusMessage ?? 'Загрузка...',
+                          style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 16),
-                  if (templates.isEmpty)
-                    Center(
-                      child: Column(
-                        children: [
-                          const SizedBox(height: 40),
-                          const Icon(
-                            Icons.text_snippet_outlined,
-                            size: 64,
-                            color: Colors.grey,
-                          ),
-                          const SizedBox(height: 16),
-                          const Text('Нет шаблонов'),
-                          const SizedBox(height: 16),
-                          ElevatedButton(
-                            onPressed: _createDefaultTemplates,
-                            child: const Text('Создать шаблоны'),
-                          ),
-                        ],
-                      ),
-                    )
-                  else
-                    Expanded(
-                      child: ListView.builder(
-                        itemCount: templates.length,
-                        itemBuilder: (context, index) {
-                          final template = templates[index];
-                          final canSend = isWhatsAppReady && selectedCustomers.isNotEmpty;
-
-                          return Card(
-                            margin: const EdgeInsets.only(bottom: 12),
-                            child: ListTile(
-                              title: Text(template['name']),
-                              subtitle: Text(
-                                template['content'],
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              trailing: SizedBox(
-                                width: 120,
-                                child: ElevatedButton(
-                                  onPressed: canSend
-                                      ? () {
-                                          _sendBulkMessages(template['content']);
-                                        }
-                                      : null,
-                                  child: Text(
-                                    !isWhatsAppReady 
-                                      ? 'WA не готов' 
-                                      : selectedCustomers.isEmpty 
-                                        ? 'Выберите' 
-                                        : 'Отправить',
-                                    style: const TextStyle(fontSize: 12),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
                 ],
               ),
             ),
-          ),
+            IconButton(icon: const Icon(Icons.refresh), onPressed: _loadInitialData, iconSize: 20),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            if (!isWhatsAppReady && (qrCode != null || qrUrl != null))
+              FilledButton.icon(
+                onPressed: () => _showQRDialog(),
+                icon: const Icon(Icons.qr_code, size: 18),
+                label: const Text('Авторизация'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF25D366),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+              ),
+            OutlinedButton.icon(
+              onPressed: _checkAuthorizationStatusWithMessage,
+              icon: const Icon(Icons.verified_user_outlined, size: 18),
+              label: const Text('Статус'),
+              style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8)),
+            ),
+            if (!isWhatsAppReady)
+              FilledButton.icon(
+                onPressed: _reconnectWhatsApp,
+                icon: const Icon(Icons.refresh, size: 18),
+                label: const Text('Переподключить'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: Colors.orange,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+              ),
+            if (isWhatsAppReady)
+              FilledButton.icon(
+                onPressed: _logoutWhatsApp,
+                icon: const Icon(Icons.logout, size: 18),
+                label: const Text('Выйти'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+              ),
+          ],
         ),
       ],
     );
   }
 
-  Widget _buildTemplatesTab() {
-    return Center(
+  Widget _buildSendTab() {
+    final margin = _isMobile ? 8.0 : 16.0;
+    final padding = _isMobile ? 12.0 : 24.0;
+
+    final recipientsList = customers.isEmpty
+        ? Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                'Нет клиентов',
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: _isMobile ? 14 : 16),
+              ),
+            ),
+          )
+        : ListView.builder(
+            shrinkWrap: _isMobile,
+            physics: _isMobile ? const AlwaysScrollableScrollPhysics() : null,
+            itemCount: customers.length,
+            itemBuilder: (context, index) {
+              final customer = customers[index];
+              final isSelected = selectedCustomers.contains(customer['id']);
+              return CheckboxListTile(
+                value: isSelected,
+                onChanged: (value) {
+                  setState(() {
+                    if (value == true) {
+                      selectedCustomers.add(customer['id']);
+                    } else {
+                      selectedCustomers.remove(customer['id']);
+                    }
+                  });
+                },
+                title: Text(customer['name'], overflow: TextOverflow.ellipsis),
+                subtitle: Text(customer['phone'] ?? 'Нет телефона', overflow: TextOverflow.ellipsis),
+                secondary: CircleAvatar(
+                  backgroundColor: AppTheme.primaryColor.withOpacity(0.1),
+                  child: const Icon(Icons.person, color: AppTheme.primaryColor, size: 24),
+                ),
+                dense: _isMobile,
+              );
+            },
+          );
+
+    final recipientsCard = Card(
+      margin: EdgeInsets.all(margin),
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: _isMobile ? MainAxisSize.min : MainAxisSize.max,
         children: [
-          const Icon(Icons.construction, size: 64, color: Colors.grey),
-          const SizedBox(height: 16),
-          Text(
-            'Редактор шаблонов в разработке',
-            style: TextStyle(color: AppTheme.textSecondary),
+          Padding(
+            padding: EdgeInsets.all(padding),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    'Получатели (${selectedCustomers.length})',
+                    style: Theme.of(context).textTheme.titleMedium,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextButton(
+                      onPressed: () {
+                        setState(() {
+                          selectedCustomers = customers.map<int>((c) => c['id'] as int).toSet();
+                        });
+                      },
+                      child: Text(_isMobile ? 'Все' : 'Выбрать все'),
+                    ),
+                    TextButton(
+                      onPressed: () => setState(() => selectedCustomers.clear()),
+                      child: Text(_isMobile ? 'Снять' : 'Снять все'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
+          const Divider(height: 1),
+          if (_isMobile)
+            SizedBox(height: 200, child: recipientsList)
+          else
+            Expanded(child: recipientsList),
         ],
       ),
+    );
+
+    final templatesContent = templates.isEmpty
+        ? Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 24),
+              Icon(Icons.text_snippet_outlined, size: _isMobile ? 48 : 64, color: Colors.grey),
+              const SizedBox(height: 12),
+              const Text('Нет шаблонов'),
+              const SizedBox(height: 12),
+              ElevatedButton(
+                onPressed: _createDefaultTemplates,
+                child: const Text('Создать шаблоны'),
+              ),
+            ],
+          )
+        : ListView.builder(
+            shrinkWrap: _isMobile,
+            physics: _isMobile ? const AlwaysScrollableScrollPhysics() : null,
+            itemCount: templates.length,
+            itemBuilder: (context, index) {
+              final template = templates[index];
+              final canSend = isWhatsAppReady && selectedCustomers.isNotEmpty;
+              return Card(
+                margin: const EdgeInsets.only(bottom: 8),
+                child: ListTile(
+                  title: Text(template['name'], overflow: TextOverflow.ellipsis),
+                  subtitle: Text(
+                    template['content'],
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: _isMobile ? 12 : 14),
+                  ),
+                  trailing: FilledButton(
+                    onPressed: canSend ? () => _sendBulkMessages(template['content']) : null,
+                    child: Text(
+                      !isWhatsAppReady ? '—' : selectedCustomers.isEmpty ? 'Выбрать' : 'Отправить',
+                      style: TextStyle(fontSize: _isMobile ? 11 : 12),
+                    ),
+                  ),
+                  dense: _isMobile,
+                ),
+              );
+            },
+          );
+
+    final templatesCard = Card(
+      margin: EdgeInsets.all(margin),
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: EdgeInsets.all(padding),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: _isMobile ? MainAxisSize.min : MainAxisSize.max,
+          children: [
+            Text('Шаблоны', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 12),
+            if (_isMobile && templates.isNotEmpty)
+              SizedBox(height: 200, child: templatesContent)
+            else if (!_isMobile)
+              Expanded(child: templatesContent)
+            else
+              templatesContent,
+          ],
+        ),
+      ),
+    );
+
+    if (_isMobile) {
+      return SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            recipientsCard,
+            templatesCard,
+          ],
+        ),
+      );
+    }
+
+    return Row(
+      children: [
+        Expanded(flex: 2, child: recipientsCard),
+        Expanded(flex: 1, child: templatesCard),
+      ],
+    );
+  }
+
+  Widget _buildTemplatesTab() {
+    return WhatsAppTemplatesTab(
+      dio: dio,
+      templates: templates,
+      onReload: _loadTemplates,
+      isMobile: _isMobile,
+      onCreateDefaults: _createDefaultTemplates,
     );
   }
 
   Widget _buildHistoryTab() {
     return Column(
       children: [
-        // Статистика
         if (historyStats != null)
           Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                _buildStatCard(
-                  'Всего отправлено',
-                  historyStats!['total'].toString(),
-                  Icons.send,
-                  Colors.blue,
-                ),
-                const SizedBox(width: 16),
-                _buildStatCard(
-                  'Успешно',
-                  historyStats!['sent'].toString(),
-                  Icons.check_circle,
-                  Colors.green,
-                ),
-                const SizedBox(width: 16),
-                _buildStatCard(
-                  'Ошибок',
-                  historyStats!['failed'].toString(),
-                  Icons.error,
-                  Colors.red,
-                ),
-                const SizedBox(width: 16),
-                _buildStatCard(
-                  'Успешность',
-                  '${historyStats!['successRate']}%',
-                  Icons.trending_up,
-                  Colors.orange,
-                ),
-              ],
-            ),
+            padding: EdgeInsets.all(_isMobile ? 8 : 16),
+            child: _isMobile
+                ? Row(
+                    children: [
+                      Expanded(child: _buildStatCard('Всего', historyStats!['total'].toString(), Icons.send, Colors.blue)),
+                      const SizedBox(width: 6),
+                      Expanded(child: _buildStatCard('OK', historyStats!['sent'].toString(), Icons.check_circle, Colors.green)),
+                      const SizedBox(width: 6),
+                      Expanded(child: _buildStatCard('Ошибок', historyStats!['failed'].toString(), Icons.error, Colors.red)),
+                      const SizedBox(width: 6),
+                      Expanded(child: _buildStatCard('%', '${historyStats!['successRate']}%', Icons.trending_up, Colors.orange)),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      Expanded(child: _buildStatCard('Всего отправлено', historyStats!['total'].toString(), Icons.send, Colors.blue)),
+                      const SizedBox(width: 8),
+                      Expanded(child: _buildStatCard('Успешно', historyStats!['sent'].toString(), Icons.check_circle, Colors.green)),
+                      const SizedBox(width: 8),
+                      Expanded(child: _buildStatCard('Ошибок', historyStats!['failed'].toString(), Icons.error, Colors.red)),
+                      const SizedBox(width: 8),
+                      Expanded(child: _buildStatCard('Успешность', '${historyStats!['successRate']}%', Icons.trending_up, Colors.orange)),
+                    ],
+                  ),
           ),
 
         const Divider(height: 1),
 
-        // Список истории
         Expanded(
           child: messageHistory.isEmpty
               ? Center(
@@ -924,7 +981,7 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
                   ),
                 )
               : ListView.builder(
-                  padding: const EdgeInsets.all(16),
+                  padding: EdgeInsets.all(_isMobile ? 8 : 16),
                   itemCount: messageHistory.length,
                   itemBuilder: (context, index) {
                     final message = messageHistory[index];
@@ -932,8 +989,9 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
                     final date = DateTime.parse(message['sentAt']);
 
                     return Card(
-                      margin: const EdgeInsets.only(bottom: 12),
+                      margin: EdgeInsets.only(bottom: _isMobile ? 8 : 12),
                       child: ListTile(
+                        dense: _isMobile,
                         leading: CircleAvatar(
                           backgroundColor: isSent
                               ? Colors.green.withOpacity(0.1)
@@ -1032,40 +1090,44 @@ class _WhatsAppScreenState extends State<WhatsAppScreen>
     IconData icon,
     Color color,
   ) {
-    return Expanded(
-      child: Card(
-        elevation: 2,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              Icon(icon, color: color, size: 32),
-              const SizedBox(height: 8),
-              Text(
-                value,
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: color,
-                ),
+    final compact = _isMobile;
+    return Card(
+      elevation: 2,
+      child: Padding(
+        padding: EdgeInsets.all(compact ? 8 : 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: color, size: compact ? 20 : 32),
+            SizedBox(height: compact ? 4 : 8),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: compact ? 16 : 24,
+                fontWeight: FontWeight.bold,
+                color: color,
               ),
-              const SizedBox(height: 4),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: AppTheme.textSecondary,
-                ),
-                textAlign: TextAlign.center,
+            ),
+            SizedBox(height: compact ? 2 : 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: compact ? 10 : 12,
+                color: AppTheme.textSecondary,
               ),
-            ],
-          ),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
         ),
       ),
     );
   }
 
-  void _showQRDialog({String? qrCodeOverride, String? qrUrlOverride}) {
+  Future<void> _showQRDialog({String? qrCodeOverride, String? qrUrlOverride}) async {
+    if (!await ensureAuthenticated(context)) return;
+    if (!context.mounted) return;
     final isMobile = MediaQuery.of(context).size.width < 768;
     if (isMobile) {
       // На мобилке — авторизация по коду (GetAuthorizationCode) вместо QR

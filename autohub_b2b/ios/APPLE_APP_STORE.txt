@@ -1,0 +1,38 @@
+App Store — чеклист для autohub_b2b (Auto+ Pro)
+==============================================
+
+Bundle ID (должен совпадать везде): com.autohub.autohubB2b
+
+--- 1. Подпись и Xcode (Apple Developer) ---
+[ ] Аккаунт Apple Developer Program активен.
+[ ] В developer.apple.com создан App ID с Bundle ID com.autohub.autohubB2b.
+[ ] Созданы Distribution Certificate и App Store provisioning profile (или включена Automatic Signing в Xcode).
+[ ] В Xcode открыт ios/Runner.xcworkspace → Target Runner → Signing & Capabilities:
+    Team выбран, нет ошибок подписи для Release.
+[ ] Скопирован ios/ExportOptions.plist.example → ios/ExportOptions.plist, подставлен teamID (Membership).
+
+--- 2. Firebase plist (CI и новые клоны) ---
+Реальный ios/Runner/GoogleService-Info.plist в .gitignore — в репозиторий не коммитится.
+[ ] Локально: файл есть (из Firebase Console) или скопирован из GoogleService-Info.plist.example и заполнен.
+[ ] CI: перед сборкой копируйте секрет в ios/Runner/GoogleService-Info.plist (см. scripts/ensure_ios_firebase_plist.sh).
+
+--- 3. App Store Connect ---
+[ ] Создано приложение с тем же Bundle ID.
+[ ] Заполнены: название, субтител, описание, ключевые слова, категория, контакт, URL политики конфиденциальности.
+[ ] Загружены скриншоты (обязательны для используемых размеров iPhone; при поддержке iPad — и iPad).
+[ ] Раздел App Privacy согласован с ios/Runner/PrivacyInfo.xcprivacy и фактическим поведением приложения.
+[ ] Возрастной рейтинг и экспорт шифрования (анкета) заполнены.
+
+--- 4. Сборка и проверка ---
+Из корня autohub_b2b:
+  ./scripts/ensure_ios_firebase_plist.sh
+  ./scripts/build_ios_ipa.sh
+
+Или вручную:
+  flutter build ipa --release --export-options-plist=ios/ExportOptions.plist
+
+[ ] В Xcode: Window → Organizer → выбрать архив → Validate App → Distribute App.
+
+--- 5. Версии ---
+Версия и build задаются в pubspec.yaml (строка version: X.Y.Z+build).
+Каждая новая загрузка в Connect требует больший build number.

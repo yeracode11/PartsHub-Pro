@@ -23,7 +23,6 @@ class _LoginScreenState extends State<LoginScreen> {
     return Scaffold(
       body: BlocConsumer<AuthBloc, AuthState>(
         listener: (context, state) {
-          
           if (state is AuthError) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -33,6 +32,9 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             );
           } else if (state is AuthAuthenticated) {
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            }
           }
         },
         builder: (context, state) {
@@ -43,6 +45,8 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _buildLoginForm(BuildContext context, AuthState state) {
+    final logoSize = MediaQuery.sizeOf(context).width < 600 ? 104.0 : 88.0;
+
     return Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(32.0),
@@ -57,12 +61,11 @@ class _LoginScreenState extends State<LoginScreen> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // Логотип
-                      
+                      // Логотип (крупнее на телефонах)
                       Image.asset(
                         'assets/icons/auto-plus-logo.png',
-                        width: 85,
-                        height: 85,
+                        width: logoSize,
+                        height: logoSize,
                         fit: BoxFit.contain,
                       ),
                       // Заголовок

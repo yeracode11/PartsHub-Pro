@@ -8,6 +8,7 @@ import 'package:autohub_b2b/screens/warehouse/incoming_doc_screen.dart';
 import 'package:autohub_b2b/widgets/unauthorized_placeholder.dart';
 import 'package:autohub_b2b/widgets/offline_placeholder.dart';
 import 'package:dio/dio.dart';
+import 'package:autohub_b2b/utils/auth_guard.dart';
 
 class IncomingListScreen extends StatefulWidget {
   const IncomingListScreen({super.key});
@@ -93,6 +94,19 @@ class _IncomingListScreenState extends State<IncomingListScreen> {
     }
   }
 
+  Future<void> _openNewIncomingDocument() async {
+    if (!await ensureAuthenticated(context)) return;
+    if (!context.mounted) return;
+    final result = await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => const IncomingDocScreen(),
+      ),
+    );
+    if (result == true && mounted) {
+      _loadDocuments();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isForbidden) {
@@ -137,16 +151,7 @@ class _IncomingListScreenState extends State<IncomingListScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.add),
-            onPressed: () async {
-              final result = await Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => const IncomingDocScreen(),
-                ),
-              );
-              if (result == true) {
-                _loadDocuments();
-              }
-            },
+            onPressed: _openNewIncomingDocument,
             tooltip: 'Создать накладную',
           ),
         ],
@@ -189,16 +194,7 @@ class _IncomingListScreenState extends State<IncomingListScreen> {
                           ),
                           const SizedBox(height: 24),
                           ElevatedButton.icon(
-                            onPressed: () async {
-                              final result = await Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (context) => const IncomingDocScreen(),
-                                ),
-                              );
-                              if (result == true) {
-                                _loadDocuments();
-                              }
-                            },
+                            onPressed: _openNewIncomingDocument,
                             icon: const Icon(Icons.add),
                             label: const Text('Создать накладную'),
                           ),

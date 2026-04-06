@@ -23,9 +23,10 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       emit(DashboardLoading());
 
       // Загружаем все данные параллельно
+      final period = event.salesPeriod;
       final results = await Future.wait([
         _apiService.getStats(),
-        _apiService.getSalesChart(period: '7d'),
+        _apiService.getSalesChart(period: period),
         _apiService.getRecentOrders(limit: 5),
         _apiService.getPopularItems(limit: 5),
       ]);
@@ -40,7 +41,7 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
         chartData: chartData,
         recentOrders: recentOrders.cast(),
         popularItems: popularItems.cast(),
-        currentPeriod: '7d',
+        currentPeriod: period,
       ));
     } catch (e) {
       if (e is ForbiddenException) {
@@ -120,6 +121,7 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
     try {
       final currentState = state;
       if (currentState is! DashboardLoaded) return;
+      if (currentState.currentPeriod == event.period) return;
 
       // Загружаем данные графика для нового периода
       final chartData = await _apiService.getSalesChart(period: event.period);

@@ -6,6 +6,7 @@ import '../../widgets/unauthorized_placeholder.dart';
 import 'package:autohub_b2b/widgets/offline_placeholder.dart';
 import '../../services/warehouse_service.dart';
 import '../../services/items_service.dart';
+import 'package:autohub_b2b/utils/auth_guard.dart';
 
 class WarehouseTransfersScreen extends StatefulWidget {
   const WarehouseTransfersScreen({Key? key}) : super(key: key);
@@ -82,6 +83,8 @@ class _WarehouseTransfersScreenState extends State<WarehouseTransfersScreen> {
   }
 
   void _showCreateTransferDialog() async {
+    if (!await ensureAuthenticated(context)) return;
+    if (!context.mounted) return;
     try {
       final warehouses = await _warehouseService.getWarehouses();
       final items = await _itemsService.getItems();

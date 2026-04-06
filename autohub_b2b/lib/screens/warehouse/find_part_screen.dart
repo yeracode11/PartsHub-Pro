@@ -566,7 +566,7 @@ class _FindPartScreenState extends State<FindPartScreen> with WidgetsBindingObse
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: Colors.blue,
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.close),

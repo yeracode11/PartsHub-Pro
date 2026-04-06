@@ -212,6 +212,11 @@ open build/macos/Build/Products/Release/autohub_b2b.app
 flutter build ios
 ```
 
+**Публикация в App Store:** полный чеклист и шаги — [ios/APPLE_APP_STORE.txt](ios/APPLE_APP_STORE.txt). Кратко:
+- `GoogleService-Info.plist` не в git: перед сборкой положите файл из Firebase (или шаблон [ios/Runner/GoogleService-Info.plist.example](ios/Runner/GoogleService-Info.plist.example)).
+- `cp ios/ExportOptions.plist.example ios/ExportOptions.plist` и укажите `teamID`.
+- Из корня проекта: `./scripts/build_ios_ipa.sh`, затем в Xcode Organizer — Validate / Distribute.
+
 ### Android
 ```bash
 flutter build apk

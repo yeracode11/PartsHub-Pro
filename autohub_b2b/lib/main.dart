@@ -24,6 +24,7 @@ import 'package:autohub_b2b/screens/analytics/analytics_screen.dart';
 import 'package:autohub_b2b/screens/whatsapp/whatsapp_screen.dart';
 import 'package:autohub_b2b/screens/vehicles/vehicles_screen.dart';
 import 'package:autohub_b2b/screens/profile/profile_screen.dart';
+import 'package:autohub_b2b/screens/settings/settings_screen.dart';
 import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/models/user_model.dart';
 import 'package:autohub_b2b/services/auth/secure_storage_service.dart';
@@ -138,11 +139,9 @@ class _AuthWrapperState extends State<AuthWrapper> {
           );
         }
 
-        if (state is AuthAuthenticated) {
-          return const MainScreen();
-        }
-
-        return const LoginScreen();
+        // После проверки токена: всегда главный экран. Гость видит все разделы;
+        // действия — только после входа (оверлей / запрос авторизации).
+        return const MainScreen();
       },
     );
   }
@@ -169,7 +168,7 @@ class _MainScreenState extends State<MainScreen> {
     const VehiclesScreen(),
     const AnalyticsScreen(),
     const WhatsAppScreen(),
-    const PlaceholderScreen(title: 'Настройки'),
+    const SettingsScreen(),
   ];
 
   @override
@@ -194,17 +193,28 @@ class _MainScreenState extends State<MainScreen> {
     }
   }
 
-  // Проверка доступа к разделу по роли
-  bool _canAccessSection(String section) {
-    if (_userRole == null) return false;
-    
-    // Для кладовщика (storekeeper) только Склад и Настройки
+  /// Гость видит все пункты меню. Вошедший кладовщик — только склад и настройки.
+  bool _canAccessSection(String section, AuthState authState) {
+    if (authState is! AuthAuthenticated) return true;
+
+    if (_userRole == null) return true;
+
     if (_userRole == 'UserRole.storekeeper') {
       return section == 'warehouse' || section == 'settings';
     }
-    
-    // Остальные роли имеют доступ ко всему
+
     return true;
+  }
+
+  bool _isGuest(AuthState state) => state is! AuthAuthenticated;
+
+  void _openLogin(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        fullscreenDialog: true,
+        builder: (context) => const LoginScreen(),
+      ),
+    );
   }
 
   // Экраны для подменю Склад
@@ -269,20 +279,50 @@ class _MainScreenState extends State<MainScreen> {
     }
   }
 
+  Widget _buildShellBody(AuthState authState) {
+    final mainContent = _selectedIndex == 1
+        ? _getWarehouseScreen()
+        : _screens[_selectedIndex];
+    return Column(
+      children: [
+        const OfflineBanner(),
+        Expanded(child: mainContent),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.of(context).size.width < 768;
-    
+    final authState = context.watch<AuthBloc>().state;
+
+    return BlocListener<AuthBloc, AuthState>(
+      listenWhen: (prev, curr) =>
+          curr is AuthAuthenticated && prev is! AuthAuthenticated,
+      listener: (context, state) {
+        _loadUserRole();
+      },
+      child: Builder(
+        builder: (context) {
+          final isMobile = MediaQuery.of(context).size.width < 768;
+
     if (isMobile) {
       // Мобильная версия с Drawer и BottomNavigationBar
       return Scaffold(
         backgroundColor: AppTheme.backgroundColor,
-        drawer: _buildDrawer(context),
+        drawer: _buildDrawer(context, authState),
         appBar: AppBar(
           title: Text(_getAppBarTitle()),
           backgroundColor: AppTheme.surfaceColor,
           foregroundColor: AppTheme.textPrimary,
           elevation: 0,
+          actions: [
+            if (_isGuest(authState))
+              IconButton(
+                icon: const Icon(Icons.login),
+                tooltip: 'Войти',
+                onPressed: () => _openLogin(context),
+              ),
+          ],
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(1),
             child: Container(
@@ -291,17 +331,8 @@ class _MainScreenState extends State<MainScreen> {
             ),
           ),
         ),
-        body: Column(
-          children: [
-            const OfflineBanner(),
-            Expanded(
-              child: _selectedIndex == 1
-                  ? _getWarehouseScreen()
-                  : _screens[_selectedIndex],
-            ),
-          ],
-        ),
-        bottomNavigationBar: _buildBottomNavigationBar(),
+        body: _buildShellBody(authState),
+        bottomNavigationBar: _buildBottomNavigationBar(authState),
       );
     } else {
       // Desktop версия с боковым меню
@@ -362,44 +393,44 @@ class _MainScreenState extends State<MainScreen> {
                     child: ListView(
                       padding: const EdgeInsets.all(12),
                       children: [
-                        if (_canAccessSection('dashboard'))
+                        if (_canAccessSection('dashboard', authState))
                           _buildNavItem(
                             icon: Icons.dashboard_outlined,
                             selectedIcon: Icons.dashboard,
                             label: 'Дашборд',
                             index: 0,
                           ),
-                        if (_canAccessSection('warehouse'))
+                        if (_canAccessSection('warehouse', authState))
                           _buildWarehouseMenu(),
-                        if (_canAccessSection('sales'))
+                        if (_canAccessSection('sales', authState))
                           _buildNavItem(
                             icon: Icons.shopping_bag_outlined,
                             selectedIcon: Icons.shopping_bag,
                             label: 'Продажи',
                             index: 2,
                           ),
-                        if (_canAccessSection('crm'))
+                        if (_canAccessSection('crm', authState))
                           _buildNavItem(
                             icon: Icons.people_outline,
                             selectedIcon: Icons.people,
                             label: 'CRM',
                             index: 3,
                           ),
-                        if (_canAccessSection('vehicles'))
+                        if (_canAccessSection('vehicles', authState))
                           _buildNavItem(
                             icon: Icons.directions_car_outlined,
                             selectedIcon: Icons.directions_car,
                           label: 'Автомобили',
                           index: 4,
                         ),
-                        if (_canAccessSection('analytics'))
+                        if (_canAccessSection('analytics', authState))
                           _buildNavItem(
                             icon: Icons.analytics_outlined,
                             selectedIcon: Icons.analytics,
                             label: 'Аналитика',
                             index: 5,
                           ),
-                        if (_canAccessSection('whatsapp'))
+                        if (_canAccessSection('whatsapp', authState))
                           _buildNavItem(
                             icon: Icons.message_outlined,
                             selectedIcon: Icons.message,
@@ -409,7 +440,7 @@ class _MainScreenState extends State<MainScreen> {
                         const SizedBox(height: 12),
                         const Divider(),
                         const SizedBox(height: 12),
-                        if (_canAccessSection('settings'))
+                        if (_canAccessSection('settings', authState))
                           _buildNavItem(
                             icon: Icons.settings_outlined,
                             selectedIcon: Icons.settings,
@@ -437,6 +468,9 @@ class _MainScreenState extends State<MainScreen> {
                                   ? state.user.name 
                                   : state.user.email.split('@')[0];
                               userEmail = state.user.email;
+                            } else {
+                              userName = 'Гость';
+                              userEmail = 'Нажмите, чтобы войти';
                             }
                             
                             if (snapshot.hasData && snapshot.data?['organization'] != null) {
@@ -445,11 +479,19 @@ class _MainScreenState extends State<MainScreen> {
                             
                             return InkWell(
                               onTap: () {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (context) => const ProfileScreen(),
-                                  ),
-                                );
+                                if (state is AuthAuthenticated) {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (context) => const ProfileScreen(),
+                                    ),
+                                  );
+                                } else {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (context) => const LoginScreen(),
+                                    ),
+                                  );
+                                }
                               },
                               borderRadius: BorderRadius.circular(12),
                               child: Container(
@@ -467,7 +509,9 @@ class _MainScreenState extends State<MainScreen> {
                                       radius: 20,
                                       backgroundColor: AppTheme.primaryColor,
                                       child: Text(
-                                        userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
+                                        state is AuthAuthenticated
+                                            ? (userName.isNotEmpty ? userName[0].toUpperCase() : 'U')
+                                            : '?',
                                         style: const TextStyle(
                                           color: Colors.white,
                                           fontWeight: FontWeight.bold,
@@ -488,9 +532,10 @@ class _MainScreenState extends State<MainScreen> {
                                             ),
                                             overflow: TextOverflow.ellipsis,
                                           ),
-                                          if (organizationName != null) ...[
+                                          if (state is AuthAuthenticated &&
+                                              organizationName != null) ...[
                                             Text(
-                                              organizationName!,
+                                              organizationName,
                                               style: const TextStyle(
                                                 fontSize: 10,
                                                 color: AppTheme.textSecondary,
@@ -529,22 +574,14 @@ class _MainScreenState extends State<MainScreen> {
             ),
             
             // Основной контент
-            Expanded(
-              child: Column(
-                children: [
-                  const OfflineBanner(),
-                  Expanded(
-                    child: _selectedIndex == 1
-                        ? _getWarehouseScreen()
-                        : _screens[_selectedIndex],
-                  ),
-                ],
-              ),
-            ),
+            Expanded(child: _buildShellBody(authState)),
           ],
         ),
       );
     }
+        },
+      ),
+    );
   }
 
   String _getApprarTitle() {
@@ -584,7 +621,7 @@ class _MainScreenState extends State<MainScreen> {
     }
   }
 
-  Widget _buildDrawer(BuildContext context) {
+  Widget _buildDrawer(BuildContext context, AuthState authState) {
     return Drawer(
       backgroundColor: AppTheme.surfaceColor,
       child: Column(
@@ -596,8 +633,8 @@ class _MainScreenState extends State<MainScreen> {
               children: [
                 Image.asset(
                   'assets/icons/auto-plus-logo.png',
-                  width: 50,
-                  height: 50,
+                  width: 72,
+                  height: 72,
                   fit: BoxFit.contain,
                 ),
                 const SizedBox(width: 12),
@@ -631,7 +668,7 @@ class _MainScreenState extends State<MainScreen> {
             child: ListView(
               padding: const EdgeInsets.all(12),
               children: [
-                if (_canAccessSection('dashboard'))
+                if (_canAccessSection('dashboard', authState))
                   _buildDrawerNavItem(
                     icon: Icons.dashboard_outlined,
                     selectedIcon: Icons.dashboard,
@@ -639,7 +676,7 @@ class _MainScreenState extends State<MainScreen> {
                     index: 0,
                     context: context,
                   ),
-                if (_canAccessSection('warehouse'))
+                if (_canAccessSection('warehouse', authState))
                   _buildDrawerWarehouseMenu(context),
                 // Модуль "Найти запчасть"
                 ListTile(
@@ -655,7 +692,7 @@ class _MainScreenState extends State<MainScreen> {
                     ),
                   ),
                   onTap: () {
-                    Navigator.pop(context); // Закрыть drawer
+                    Navigator.pop(context);
                     Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -664,7 +701,7 @@ class _MainScreenState extends State<MainScreen> {
                     );
                   },
                 ),
-                if (_canAccessSection('sales'))
+                if (_canAccessSection('sales', authState))
                   _buildDrawerNavItem(
                     icon: Icons.shopping_bag_outlined,
                     selectedIcon: Icons.shopping_bag,
@@ -672,7 +709,7 @@ class _MainScreenState extends State<MainScreen> {
                     index: 2,
                     context: context,
                   ),
-                if (_canAccessSection('crm'))
+                if (_canAccessSection('crm', authState))
                   _buildDrawerNavItem(
                     icon: Icons.people_outline,
                     selectedIcon: Icons.people,
@@ -680,7 +717,7 @@ class _MainScreenState extends State<MainScreen> {
                     index: 3,
                     context: context,
                   ),
-                if (_canAccessSection('vehicles'))
+                if (_canAccessSection('vehicles', authState))
                   _buildDrawerNavItem(
                     icon: Icons.directions_car_outlined,
                     selectedIcon: Icons.directions_car,
@@ -688,7 +725,7 @@ class _MainScreenState extends State<MainScreen> {
                     index: 4,
                     context: context,
                   ),
-                if (_canAccessSection('analytics'))
+                if (_canAccessSection('analytics', authState))
                   _buildDrawerNavItem(
                     icon: Icons.analytics_outlined,
                     selectedIcon: Icons.analytics,
@@ -696,7 +733,7 @@ class _MainScreenState extends State<MainScreen> {
                     index: 5,
                     context: context,
                   ),
-                if (_canAccessSection('whatsapp'))
+                if (_canAccessSection('whatsapp', authState))
                   _buildDrawerNavItem(
                     icon: Icons.message_outlined,
                     selectedIcon: Icons.message,
@@ -707,7 +744,7 @@ class _MainScreenState extends State<MainScreen> {
                 const SizedBox(height: 12),
                 const Divider(),
                 const SizedBox(height: 12),
-                if (_canAccessSection('settings'))
+                if (_canAccessSection('settings', authState))
                   _buildDrawerNavItem(
                     icon: Icons.settings_outlined,
                     selectedIcon: Icons.settings,
@@ -730,26 +767,35 @@ class _MainScreenState extends State<MainScreen> {
                     String userName = 'Пользователь';
                     String userEmail = '';
                     String? organizationName;
-                    
+
                     if (state is AuthAuthenticated) {
-                      userName = state.user.name.isNotEmpty 
-                          ? state.user.name 
+                      userName = state.user.name.isNotEmpty
+                          ? state.user.name
                           : state.user.email.split('@')[0];
                       userEmail = state.user.email;
+                    } else {
+                      userName = 'Гость';
+                      userEmail = 'Нажмите, чтобы войти';
                     }
-                    
-                    if (snapshot.hasData && snapshot.data?['organization'] != null) {
-                      organizationName = snapshot.data!['organization']['name'] as String?;
+
+                    if (snapshot.hasData &&
+                        snapshot.data?['organization'] != null ) {
+                      organizationName =
+                          snapshot.data!['organization']['name'] as String?;
                     }
-                    
+
                     return InkWell(
                       onTap: () {
                         Navigator.of(context).pop();
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (context) => const ProfileScreen(),
-                          ),
-                        );
+                        if (state is! AuthAuthenticated) {
+                          _openLogin(context);
+                        } else {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => const ProfileScreen(),
+                            ),
+                          );
+                        }
                       },
                       borderRadius: BorderRadius.circular(12),
                       child: Container(
@@ -767,7 +813,9 @@ class _MainScreenState extends State<MainScreen> {
                               radius: 20,
                               backgroundColor: AppTheme.primaryColor,
                               child: Text(
-                                userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
+                                userName.isNotEmpty
+                                    ? userName[0].toUpperCase()
+                                    : 'U',
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold,
@@ -790,7 +838,7 @@ class _MainScreenState extends State<MainScreen> {
                                   ),
                                   if (organizationName != null) ...[
                                     Text(
-                                      organizationName!,
+                                      organizationName,
                                       style: const TextStyle(
                                         fontSize: 10,
                                         color: AppTheme.textSecondary,
@@ -811,8 +859,10 @@ class _MainScreenState extends State<MainScreen> {
                                 ],
                               ),
                             ),
-                            const Icon(
-                              Icons.chevron_right,
+                            Icon(
+                              state is AuthAuthenticated
+                                  ? Icons.chevron_right
+                                  : Icons.login,
                               color: AppTheme.textSecondary,
                             ),
                           ],
@@ -829,8 +879,8 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  Widget _buildBottomNavigationBar() {
-    // Показываем только основные разделы в BottomNavigationBar
+  Widget _buildBottomNavigationBar(AuthState authState) {
+    // Только основные разделы (остальные — в drawer), иначе не помещается на узких экранах
     final allSections = [
       {'index': 0, 'icon': Icons.dashboard, 'label': 'Дашборд', 'section': 'dashboard'},
       {'index': 1, 'icon': Icons.inventory_2, 'label': 'Склад', 'section': 'warehouse'},
@@ -839,10 +889,10 @@ class _MainScreenState extends State<MainScreen> {
       {'index': 5, 'icon': Icons.analytics, 'label': 'Аналитика', 'section': 'analytics'},
     ];
 
-    // Фильтруем разделы на основе роли пользователя
-    final mainSections = allSections.where((section) => 
-      _canAccessSection(section['section'] as String)
-    ).toList();
+    final mainSections = allSections
+        .where((section) =>
+            _canAccessSection(section['section'] as String, authState))
+        .toList();
 
     // Если нет доступных разделов, возвращаем пустой виджет
     if (mainSections.isEmpty) {
@@ -1239,88 +1289,3 @@ class _MainScreenState extends State<MainScreen> {
   }
 }
 
-class PlaceholderScreen extends StatelessWidget {
-  final String title;
-
-  const PlaceholderScreen({super.key, required this.title});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppTheme.backgroundColor,
-      body: Center(
-        child: Container(
-          constraints: const BoxConstraints(maxWidth: 400),
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(32),
-                decoration: BoxDecoration(
-                  gradient: AppTheme.primaryGradient,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppTheme.primaryColor.withOpacity(0.3),
-                      blurRadius: 20,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
-                ),
-                child: const Icon(
-                  Icons.construction_outlined,
-                  size: 64,
-                  color: Colors.white,
-                ),
-              ),
-              const SizedBox(height: 32),
-              Text(
-                'Раздел "$title"',
-                style: Theme.of(context).textTheme.displaySmall,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Этот раздел находится в разработке.\nСкоро он будет доступен!',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: AppTheme.textSecondary,
-                    ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 32),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                decoration: BoxDecoration(
-                  color: AppTheme.primaryColor.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(30),
-                  border: Border.all(
-                    color: AppTheme.primaryColor.withOpacity(0.2),
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      Icons.access_time,
-                      color: AppTheme.primaryColor,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Скоро',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: AppTheme.primaryColor,
-                            fontWeight: FontWeight.w600,
-                          ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}

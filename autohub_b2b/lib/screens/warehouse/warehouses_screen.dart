@@ -4,6 +4,7 @@ import '../../services/warehouse_service.dart';
 import 'package:autohub_b2b/widgets/unauthorized_placeholder.dart';
 import 'package:autohub_b2b/widgets/offline_placeholder.dart';
 import 'package:autohub_b2b/utils/dialog_helper.dart';
+import 'package:autohub_b2b/utils/auth_guard.dart';
 import 'package:dio/dio.dart';
 
 class WarehousesScreen extends StatefulWidget {
@@ -90,7 +91,9 @@ class _WarehousesScreenState extends State<WarehousesScreen> {
     }
   }
 
-  void _showWarehouseDialog([Warehouse? warehouse]) {
+  Future<void> _showWarehouseDialog([Warehouse? warehouse]) async {
+    if (!await ensureAuthenticated(context)) return;
+    if (!context.mounted) return;
     final isMobile = MediaQuery.of(context).size.width < 768;
     final formWidget = _WarehouseFormDialog(
       warehouse: warehouse,
@@ -110,6 +113,8 @@ class _WarehousesScreenState extends State<WarehousesScreen> {
   }
 
   Future<void> _deleteWarehouse(Warehouse warehouse) async {
+    if (!await ensureAuthenticated(context)) return;
+    if (!context.mounted) return;
     final confirm = await DialogHelper.showConfirmSimple(
       context: context,
       title: 'Удаление склада',

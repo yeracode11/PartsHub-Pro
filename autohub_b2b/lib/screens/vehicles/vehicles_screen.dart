@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/utils/dialog_helper.dart';
+import 'package:autohub_b2b/utils/auth_guard.dart';
 import 'package:autohub_b2b/widgets/unauthorized_placeholder.dart';
 import 'package:autohub_b2b/widgets/offline_placeholder.dart';
 import 'package:autohub_b2b/services/api/api_client.dart';
@@ -103,7 +104,9 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
     _showVehicleDialog(vehicle);
   }
 
-  void _showVehicleDialog(VehicleModel? vehicle) {
+  Future<void> _showVehicleDialog(VehicleModel? vehicle) async {
+    if (!await ensureAuthenticated(context)) return;
+    if (!context.mounted) return;
     final isMobile = MediaQuery.of(context).size.width < 768;
     final dialog = _VehicleDialog(
       vehicle: vehicle,
@@ -122,6 +125,8 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
   }
 
   Future<void> _deleteVehicle(VehicleModel vehicle) async {
+    if (!await ensureAuthenticated(context)) return;
+    if (!context.mounted) return;
     final confirm = await DialogHelper.showConfirmSimple(
       context: context,
       title: 'Удалить автомобиль?',

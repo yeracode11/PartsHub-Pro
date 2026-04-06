@@ -8,6 +8,7 @@ import 'package:autohub_b2b/services/api/api_client.dart';
 import 'package:autohub_b2b/repositories/customers_repository.dart';
 import 'package:autohub_b2b/services/service_locator.dart';
 import 'package:autohub_b2b/utils/dialog_helper.dart';
+import 'package:autohub_b2b/utils/auth_guard.dart';
 
 class CrmScreen extends StatefulWidget {
   const CrmScreen({super.key});
@@ -413,7 +414,9 @@ class _CrmScreenState extends State<CrmScreen> {
     );
   }
 
-  void _showCustomerDialog(BuildContext context, {CustomerModel? customer}) {
+  Future<void> _showCustomerDialog(BuildContext context, {CustomerModel? customer}) async {
+    if (!await ensureAuthenticated(context)) return;
+    if (!context.mounted) return;
     final isMobile = MediaQuery.of(context).size.width < 768;
     final formWidget = _CustomerFormDialog(
       customer: customer,
@@ -432,7 +435,9 @@ class _CrmScreenState extends State<CrmScreen> {
     }
   }
 
-  void _showDeleteDialog(BuildContext context, CustomerModel customer) {
+  Future<void> _showDeleteDialog(BuildContext context, CustomerModel customer) async {
+    if (!await ensureAuthenticated(context)) return;
+    if (!context.mounted) return;
     DialogHelper.showConfirm(
       context: context,
       title: 'Удалить клиента?',
