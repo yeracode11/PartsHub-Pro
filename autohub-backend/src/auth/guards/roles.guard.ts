@@ -21,7 +21,7 @@ export class RolesGuard implements CanActivate {
       }
 
       const { user } = request;
-      
+
       // Проверяем, что пользователь существует
       if (!user) {
         throw new ForbiddenException('User not authenticated');
@@ -30,6 +30,11 @@ export class RolesGuard implements CanActivate {
       // Проверяем, что у пользователя есть роль
       if (!user.role) {
         throw new ForbiddenException('User role not found');
+      }
+
+      // Платформенный суперадмин проходит любые @Roles(...)
+      if (user.role === UserRole.SUPERADMIN) {
+        return true;
       }
 
       // Проверяем, есть ли у пользователя одна из требуемых ролей

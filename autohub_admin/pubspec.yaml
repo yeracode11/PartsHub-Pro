@@ -1,0 +1,32 @@
+name: autohub_admin
+description: AutoHub B2B — internal macOS superadmin panel (UI + API only).
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.10.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+  flutter_bloc: ^9.1.1
+  equatable: ^2.0.7
+  dio: ^5.9.0
+  flutter_secure_storage: ^9.2.4
+  intl: ^0.20.2
+  fl_chart: ^1.1.1
+  flutter_dotenv: ^6.0.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/env/app.env

@@ -1,0 +1,8 @@
+-- После применения миграции AddSuperadminUserRole назначьте роль существующему пользователю,
+-- у которого уже задан пароль (через регистрацию или UPDATE password в БД).
+--
+-- psql или клиент PostgreSQL:
+--   UPDATE users SET role = 'superadmin' WHERE email = 'your@email.com';
+--
+-- Проверка:
+--   SELECT id, email, role FROM users WHERE email = 'your@email.com';
