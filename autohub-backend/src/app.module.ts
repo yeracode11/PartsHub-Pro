@@ -38,6 +38,12 @@ const logger = new Logger('AppModule');
           : '';
 
         // Используем отдельные переменные окружения для большей надежности
+        // Синхронизацию схемы включаем только явно (локально): без NODE_ENV=development при pm2
+        // synchronize считался «включённым» и ломал деплой. На сервере: NODE_ENV=production или не задавать TYPEORM_SYNCHRONIZE.
+        const synchronizeEnabled =
+          process.env.NODE_ENV === 'development' ||
+          process.env.TYPEORM_SYNCHRONIZE === 'true';
+
         const config: any = {
           type: 'postgres',
           host: process.env.DB_HOST || 'localhost',
@@ -46,7 +52,7 @@ const logger = new Logger('AppModule');
           password: dbPassword, // Явно как строка
           database: process.env.DB_NAME || 'autohubdb',
           autoLoadEntities: true,
-          synchronize: process.env.NODE_ENV !== 'production', // Отключено в production
+          synchronize: synchronizeEnabled,
         };
 
         // Если есть DATABASE_URL, парсим его и используем отдельные параметры
@@ -80,6 +86,10 @@ const logger = new Logger('AppModule');
           logger.error(`CRITICAL: password is not a string (${typeof config.password})`);
           config.password = String(config.password || '');
         }
+
+        logger.log(
+          `TypeORM → postgres://${config.host}:${config.port}/${config.database} (synchronize=${String(config.synchronize)}, NODE_ENV=${process.env.NODE_ENV ?? '(unset)'})`,
+        );
 
         return config;
       },
