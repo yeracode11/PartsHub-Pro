@@ -7,4 +7,4 @@ releases:
           platform: windows
           target: exe
           build_args:
-            dart-define: API_BASE_URL=http://78.140.246.83:3001/api
+            dart-define: API_BASE_URL=http://108.174.78.106:3001/api

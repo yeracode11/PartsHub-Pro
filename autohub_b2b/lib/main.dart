@@ -10,7 +10,8 @@ import 'package:autohub_b2b/blocs/auth/auth_state.dart';
 import 'package:autohub_b2b/blocs/warehouse/warehouse_bloc.dart';
 import 'package:autohub_b2b/blocs/dashboard/dashboard_bloc.dart';
 import 'package:autohub_b2b/services/database/database.dart';
-import 'package:autohub_b2b/screens/auth/login_screen.dart';
+import 'package:autohub_b2b/utils/auth_navigation.dart';
+import 'package:autohub_b2b/core/app_navigator_key.dart';
 import 'package:autohub_b2b/screens/dashboard/dashboard_screen.dart';
 import 'package:autohub_b2b/screens/warehouse/warehouse_screen.dart';
 import 'package:autohub_b2b/screens/warehouse/incoming_list_screen.dart';
@@ -75,6 +76,7 @@ class AutoHubApp extends StatelessWidget {
         ),
       ],
       child: MaterialApp(
+        navigatorKey: rootNavigatorKey,
         title: 'Auto+ Pro',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
@@ -209,12 +211,7 @@ class _MainScreenState extends State<MainScreen> {
   bool _isGuest(AuthState state) => state is! AuthAuthenticated;
 
   void _openLogin(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        fullscreenDialog: true,
-        builder: (context) => const LoginScreen(),
-      ),
-    );
+    AuthNavigation.pushLoginOverlay(context);
   }
 
   // Экраны для подменю Склад
@@ -486,11 +483,7 @@ class _MainScreenState extends State<MainScreen> {
                                     ),
                                   );
                                 } else {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (context) => const LoginScreen(),
-                                    ),
-                                  );
+                                  AuthNavigation.pushLoginOverlay(context);
                                 }
                               },
                               borderRadius: BorderRadius.circular(12),

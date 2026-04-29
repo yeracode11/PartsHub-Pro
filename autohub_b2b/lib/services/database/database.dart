@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 
@@ -15,11 +17,14 @@ class Items extends Table {
   RealColumn get price => real()();
   IntColumn get quantity => integer().withDefault(const Constant(0))();
   TextColumn get condition => text()(); // new, used, refurbished
-  TextColumn get description => text().nullable()();
+  TextColumn get description => text().nullable()();kc
   TextColumn get imageUrl => text().nullable()();
   BoolColumn get synced => boolean().withDefault(const Constant(false))();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
-  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();"
+  
+  
+  z"
 }
 
 // Orders table - заказы

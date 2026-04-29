@@ -4,7 +4,8 @@ import 'package:autohub_b2b/models/item_model.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:autohub_b2b/services/api/api_client.dart';
 import 'package:autohub_b2b/screens/warehouse/item_edit_screen.dart';
-import 'package:autohub_b2b/services/hardware/thermal_printer_service.dart';
+import 'package:autohub_b2b/models/label_product_model.dart';
+import 'package:autohub_b2b/screens/warehouse/label_print_screen.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
@@ -225,9 +226,17 @@ class ItemDetailScreen extends StatelessWidget {
                 SizedBox(
                   width: 180,
                   child: OutlinedButton.icon(
-                    onPressed: () => _showPrintLabelDialog(context),
-                    icon: const Icon(Icons.print),
-                    label: const Text('Печать этикетки'),
+                    onPressed: () {
+                      Navigator.of(context).push<void>(
+                        MaterialPageRoute<void>(
+                          builder: (context) => LabelPrintScreen(
+                            product: LabelProductData.fromItem(item),
+                          ),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.label_outline),
+                    label: const Text('Этикетка PDF'),
                   ),
                 ),
                 SizedBox(
@@ -260,70 +269,6 @@ class ItemDetailScreen extends StatelessWidget {
       const SnackBar(
         content: Text('SKU скопирован'),
         backgroundColor: Colors.green,
-      ),
-    );
-  }
-
-  Future<void> _showPrintLabelDialog(BuildContext context) async {
-    final controller = TextEditingController(text: '1');
-    final result = await showDialog<int>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Печать этикетки'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                item.name,
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: controller,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Количество этикеток',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Отмена'),
-            ),
-            FilledButton(
-              onPressed: () {
-                final qty = int.tryParse(controller.text.trim()) ?? 1;
-                Navigator.pop(dialogContext, qty < 1 ? 1 : qty);
-              },
-              child: const Text('Печать'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (result == null) return;
-
-    final printer = ThermalPrinterService();
-    final success = await printer.printLabel(
-      itemName: item.name,
-      sku: item.sku,
-      price: item.price ?? 0,
-      warehouseCell: item.warehouseCell,
-      quantity: result,
-    );
-
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          success ? 'Этикетка отправлена на печать' : 'Не удалось напечатать этикетку',
-        ),
-        backgroundColor: success ? Colors.green : Colors.red,
       ),
     );
   }

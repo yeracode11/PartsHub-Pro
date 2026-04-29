@@ -8,7 +8,7 @@ import 'package:autohub_b2b/blocs/auth/auth_bloc.dart';
 import 'package:autohub_b2b/blocs/auth/auth_event.dart';
 import 'package:autohub_b2b/blocs/auth/auth_state.dart';
 import 'package:autohub_b2b/core/theme.dart';
-import 'package:autohub_b2b/screens/auth/login_screen.dart';
+import 'package:autohub_b2b/utils/auth_navigation.dart';
 import 'package:autohub_b2b/screens/auth/register_screen.dart';
 import 'package:autohub_b2b/screens/legal/privacy_policy_screen.dart';
 import 'package:autohub_b2b/screens/legal/terms_of_use_screen.dart';
@@ -65,14 +65,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     title: const Text('Войти'),
                     subtitle: const Text('Доступ к данным организации и синхронизации'),
                     trailing: const Icon(Icons.chevron_right),
-                    onTap: () {
-                      Navigator.of(context).push<void>(
-                        MaterialPageRoute<void>(
-                          fullscreenDialog: true,
-                          builder: (context) => const LoginScreen(),
-                        ),
-                      );
-                    },
+                    onTap: () => AuthNavigation.pushLoginOverlay(context),
                   ),
                   const Divider(height: 1),
                   ListTile(

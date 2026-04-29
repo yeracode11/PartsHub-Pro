@@ -2,7 +2,7 @@
 class BackendConfig {
   // Базовые URL для разных окружений
   static const String devBaseUrl = 'http://localhost:3000/api';
-  static const String prodBaseUrl = 'https://api.autohub.kz/api';
+  static const String prodBaseUrl = 'http://108.174.78.106:3000/api';
   
   // Текущий URL (определяется в runtime)
   static String get baseUrl {

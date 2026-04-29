@@ -11,8 +11,12 @@ import 'package:excel/excel.dart' as excel;
 import 'package:file_picker/file_picker.dart';
 import 'package:autohub_b2b/services/api/api_client.dart';
 import 'package:autohub_b2b/screens/warehouse/item_edit_screen.dart';
+import 'package:autohub_b2b/models/label_product_model.dart';
+import 'package:autohub_b2b/models/label_size_preset.dart';
+import 'package:autohub_b2b/screens/warehouse/label_print_screen.dart';
 import 'package:autohub_b2b/screens/warehouse/printer_settings_screen.dart';
-import 'package:autohub_b2b/services/hardware/thermal_printer_service.dart';
+import 'package:autohub_b2b/services/pdf/label_pdf_service.dart';
+import 'package:autohub_b2b/services/print/label_print_service.dart';
 import 'package:autohub_b2b/widgets/unauthorized_placeholder.dart';
 import 'package:autohub_b2b/repositories/items_repository.dart';
 import 'package:autohub_b2b/services/service_locator.dart';
@@ -733,9 +737,9 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                             value: 'print',
                             child: Row(
                               children: [
-                                Icon(Icons.print, size: 20, color: Colors.blue),
+                                Icon(Icons.picture_as_pdf_outlined, size: 20, color: Colors.blue),
                                 SizedBox(width: 8),
-                                Text('Печать этикетки', style: TextStyle(color: Colors.blue)),
+                                Text('Этикетка PDF', style: TextStyle(color: Colors.blue)),
                               ],
                             ),
                           ),
@@ -1149,8 +1153,8 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
           : FloatingActionButton.extended(
               onPressed: () => _printSelectedLabels(context),
               backgroundColor: AppTheme.primaryColor,
-              icon: const Icon(Icons.print),
-              label: Text('Печать (${selectedItemIds.length})'),
+              icon: const Icon(Icons.picture_as_pdf_outlined),
+              label: Text('PDF (${selectedItemIds.length})'),
             ),
     );
   }
@@ -1399,173 +1403,39 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
     );
   }
 
-  /// Печать этикетки для товара
+  /// Экран PDF-этикетки (размер и копии — на экране).
   Future<void> _printLabel(BuildContext context, ItemModel item) async {
     if (!await ensureAuthenticated(context)) return;
     if (!context.mounted) return;
-    // Показываем диалог выбора количества этикеток
-    int quantity = 1;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Печать этикетки'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Товар: ${item.name ?? 'Без названия'}',
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 8),
-            if (item.sku != null && item.sku!.isNotEmpty)
-              Text('Артикул: ${item.sku}'),
-            const SizedBox(height: 4),
-            Text('Цена: ${item.price?.toStringAsFixed(2) ?? '0.00'} ₸'),
-            const SizedBox(height: 16),
-            const Text('Количество этикеток:'),
-            const SizedBox(height: 8),
-            StatefulBuilder(
-              builder: (context, setQuantity) => Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  IconButton(
-                    onPressed: () {
-                      if (quantity > 1) {
-                        setQuantity(() => quantity--);
-                      }
-                    },
-                    icon: const Icon(Icons.remove_circle_outline),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      '$quantity',
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: () {
-                      if (quantity < 99) {
-                        setQuantity(() => quantity++);
-                      }
-                    },
-                    icon: const Icon(Icons.add_circle_outline),
-                  ),
-                ],
-              ),
-            ),
-          ],
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (context) => LabelPrintScreen(
+          product: LabelProductData.fromItem(item),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Печать'),
-          ),
-        ],
       ),
     );
-
-    if (confirmed != true) return;
-
-    // Показываем индикатор загрузки
-    if (context.mounted) {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => const Center(
-          child: Card(
-            child: Padding(
-              padding: EdgeInsets.all(20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text('Подготовка этикетки...'),
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    try {
-      final printerService = ThermalPrinterService();
-      
-      final success = await printerService.printLabel(
-        itemName: item.name ?? 'Без названия',
-        sku: item.sku,
-        price: item.price ?? 0.0,
-        warehouseCell: item.warehouseCell,
-        quantity: quantity,
-      );
-
-      if (context.mounted) {
-        Navigator.pop(context); // Закрываем индикатор загрузки
-        
-        if (success) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Этикетка открыта в Preview. Нажмите ⌘P для печати на Xprinter'),
-              backgroundColor: Colors.green,
-              duration: const Duration(seconds: 4),
-            ),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Ошибка при подготовке этикетки'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (context.mounted) {
-        Navigator.pop(context); // Закрываем индикатор загрузки
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Ошибка: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
   }
 
-  /// Массовая печать этикеток для выбранных товаров
+  /// Один PDF со страницей на каждый выбранный товар, затем системный диалог печати.
   Future<void> _printSelectedLabels(BuildContext context) async {
     if (!await ensureAuthenticated(context)) return;
     if (!context.mounted) return;
     if (selectedItemIds.isEmpty) return;
 
-    // Получаем выбранные товары
     final selectedItems = items.where((item) => selectedItemIds.contains(item.id)).toList();
-    
     if (selectedItems.isEmpty) return;
 
-    // Показываем диалог подтверждения
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Печать этикеток'),
+        title: const Text('PDF этикетки'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Будет напечатано этикеток: ${selectedItems.length}',
-              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+              'Будет создан один PDF на ${selectedItems.length} страниц (60×40 мм на страницу).',
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
             ),
             const SizedBox(height: 12),
             const Text('Товары:', style: TextStyle(fontWeight: FontWeight.w600)),
@@ -1604,7 +1474,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Печать всех'),
+            child: const Text('Печать'),
           ),
         ],
       ),
@@ -1612,7 +1482,6 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
 
     if (confirmed != true) return;
 
-    // Показываем индикатор загрузки
     if (context.mounted) {
       showDialog(
         context: context,
@@ -1626,7 +1495,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                 children: [
                   const CircularProgressIndicator(),
                   const SizedBox(height: 16),
-                  Text('Подготовка ${selectedItems.length} этикеток...'),
+                  Text('Сборка PDF (${selectedItems.length} стр.)...'),
                 ],
               ),
             ),
@@ -1636,56 +1505,33 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
     }
 
     try {
-      final printerService = ThermalPrinterService();
-      int successCount = 0;
-
-      // Печатаем по одной этикетке для каждого товара
-      for (var item in selectedItems) {
-        final success = await printerService.printLabel(
-          itemName: item.name ?? 'Без названия',
-          sku: item.sku,
-          price: item.price ?? 0.0,
-          warehouseCell: item.warehouseCell,
-          quantity: 1,
-        );
-        
-        if (success) {
-          successCount++;
-        }
-        
-        // Небольшая задержка между печатью
-        await Future.delayed(const Duration(milliseconds: 100));
-      }
+      final pdf = LabelPdfService();
+      final data = selectedItems.map(LabelProductData.fromItem).toList();
+      final result = await pdf.generateLabelsForItems(
+        data,
+        LabelSizePreset.mm60x40,
+      );
+      final ok = await LabelPrintService.printLabelResult(
+        result,
+        jobName: 'labels_${selectedItems.length}.pdf',
+      );
 
       if (context.mounted) {
-        Navigator.pop(context); // Закрываем индикатор загрузки
-        
-        // Очищаем выбор
+        Navigator.pop(context);
+
         setState(() {
           selectedItemIds.clear();
         });
 
-        if (successCount == selectedItems.length) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Успешно подготовлено $successCount этикеток. PDF открыт в Preview'),
-              backgroundColor: Colors.green,
-              duration: const Duration(seconds: 4),
-            ),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Подготовлено $successCount из ${selectedItems.length} этикеток'),
-              backgroundColor: Colors.orange,
-              duration: const Duration(seconds: 4),
-            ),
-          );
-        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(ok ? 'Отправлено на печать' : 'Печать отменена'),
+          ),
+        );
       }
     } catch (e) {
       if (context.mounted) {
-        Navigator.pop(context); // Закрываем индикатор загрузки
+        Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Ошибка: $e'),

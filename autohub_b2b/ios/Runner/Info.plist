@@ -34,17 +34,24 @@
 		<false/>
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
+		<!-- HTTP API по умолчанию (environment.dart); для HTTPS в проде можно убрать -->
+		<key>NSExceptionDomains</key>
+		<dict>
+			<key>108.174.78.106</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+			</dict>
+		</dict>
 	</dict>
-	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>Приложению необходим Bluetooth для подключения к термопринтеру и печати наклеек</string>
-	<key>NSBluetoothPeripheralUsageDescription</key>
-	<string>Приложению необходим Bluetooth для подключения к термопринтеру и печати наклеек</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Приложению необходим доступ к камере для сканирования QR-кодов и штрих-кодов запчастей</string>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Доступ к геолокации необходим для обнаружения Bluetooth-принтеров поблизости</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Приложению необходим доступ к фотогалерее для загрузки фотографий товаров</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Локальная сеть нужна для поиска Wi‑Fi принтеров (порт 9100) и печати чеков в вашей сети.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

@@ -43,7 +43,7 @@ export class B2CController {
     });
 
     // Преобразуем в формат для B2C
-    const baseUrl = process.env.API_BASE_URL || 'http://78.140.246.83:3000';
+    const baseUrl = process.env.API_BASE_URL || 'http://108.174.78.106:3000';
     
     return {
       data: items.map(item => {
@@ -90,7 +90,7 @@ export class B2CController {
     const items = await this.itemsService.getPopularForB2C(limitNum);
     
     // Используем тот же baseUrl для изображений
-    const baseUrl = process.env.API_BASE_URL || 'http://78.140.246.83:3000';
+    const baseUrl = process.env.API_BASE_URL || 'http://108.174.78.106:3000';
 
     return {
       data: items.map(item => {

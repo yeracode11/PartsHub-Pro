@@ -1,12 +1,11 @@
 import 'package:dio/dio.dart';
 import 'package:autohub_b2b/config/environment.dart';
-import 'package:autohub_b2b/services/auth/secure_storage_service.dart';
+import 'package:autohub_b2b/services/api/api_interceptors.dart';
 import 'package:autohub_b2b/services/api/api_exception.dart';
 
 /// Базовый класс для всех API сервисов
 class BaseApiService {
   late final Dio _dio;
-  final SecureStorageService _storage = SecureStorageService();
 
   BaseApiService() {
     _dio = Dio(
@@ -21,38 +20,7 @@ class BaseApiService {
       ),
     );
 
-    _setupInterceptors();
-  }
-
-  void _setupInterceptors() {
-    // Interceptor для добавления токена авторизации
-    _dio.interceptors.add(
-      InterceptorsWrapper(
-        onRequest: (options, handler) async {
-          final token = await _storage.getAuthToken();
-          if (token != null) {
-            options.headers['Authorization'] = 'Bearer $token';
-          }
-          
-          return handler.next(options);
-        },
-        onResponse: (response, handler) {
-          return handler.next(response);
-        },
-        onError: (error, handler) async {
-          return handler.next(error);
-        },
-      ),
-    );
-
-    // Логирование (только в dev режиме)
-    if (Environment.enableApiLogs) {
-      _dio.interceptors.add(LogInterceptor(
-        requestBody: true,
-        responseBody: true,
-        error: true,
-      ));
-    }
+    attachCoreApiInterceptors(_dio);
   }
 
   /// GET запрос

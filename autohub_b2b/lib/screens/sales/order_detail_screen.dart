@@ -4,6 +4,8 @@ import 'package:autohub_b2b/models/order_model.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
 import 'package:dio/dio.dart';
+import 'package:autohub_b2b/models/receipt_document_model.dart';
+import 'package:autohub_b2b/screens/receipt/receipt_preview_screen.dart';
 import 'package:autohub_b2b/services/auth/secure_storage_service.dart';
 
 class OrderDetailScreen extends StatefulWidget {
@@ -297,6 +299,16 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       return Scaffold(
         appBar: AppBar(
           title: Text('Заказ ${widget.order.orderNumber ?? '#${widget.order.id}'}'),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.picture_as_pdf_outlined),
+              tooltip: 'Скачать / печать чек',
+              onPressed: () {
+                final doc = ReceiptDocumentData.fromOrder(widget.order);
+                ReceiptPreviewScreen.open(context, doc);
+              },
+            ),
+          ],
         ),
         body: const Center(
           child: Text('Товары в заказе не найдены'),
@@ -308,6 +320,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       appBar: AppBar(
         title: Text('Заказ ${widget.order.orderNumber ?? '#${widget.order.id}'}'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.picture_as_pdf_outlined),
+            tooltip: 'Скачать / печать чек',
+            onPressed: () {
+              final doc = ReceiptDocumentData.fromOrder(widget.order);
+              ReceiptPreviewScreen.open(context, doc);
+            },
+          ),
           if (isSaving)
             const Padding(
               padding: EdgeInsets.all(16.0),
@@ -737,7 +757,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                 child: CachedNetworkImage(
                                   imageUrl: firstImage.startsWith('http')
                                       ? firstImage
-                                      : 'http://78.140.246.83:3000$firstImage',
+                                      : 'http://108.174.78.106:3000$firstImage',
                                   width: 80,
                                   height: 80,
                                   fit: BoxFit.cover,

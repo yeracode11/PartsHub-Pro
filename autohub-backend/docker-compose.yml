@@ -23,7 +23,7 @@ services:
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
-      GRAFANA_LOKI_URL: ${GRAFANA_LOKI_URL:-http://78.140.246.83:3100}
+      GRAFANA_LOKI_URL: ${GRAFANA_LOKI_URL:-http://108.174.78.106:3100}
     volumes:
       - grafana_data:/var/lib/grafana
       - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
@@ -47,7 +47,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:-change_me_in_production}
       CORS_ORIGIN: ${CORS_ORIGIN:-*}
       LOG_LEVEL: ${LOG_LEVEL:-info}
-      LOKI_HOST: ${LOKI_HOST:-http://78.140.246.83:3100}
+      LOKI_HOST: ${LOKI_HOST:-http://108.174.78.106:3100}
       LOKI_SERVICE_NAME: ${LOKI_SERVICE_NAME:-autohub-backend}
       LOKI_ENV: ${LOKI_ENV:-production}
       GREEN_API_URL: ${GREEN_API_URL:-https://api.green-api.com}

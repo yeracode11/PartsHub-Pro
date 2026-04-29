@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/widgets/unauthorized_placeholder.dart';
 import 'package:autohub_b2b/widgets/offline_placeholder.dart';
+import 'package:autohub_b2b/widgets/api_error_view.dart';
 import 'package:autohub_b2b/services/api/api_client.dart';
+import 'package:autohub_b2b/services/api/api_user_message.dart';
 import 'package:dio/dio.dart';
 
 class WarehouseLocationScreen extends StatefulWidget {
@@ -93,7 +95,7 @@ class _WarehouseLocationScreenState extends State<WarehouseLocationScreen> {
         });
       } else {
         setState(() {
-          _error = e.toString();
+          _error = userFacingApiMessage(e);
           _isLoading = false;
         });
       }
@@ -130,36 +132,11 @@ class _WarehouseLocationScreenState extends State<WarehouseLocationScreen> {
               : _isOffline
               ? OfflinePlaceholder(onRetry: _loadLocations)
               : _error != null
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(
-                        Icons.error_outline,
-                        size: 64,
-                        color: Colors.red,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Ошибка загрузки',
-                        style: Theme.of(context).textTheme.headlineSmall,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        _error!,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: AppTheme.textSecondary,
-                            ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: _loadLocations,
-                        child: const Text('Повторить'),
-                      ),
-                    ],
-                  ),
-                )
+                  ? ApiErrorView(
+                      error: _error!,
+                      onRetry: _loadLocations,
+                      title: 'Ошибка загрузки',
+                    )
               : _locations.isEmpty
                   ? Center(
                       child: Column(

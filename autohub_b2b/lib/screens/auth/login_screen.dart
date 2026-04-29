@@ -20,7 +20,21 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final canDismiss = Navigator.of(context, rootNavigator: true).canPop();
+
     return Scaffold(
+      appBar: canDismiss
+          ? AppBar(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              automaticallyImplyLeading: false,
+              leading: IconButton(
+                icon: const Icon(Icons.close),
+                tooltip: 'Закрыть',
+                onPressed: () => Navigator.of(context, rootNavigator: true).maybePop(),
+              ),
+            )
+          : null,
       body: BlocConsumer<AuthBloc, AuthState>(
         listener: (context, state) {
           if (state is AuthError) {
@@ -32,9 +46,14 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             );
           } else if (state is AuthAuthenticated) {
-            if (Navigator.of(context).canPop()) {
-              Navigator.of(context).pop();
-            }
+            // После входа закрываем только экран логина (не сбрасываем весь стек до root).
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!context.mounted) return;
+              final nav = Navigator.of(context, rootNavigator: true);
+              if (nav.canPop()) {
+                nav.pop();
+              }
+            });
           }
         },
         builder: (context, state) {

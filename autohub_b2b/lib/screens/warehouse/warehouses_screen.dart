@@ -5,6 +5,7 @@ import 'package:autohub_b2b/widgets/unauthorized_placeholder.dart';
 import 'package:autohub_b2b/widgets/offline_placeholder.dart';
 import 'package:autohub_b2b/utils/dialog_helper.dart';
 import 'package:autohub_b2b/utils/auth_guard.dart';
+import 'package:autohub_b2b/services/api/api_user_message.dart';
 import 'package:dio/dio.dart';
 
 class WarehousesScreen extends StatefulWidget {
@@ -70,7 +71,7 @@ class _WarehousesScreenState extends State<WarehousesScreen> {
         setState(() => _isLoading = false);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Ошибка загрузки складов: $e')),
+            SnackBar(content: Text(userFacingApiMessage(e))),
           );
         }
       }
@@ -84,7 +85,7 @@ class _WarehousesScreenState extends State<WarehousesScreen> {
         setState(() => _isLoading = false);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Ошибка загрузки складов: $e')),
+            SnackBar(content: Text(userFacingApiMessage(e))),
           );
         }
       }

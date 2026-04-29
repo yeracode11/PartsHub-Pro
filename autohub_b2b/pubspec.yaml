@@ -14,7 +14,7 @@ publish_to: 'none'
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.0+1
+version: 1.0.1
 
 environment:
   sdk: ^3.9.2
@@ -28,10 +28,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  
-  # UI
-  cupertino_icons: ^1.0.8
-  
+
   # State Management
   flutter_bloc: ^8.1.6
   equatable: ^2.0.5
@@ -53,8 +50,8 @@ dependencies:
   # Barcode Scanner & Printer
   printing: ^5.13.3
   pdf: ^3.11.1
-  google_fonts: ^6.2.1
-  blue_thermal_printer: ^1.1.0
+  # google_fonts — не используется (PDF/экраны берут локальные Roboto из assets/fonts).
+  # Печать этикеток — PDF (AirPrint / системный диалог); Bluetooth-термопринтер убран.
   permission_handler: ^11.3.1
   
   # Utils
@@ -72,6 +69,12 @@ dependencies:
   file_picker: ^10.3.10
   url_launcher: ^6.3.1
   package_info_plus: ^9.0.0
+  esc_pos_printer_plus: ^0.1.1
+  esc_pos_utils_plus: ^2.0.4
+  network_info_plus: ^7.0.0
+  share_plus: ^12.0.2
+  barcode: ^2.2.9
+  file_selector: ^1.1.0
 
 dev_dependencies:
   flutter_test:

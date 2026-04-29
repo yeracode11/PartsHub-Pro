@@ -31,15 +31,17 @@
 $ npm install
 ```
 
-### Green API (WhatsApp)
-
-Для работы модуля WhatsApp нужен токен Green API. Создайте `.env` на основе `.env.example`:
+Файла `.env` в репозитории нет намеренно: он указан в `.gitignore`, чтобы пароли и ключи не попадали в Git. Шаблон — `.env.example` в этом же каталоге. Создайте рабочий файл и отредактируйте значения:
 
 ```bash
 cp .env.example .env
 ```
 
-Добавьте в `.env`:
+Для приложения нужны как минимум параметры PostgreSQL (`DB_*` или `DATABASE_URL`), `JWT_SECRET` и при публичном доступе согласованный с приложениями `API_BASE_URL`.
+
+### Green API (WhatsApp)
+
+Для работы модуля WhatsApp добавьте в `.env`:
 ```
 GREEN_API_TOKEN_INSTANCE=ваш_токен_из_консоли_green_api
 ```

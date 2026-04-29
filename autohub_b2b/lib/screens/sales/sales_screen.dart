@@ -1102,7 +1102,7 @@ class _OrderDialogState extends State<_OrderDialog> {
                   ? CachedNetworkImage(
                       imageUrl: imageUrl.startsWith('http')
                           ? imageUrl
-                          : 'http://78.140.246.83:3000$imageUrl',
+                          : 'http://108.174.78.106:3000$imageUrl',
                       width: 56,
                       height: 56,
                       fit: BoxFit.cover,
@@ -1387,7 +1387,7 @@ class _OrderDialogState extends State<_OrderDialog> {
                                   child: CachedNetworkImage(
                                     imageUrl: imageUrl.startsWith('http')
                                         ? imageUrl
-                                        : 'http://78.140.246.83:3000$imageUrl',
+                                        : 'http://108.174.78.106:3000$imageUrl',
                                     width: 48, height: 48, fit: BoxFit.cover,
                                     maxWidthDiskCache: 200, maxHeightDiskCache: 200,
                                     memCacheWidth: 200, memCacheHeight: 200,

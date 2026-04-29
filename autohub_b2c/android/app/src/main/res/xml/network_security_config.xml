@@ -10,7 +10,7 @@
     <!-- Разрешить доступ к конкретным доменам -->
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="true">picsum.photos</domain>
-        <domain includeSubdomains="true">78.140.246.83</domain>
+        <domain includeSubdomains="true">108.174.78.106</domain>
         <domain includeSubdomains="true">localhost</domain>
         <domain includeSubdomains="true">192.168.2.240</domain>
     </domain-config>

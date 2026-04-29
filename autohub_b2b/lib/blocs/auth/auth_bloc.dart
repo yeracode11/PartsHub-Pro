@@ -10,6 +10,35 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final SecureStorageService _storage = SecureStorageService();
   String get _authBaseUrl => Environment.apiBaseUrl.replaceAll('/api', '');
 
+  Dio _authDio() {
+    return Dio(
+      BaseOptions(
+        baseUrl: _authBaseUrl,
+        connectTimeout: Environment.connectTimeout,
+        receiveTimeout: Environment.receiveTimeout,
+        sendTimeout: Environment.receiveTimeout,
+        headers: const {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+      ),
+    );
+  }
+
+  /// Ответ 401/403 часто приходит HTML/текстом с прокси — не обращаемся к data как к Map вслепую.
+  String _messageFromAuthResponse(Response? response) {
+    final data = response?.data;
+    if (data is Map) {
+      final msg = data['message'] ?? data['error'];
+      if (msg != null) return msg.toString();
+    }
+    final code = response?.statusCode;
+    if (code == 401 || code == 403) {
+      return 'Неверный email или пароль';
+    }
+    return 'Неверный email или пароль';
+  }
+
   AuthBloc() : super(AuthInitial()) {
     on<AuthCheckRequested>(_onAuthCheckRequested);
     on<AuthSignInRequested>(_onSignInRequested);
@@ -57,12 +86,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   Future<void> _onSignInRequested(
       AuthSignInRequested event, Emitter<AuthState> emit) async {
     try {
-      // Очищаем старые токены перед входом
-      await _storage.clearAll();
       emit(AuthLoading());
-      
-      // Шаг 1: Прямая авторизация через наш бэкенд
-      final dio = Dio(BaseOptions(baseUrl: _authBaseUrl));
+      await _storage.clearAll();
+
+      final dio = _authDio();
       final jwtResponse = await dio.post('/api/auth/login', data: {
         'email': event.email,
         'password': event.password,
@@ -101,20 +128,18 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       
       emit(AuthAuthenticated(userModel));
     } on DioException catch (e) {
-      // Обработка ошибок подключения
-      if (e.type == DioExceptionType.connectionError || 
+      if (e.type == DioExceptionType.connectionError ||
           e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.sendTimeout ||
+          e.type == DioExceptionType.receiveTimeout ||
           e.message?.contains('Connection refused') == true) {
-        emit(AuthError('Не удалось подключиться к серверу. Проверьте, что backend запущен.'));
+        emit(AuthError(
+          'Не удалось подключиться к серверу. Проверьте сеть и что backend доступен.',
+        ));
         return;
       }
-      
-      // Обработка HTTP ошибок
       if (e.response != null) {
-        final errorMessage = e.response?.data['message'] ?? 
-                            e.response?.data['error'] ?? 
-                            'Неверный email или пароль';
-        emit(AuthError(errorMessage));
+        emit(AuthError(_messageFromAuthResponse(e.response)));
       } else {
         emit(AuthError('Ошибка подключения к серверу'));
       }
@@ -155,12 +180,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   Future<void> _onSignUpRequested(
       AuthSignUpRequested event, Emitter<AuthState> emit) async {
     try {
-      // Очищаем старые токены перед регистрацией
-      await _storage.clearAll();
       emit(AuthLoading());
-      
-      // Регистрация через наш бэкенд
-      final dio = Dio(BaseOptions(baseUrl: _authBaseUrl));
+      await _storage.clearAll();
+
+      final dio = _authDio();
       final registerResponse = await dio.post('/api/auth/register', data: {
         'email': event.email,
         'password': event.password,
@@ -203,20 +226,24 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       
       emit(AuthAuthenticated(userModel));
     } on DioException catch (e) {
-      // Обработка ошибок подключения
-      if (e.type == DioExceptionType.connectionError || 
+      if (e.type == DioExceptionType.connectionError ||
           e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.sendTimeout ||
+          e.type == DioExceptionType.receiveTimeout ||
           e.message?.contains('Connection refused') == true) {
-        emit(AuthError('Не удалось подключиться к серверу. Проверьте, что backend запущен.'));
+        emit(AuthError(
+          'Не удалось подключиться к серверу. Проверьте сеть и что backend доступен.',
+        ));
         return;
       }
-      
-      // Обработка HTTP ошибок
       if (e.response != null) {
-        final errorMessage = e.response?.data['message'] ?? 
-                            e.response?.data['error'] ?? 
-                            'Ошибка регистрации';
-        emit(AuthError(errorMessage));
+        final data = e.response?.data;
+        String msg = 'Ошибка регистрации';
+        if (data is Map) {
+          final m = data['message'] ?? data['error'];
+          if (m != null) msg = m.toString();
+        }
+        emit(AuthError(msg));
       } else {
         emit(AuthError('Ошибка подключения к серверу'));
       }

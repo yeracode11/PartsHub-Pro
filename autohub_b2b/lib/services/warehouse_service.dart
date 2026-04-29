@@ -12,6 +12,8 @@ class WarehouseService {
       final response = await _apiClient.dio.get('/api/warehouses');
       final List<dynamic> data = response.data;
       return data.map((json) => Warehouse.fromJson(json)).toList();
+    } on DioException {
+      rethrow;
     } catch (e) {
       throw Exception('Failed to load warehouses: $e');
     }

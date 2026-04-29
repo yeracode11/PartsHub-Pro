@@ -4,10 +4,12 @@
 
 list(APPEND FLUTTER_PLUGIN_LIST
   auto_updater_windows
+  charset_converter
   connectivity_plus
   file_selector_windows
   permission_handler_windows
   printing
+  share_plus
   sqlite3_flutter_libs
   url_launcher_windows
 )

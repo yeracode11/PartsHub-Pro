@@ -6,6 +6,47 @@ import 'package:autohub_b2b/services/api/api_client.dart';
 import 'package:autohub_b2b/services/connectivity_service.dart';
 import 'package:autohub_b2b/services/database/database.dart';
 
+/// Разбор QR с этикетки [LabelProductData.fromItem]: `SKU:…|ID:n|CELL:…`.
+class _LabelQrParse {
+  _LabelQrParse({this.id, this.sku, required this.raw});
+
+  final int? id;
+  final String? sku;
+  final String raw;
+}
+
+_LabelQrParse _parseLabelQrPayload(String code) {
+  final raw = code.trim();
+  if (raw.isEmpty) {
+    return _LabelQrParse(raw: raw);
+  }
+  final plainId = int.tryParse(raw);
+  if (plainId != null && plainId > 0) {
+    return _LabelQrParse(id: plainId, raw: raw);
+  }
+  final upper = raw.toUpperCase();
+  if (!upper.contains('ID:') && !upper.contains('SKU:')) {
+    return _LabelQrParse(raw: raw);
+  }
+  int? id;
+  String? sku;
+  for (final part in raw.split('|')) {
+    final s = part.trim();
+    final colon = s.indexOf(':');
+    if (colon <= 0) {
+      continue;
+    }
+    final key = s.substring(0, colon).trim().toUpperCase();
+    final val = s.substring(colon + 1).trim();
+    if (key == 'ID') {
+      id = int.tryParse(val);
+    } else if (key == 'SKU' && val.isNotEmpty) {
+      sku = val;
+    }
+  }
+  return _LabelQrParse(id: id, sku: sku, raw: raw);
+}
+
 class ItemsRepository {
   final AppDatabase _db;
   final ApiClient _api = ApiClient();
@@ -48,20 +89,39 @@ class ItemsRepository {
   }
 
   Future<ItemModel?> findByCode(String code) async {
+    final parsed = _parseLabelQrPayload(code);
     if (_connectivity.isOnline) {
       try {
+        if (parsed.id != null) {
+          final byId = await getItem(parsed.id!);
+          if (byId != null) {
+            return byId;
+          }
+        }
+        if (parsed.sku != null && parsed.sku!.isNotEmpty) {
+          final response = await _api.dio.get(
+            '/api/items',
+            queryParameters: {'sku': parsed.sku},
+          );
+          final List<dynamic> data = response.data;
+          if (data.isNotEmpty) {
+            return ItemModel.fromJson(data[0]);
+          }
+        }
         final response = await _api.dio.get(
           '/api/items',
-          queryParameters: {'sku': code.trim()},
+          queryParameters: {'sku': parsed.raw},
         );
         final List<dynamic> data = response.data;
-        if (data.isNotEmpty) return ItemModel.fromJson(data[0]);
+        if (data.isNotEmpty) {
+          return ItemModel.fromJson(data[0]);
+        }
         return null;
       } catch (_) {
-        return _findBySkuFromCache(code);
+        return _findByCodeFromCache(parsed);
       }
     }
-    return _findBySkuFromCache(code);
+    return _findByCodeFromCache(parsed);
   }
 
   bool get isOffline => !_connectivity.isOnline;
@@ -78,12 +138,30 @@ class ItemsRepository {
     return row != null ? _mapDriftToModel(row) : null;
   }
 
-  Future<ItemModel?> _findBySkuFromCache(String code) async {
+  Future<ItemModel?> _findByCodeFromCache(_LabelQrParse parsed) async {
+    if (parsed.id != null) {
+      final row = await _db.getItemById(parsed.id!);
+      if (row != null) {
+        return _mapDriftToModel(row);
+      }
+    }
     final rows = await _db.getAllItems();
-    final match = rows.where(
-      (r) => r.sku?.toLowerCase() == code.trim().toLowerCase(),
-    );
-    return match.isNotEmpty ? _mapDriftToModel(match.first) : null;
+    if (parsed.sku != null && parsed.sku!.isNotEmpty) {
+      final match = rows.where(
+        (r) => r.sku?.toLowerCase() == parsed.sku!.toLowerCase(),
+      );
+      if (match.isNotEmpty) {
+        return _mapDriftToModel(match.first);
+      }
+    }
+    if (parsed.raw.isNotEmpty) {
+      final want = parsed.raw.toLowerCase();
+      final match = rows.where((r) => r.sku?.toLowerCase() == want);
+      if (match.isNotEmpty) {
+        return _mapDriftToModel(match.first);
+      }
+    }
+    return null;
   }
 
   Future<void> _cacheItems(List<ItemModel> items) async {

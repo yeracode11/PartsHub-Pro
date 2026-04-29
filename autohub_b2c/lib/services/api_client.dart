@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiClient {
   // Используем production API для всех режимов
-  static const String baseUrl = 'http://78.140.246.83:3000/api';
+  static const String baseUrl = 'http://108.174.78.106:3000/api';
 
   late final Dio _dio;
 

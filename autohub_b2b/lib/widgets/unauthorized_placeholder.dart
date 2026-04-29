@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:autohub_b2b/blocs/auth/auth_bloc.dart';
-import 'package:autohub_b2b/blocs/auth/auth_event.dart';
 import 'package:autohub_b2b/core/theme.dart';
-import 'package:autohub_b2b/screens/auth/login_screen.dart';
+import 'package:autohub_b2b/utils/auth_navigation.dart';
 
 /// Виджет-заглушка при ошибке 403 (Доступ запрещён) или 401 (Требуется авторизация).
 /// [isForbidden] — true для 403 (доступ запрещён), false для 401 (нужна авторизация).
@@ -81,18 +78,7 @@ class UnauthorizedPlaceholder extends StatelessWidget {
             SizedBox(
               width: 220,
               child: ElevatedButton.icon(
-                onPressed: () {
-                  // Сбрасываем сессию (протухший токен и т.д.)
-                  context.read<AuthBloc>().add(AuthSignOutRequested());
-                  // Гость уже в AuthUnauthenticated — повторный emit ничего не даёт;
-                  // явно открываем экран входа, как кнопка в AppBar.
-                  Navigator.of(context, rootNavigator: true).push<void>(
-                    MaterialPageRoute<void>(
-                      fullscreenDialog: true,
-                      builder: (context) => const LoginScreen(),
-                    ),
-                  );
-                },
+                onPressed: () => AuthNavigation.pushLoginAfterSessionExpired(context),
                 icon: const Icon(Icons.login_rounded),
                 label: const Text(
                   'Войти в систему',
