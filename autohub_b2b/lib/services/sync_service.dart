@@ -4,6 +4,7 @@ import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart';
 import 'package:autohub_b2b/services/database/database.dart';
 import 'package:autohub_b2b/services/api/api_client.dart';
+import 'package:autohub_b2b/services/auth/secure_storage_service.dart';
 import 'package:autohub_b2b/services/connectivity_service.dart';
 
 class SyncService {
@@ -35,6 +36,13 @@ class SyncService {
   /// Push local changes (SyncQueue) to the server, then pull fresh data
   Future<void> syncAll() async {
     if (_isSyncing || !_connectivity.isOnline) return;
+
+    final token = await SecureStorageService().getAuthToken();
+    if (token == null || token.trim().isEmpty) {
+      debugPrint('[Sync] Skipped: no JWT yet (routes require Bearer token)');
+      return;
+    }
+
     _isSyncing = true;
     _syncStateController.add(SyncState.syncing);
     debugPrint('[Sync] Starting full sync...');

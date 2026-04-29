@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:autohub_b2b/blocs/auth/auth_event.dart';
 import 'package:autohub_b2b/blocs/auth/auth_state.dart';
 import 'package:autohub_b2b/models/user_model.dart';
 import 'package:autohub_b2b/services/auth/secure_storage_service.dart';
 import 'package:autohub_b2b/config/environment.dart';
+import 'package:autohub_b2b/services/service_locator.dart';
 import 'package:dio/dio.dart';
 
 class AuthBloc extends Bloc<AuthEvent, AuthState> {
@@ -71,6 +74,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             createdAt: DateTime.parse(userData['createdAt'] ?? DateTime.now().toIso8601String()),
           );
           emit(AuthAuthenticated(userModel));
+          unawaited(ServiceLocator().syncService.syncAll());
         } catch (e) {
           await _storage.clearAll();
           emit(AuthUnauthenticated());
@@ -127,6 +131,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       );
       
       emit(AuthAuthenticated(userModel));
+      unawaited(ServiceLocator().syncService.syncAll());
     } on DioException catch (e) {
       if (e.type == DioExceptionType.connectionError ||
           e.type == DioExceptionType.connectionTimeout ||
@@ -225,6 +230,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       );
       
       emit(AuthAuthenticated(userModel));
+      unawaited(ServiceLocator().syncService.syncAll());
     } on DioException catch (e) {
       if (e.type == DioExceptionType.connectionError ||
           e.type == DioExceptionType.connectionTimeout ||

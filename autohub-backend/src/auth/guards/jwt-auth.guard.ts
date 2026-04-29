@@ -1,4 +1,8 @@
-import { Injectable, ExecutionContext } from '@nestjs/common';
+import {
+  Injectable,
+  ExecutionContext,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { Observable } from 'rxjs';
 import { firstValueFrom } from 'rxjs';
@@ -7,9 +11,8 @@ import { firstValueFrom } from 'rxjs';
 export class JwtAuthGuard extends AuthGuard('jwt') {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
-    const url = request.url.split('?')[0]; // Remove query params
+    const url = request.url.split('?')[0];
 
-    // Публичные эндпоинты - не требуют авторизации
     const publicRoutes = [
       '/api/auth/login',
       '/api/auth/register',
@@ -19,33 +22,39 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       '/api/b2c/orders',
     ];
 
-    if (publicRoutes.some(route => url.startsWith(route))) {
+    if (publicRoutes.some((route) => url.startsWith(route))) {
       return true;
     }
 
-    // Проверяем есть ли токен
     const authHeader = request.headers.authorization;
-    if (!authHeader) {
-      return false;
+    if (!authHeader?.trim()) {
+      throw new UnauthorizedException('Authorization header required');
     }
 
     try {
-      // Вызываем родительский метод для проверки токена
       const result = super.canActivate(context);
-      
-      // Обрабатываем результат (может быть boolean или Observable<boolean>)
+
+      let ok = false;
       if (result instanceof Observable) {
-        const value = await firstValueFrom(result);
-        return value === true;
+        ok = await firstValueFrom(result) === true;
       } else if (result instanceof Promise) {
-        const value = await result;
-        return value === true;
+        ok = (await result) === true;
       } else {
-        return result === true;
+        ok = result === true;
       }
+
+      if (!ok) {
+        throw new UnauthorizedException('Invalid authentication');
+      }
+
+      return true;
     } catch (error) {
-      return false;
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
+      throw new UnauthorizedException(
+        error instanceof Error ? error.message : 'Invalid or expired token',
+      );
     }
   }
 }
-
