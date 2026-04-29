@@ -6,6 +6,7 @@ import 'package:autohub_b2b/blocs/auth/auth_state.dart';
 import 'package:autohub_b2b/models/user_model.dart';
 import 'package:autohub_b2b/services/auth/secure_storage_service.dart';
 import 'package:autohub_b2b/config/environment.dart';
+import 'package:autohub_b2b/services/api/api_client.dart';
 import 'package:autohub_b2b/services/service_locator.dart';
 import 'package:dio/dio.dart';
 
@@ -63,7 +64,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           .timeout(const Duration(seconds: 5), onTimeout: () => null);
 
       if (userData != null && token != null) {
-        // Восстанавливаем пользователя из сохраненных данных
         try {
           final userModel = UserModel(
             uid: userData['uid'] ?? '',
@@ -73,6 +73,22 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             businessType: _parseBusinessType(userData['businessType']),
             createdAt: DateTime.parse(userData['createdAt'] ?? DateTime.now().toIso8601String()),
           );
+
+          try {
+            await ApiClient().dio.get('/api/auth/me').timeout(
+                  const Duration(seconds: 10),
+                );
+          } on DioException catch (e) {
+            final sc = e.response?.statusCode;
+            if (sc == 401 || sc == 403) {
+              await _storage.clearAll();
+              emit(AuthUnauthenticated());
+              return;
+            }
+          } on TimeoutException {
+            //
+          }
+
           emit(AuthAuthenticated(userModel));
           unawaited(ServiceLocator().syncService.syncAll());
         } catch (e) {
