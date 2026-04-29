@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../core/injection/app_dependencies.dart';
+import '../core/logging/app_logger.dart';
 import '../core/network/auth_navigator.dart';
 import '../core/theme/admin_theme.dart';
 import 'features/auth/presentation/bloc/auth_bloc.dart';
@@ -34,9 +35,11 @@ class _AutoHubAdminAppState extends State<AutoHubAdminApp> {
     )..add(const AuthStarted());
 
     AuthNavigator.onUnauthorized = () {
+      AppLogger.warn('401 Unauthorized → сессия сброшена, экран входа');
       _authBloc.add(const AuthSessionExpired());
     };
     AuthNavigator.onForbidden = (message) {
+      AppLogger.warn('403 Forbidden: ${message ?? '(no message)'}');
       final nav = AuthNavigator.navigatorKey.currentState;
       if (nav == null) return;
       nav.push<void>(

@@ -10,14 +10,14 @@ class SubscriptionsApi {
 
   Future<List<SubscriptionEntity>> listSubscriptions() {
     return guardApi(() async {
-      final res = await _dio.get<dynamic>('/subscriptions');
+      final res = await _dio.get<dynamic>('/api/subscriptions');
       return _parseList(res.data);
     });
   }
 
   Future<SubscriptionEntity> patchSubscription(String id, Map<String, dynamic> body) {
     return guardApi(() async {
-      final res = await _dio.patch<Map<String, dynamic>>('/subscriptions/$id', data: body);
+      final res = await _dio.patch<Map<String, dynamic>>('/api/subscriptions/$id', data: body);
       return SubscriptionEntity.fromJson(res.data ?? {});
     });
   }

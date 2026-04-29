@@ -15,7 +15,7 @@ class TransactionsApi {
   }) {
     return guardApi(() async {
       final res = await _dio.get<dynamic>(
-        '/transactions',
+        '/api/transactions',
         queryParameters: {
           if (from != null) 'from': from.toIso8601String(),
           if (to != null) 'to': to.toIso8601String(),

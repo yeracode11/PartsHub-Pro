@@ -15,7 +15,7 @@ class UsersApi {
   }) {
     return guardApi(() async {
       final res = await _dio.get<dynamic>(
-        '/users',
+        '/api/users',
         queryParameters: {
           'page': page,
           'limit': pageSize,
@@ -53,28 +53,28 @@ class UsersApi {
 
   Future<UserEntity> getUser(String id) {
     return guardApi(() async {
-      final res = await _dio.get<Map<String, dynamic>>('/users/$id');
+      final res = await _dio.get<Map<String, dynamic>>('/api/users/$id');
       return UserEntity.fromJson(res.data ?? {});
     });
   }
 
   Future<UserEntity> createUser(Map<String, dynamic> body) {
     return guardApi(() async {
-      final res = await _dio.post<Map<String, dynamic>>('/users', data: body);
+      final res = await _dio.post<Map<String, dynamic>>('/api/users', data: body);
       return UserEntity.fromJson(res.data ?? {});
     });
   }
 
   Future<UserEntity> updateUser(String id, Map<String, dynamic> body) {
     return guardApi(() async {
-      final res = await _dio.patch<Map<String, dynamic>>('/users/$id', data: body);
+      final res = await _dio.patch<Map<String, dynamic>>('/api/users/$id', data: body);
       return UserEntity.fromJson(res.data ?? {});
     });
   }
 
   Future<void> deleteUser(String id) {
     return guardApi(() async {
-      await _dio.delete<void>('/users/$id');
+      await _dio.delete<void>('/api/users/$id');
     });
   }
 }

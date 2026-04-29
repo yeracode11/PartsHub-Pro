@@ -2,6 +2,11 @@ import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@
 import { Reflector } from '@nestjs/core';
 import { UserRole } from '../../common/enums/user-role.enum';
 
+function isPlatformSuperAdmin(role: unknown): boolean {
+  const r = String(role ?? '').trim().toLowerCase();
+  return r === UserRole.SUPERADMIN.toLowerCase();
+}
+
 @Injectable()
 export class RolesGuard implements CanActivate {
   constructor(private reflector: Reflector) {}
@@ -33,7 +38,7 @@ export class RolesGuard implements CanActivate {
       }
 
       // Платформенный суперадмин проходит любые @Roles(...)
-      if (user.role === UserRole.SUPERADMIN) {
+      if (isPlatformSuperAdmin(user.role)) {
         return true;
       }
 

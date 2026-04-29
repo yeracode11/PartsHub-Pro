@@ -1,7 +1,15 @@
 -- После применения миграции AddSuperadminUserRole назначьте роль существующему пользователю,
 -- у которого уже задан пароль (через регистрацию или UPDATE password в БД).
 --
--- psql или клиент PostgreSQL:
+-- ВАЖНО: таблица users находится в БД приложения (DB_NAME / имя из DATABASE_URL в .env),
+-- а не в системной базе `postgres`. Если вы зашли как `psql` без `-d`, сначала выберите БД:
+--
+--   sudo -u postgres psql -d partshub
+--   -- или в уже открытом psql:  \c partshub
+--
+-- Замените `partshub` на значение из autohub-backend/.env (переменная DB_NAME).
+--
+-- Затем:
 --   UPDATE users SET role = 'superadmin' WHERE email = 'your@email.com';
 --
 -- Проверка:

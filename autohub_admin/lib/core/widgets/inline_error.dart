@@ -18,17 +18,19 @@ class InlineError extends StatelessWidget {
         constraints: const BoxConstraints(maxWidth: 480),
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.error_outline, size: 44, color: cs.error),
-              const SizedBox(height: 12),
-              SelectableText(message, textAlign: TextAlign.center),
-              if (onRetry != null) ...[
-                const SizedBox(height: 16),
-                FilledButton.icon(onPressed: onRetry, icon: const Icon(Icons.refresh), label: const Text('Retry')),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.error_outline, size: 40, color: cs.error),
+                const SizedBox(height: 12),
+                SelectableText(message, textAlign: TextAlign.center),
+                if (onRetry != null) ...[
+                  const SizedBox(height: 16),
+                  FilledButton.icon(onPressed: onRetry, icon: const Icon(Icons.refresh), label: const Text('Retry')),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),

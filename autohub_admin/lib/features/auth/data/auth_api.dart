@@ -14,7 +14,7 @@ class AuthApi {
   }) {
     return guardApi(() async {
       final res = await _dio.post<Map<String, dynamic>>(
-        '/auth/login',
+        '/api/auth/login',
         data: {'email': email, 'password': password},
       );
       final data = res.data ?? {};
@@ -32,7 +32,7 @@ class AuthApi {
   /// Validates the stored JWT and returns the current principal (`GET /auth/me`).
   Future<AdminUser> me() {
     return guardApi(() async {
-      final res = await _dio.get<Map<String, dynamic>>('/auth/me');
+      final res = await _dio.get<Map<String, dynamic>>('/api/auth/me');
       final data = res.data ?? {};
       return AdminUser.fromJson(data);
     });

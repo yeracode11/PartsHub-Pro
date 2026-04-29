@@ -13,6 +13,10 @@ class AppConfig {
 
   static late final String apiBaseUrl;
 
+  /// База для [Dio] **без** суффикса `/api` — как в `autohub_b2b/lib/services/api/api_client.dart`:
+  /// `replaceAll('/api', '')`, а все запросы идут с путём `/api/...` (совпадает с `@Controller('api/...')` в Nest).
+  static String get dioBaseUrl => apiBaseUrl.replaceAll('/api', '');
+
   /// Вызывать после `WidgetsFlutterBinding.ensureInitialized()` и после `dotenv.load(...)`.
   static void resolveAfterEnvLoaded() {
     const fromDefine = String.fromEnvironment('API_BASE_URL');

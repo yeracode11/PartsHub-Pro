@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 
 import '../config/app_config.dart';
 import '../network/auth_navigator.dart';
+import '../network/http_log_interceptor.dart';
 import '../storage/secure_token_storage.dart';
 
 class DioFactory {
@@ -12,7 +13,7 @@ class DioFactory {
   Dio create() {
     final dio = Dio(
       BaseOptions(
-        baseUrl: AppConfig.apiBaseUrl,
+        baseUrl: AppConfig.dioBaseUrl,
         connectTimeout: const Duration(seconds: 15),
         receiveTimeout: const Duration(seconds: 45),
         sendTimeout: const Duration(seconds: 45),
@@ -36,8 +37,8 @@ class DioFactory {
           final status = error.response?.statusCode;
           final path = error.requestOptions.path;
 
-          final isAuthRoute =
-              path.endsWith('/auth/login') || path.endsWith('/auth/refresh');
+          final isAuthRoute = path.contains('/api/auth/login') ||
+              path.contains('/api/auth/refresh');
 
           if (status == 401 && !isAuthRoute) {
             await _tokens.clearAll();
@@ -52,6 +53,8 @@ class DioFactory {
         },
       ),
     );
+
+    dio.interceptors.add(HttpLogInterceptor());
 
     return dio;
   }
