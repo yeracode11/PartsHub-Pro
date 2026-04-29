@@ -1,20 +1,26 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 
+const JWT_FALLBACK =
+  'Rtw+Dir1+3+AgjWFCOHJzQJng3FYhWXoNs5HUCkS23Q=';
+
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    private readonly configService: ConfigService,
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: process.env.JWT_SECRET || 'Rtw+Dir1+3+AgjWFCOHJzQJng3FYhWXoNs5HUCkS23Q=',
+      secretOrKey:
+        configService.get<string>('JWT_SECRET')?.trim() || JWT_FALLBACK,
       algorithms: ['HS256'],
     });
   }
