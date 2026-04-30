@@ -51,7 +51,7 @@ dependencies:
   printing: ^5.13.3
   pdf: ^3.11.1
   # google_fonts — не используется (PDF/экраны берут локальные Roboto из assets/fonts).
-  # Печать этикеток — PDF (AirPrint / системный диалог); Bluetooth-термопринтер убран.
+  # Печать этикеток с телефона: PDF через системную печать; BLE‑термопринтер — настройки → скан BLE.
   permission_handler: ^11.3.1
   
   # Utils
@@ -75,6 +75,7 @@ dependencies:
   share_plus: ^12.0.2
   barcode: ^2.2.9
   file_selector: ^1.1.0
+  flutter_blue_plus: ^2.2.1
 
 dev_dependencies:
   flutter_test:

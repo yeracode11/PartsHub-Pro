@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/models/receipt_document_model.dart';
 import 'package:autohub_b2b/screens/receipt/receipt_preview_screen.dart';
+import 'package:autohub_b2b/screens/warehouse/ble_printer_scan_screen.dart';
 import 'package:autohub_b2b/screens/warehouse/printer_discovery_screen.dart';
 import 'package:autohub_b2b/services/hardware/thermal_printer_service.dart';
 
@@ -170,6 +171,8 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
               ? ListView(
                   padding: const EdgeInsets.all(16),
                   children: [
+                    _buildBleThermalSection(context),
+                    const SizedBox(height: 24),
                     _buildIosPdfReceiptSection(),
                     const SizedBox(height: 24),
                     _buildLabelPrintInfoCard(),
@@ -180,6 +183,8 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                   child: ListView(
                     padding: const EdgeInsets.all(16),
                     children: [
+                      _buildBleThermalSection(context),
+                      const SizedBox(height: 24),
                       _buildStatusCard(),
                       const SizedBox(height: 24),
                       _buildWifiSection(),
@@ -194,6 +199,64 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                     ],
                   ),
                 ),
+    );
+  }
+
+  /// Термопринтер по Bluetooth Low Energy (Android / iPhone).
+  Widget _buildBleThermalSection(BuildContext context) {
+    if (!(Platform.isAndroid || Platform.isIOS)) {
+      return const SizedBox.shrink();
+    }
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.bluetooth, color: AppTheme.primaryColor),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text(
+                    'Термопринтер по Bluetooth LE',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Поиск и подключение к принтеру с ESC/POS по BLE (частые китайские POS‑модули AiYin, Nordic UART '
+              'и др.). После подключения доступна тестовая печать на экране устройства.',
+              style: TextStyle(fontSize: 13, color: AppTheme.textSecondary, height: 1.4),
+            ),
+            const SizedBox(height: 18),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                icon: const Icon(Icons.radar),
+                label: const Text('Найти и подключить BLE‑принтер'),
+                onPressed: () {
+                  Navigator.of(context).push<void>(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const BlePrinterScanScreen(),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

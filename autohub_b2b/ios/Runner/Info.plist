@@ -46,6 +46,8 @@
 			</dict>
 		</dict>
 	</dict>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Bluetooth LE нужен для подключения к термопринтеру и тестовой печати.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Приложению необходим доступ к камере для сканирования QR-кодов и штрих-кодов запчастей</string>
 	<key>NSPhotoLibraryUsageDescription</key>
