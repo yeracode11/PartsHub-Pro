@@ -2,6 +2,7 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:autohub_b2b/services/hardware/ble_esc_pos_session.dart';
+import 'package:autohub_b2b/services/hardware/flutter_blue_adapter_resolve.dart';
 
 /// Общая BLE‑сессия ESC/POS: подключение сохраняется после выбора принтера.
 class BleThermalPrintCoordinator {
@@ -35,13 +36,13 @@ class BleThermalPrintCoordinator {
       }
     }
 
-    final state = FlutterBluePlus.adapterStateNow;
-    if (state == BluetoothAdapterState.off ||
-        state == BluetoothAdapterState.turningOff ||
-        state == BluetoothAdapterState.unavailable) {
+    final adapter = await fbpAwaitAdapterStateResolved();
+    if (adapter == BluetoothAdapterState.off ||
+        adapter == BluetoothAdapterState.turningOff ||
+        adapter == BluetoothAdapterState.unauthorized ||
+        adapter == BluetoothAdapterState.unavailable) {
       return false;
     }
-
     if (savedId == null || savedId.isEmpty) return false;
 
     try {

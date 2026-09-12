@@ -33,7 +33,7 @@ class IncomingApiService {
           .map((json) => IncomingDocModel.fromJson(json as Map<String, dynamic>))
           .toList();
     } catch (e) {
-      throw Exception('Ошибка получения накладных: $e');
+      rethrow;
     }
   }
 
@@ -43,7 +43,7 @@ class IncomingApiService {
       final response = await _apiClient.dio.get('/api/incoming/$id');
       return IncomingDocModel.fromJson(response.data as Map<String, dynamic>);
     } catch (e) {
-      throw Exception('Ошибка получения накладной: $e');
+      rethrow;
     }
   }
 
@@ -53,7 +53,7 @@ class IncomingApiService {
       final response = await _apiClient.dio.post('/api/incoming', data: data);
       return IncomingDocModel.fromJson(response.data as Map<String, dynamic>);
     } catch (e) {
-      throw Exception('Ошибка создания накладной: $e');
+      rethrow;
     }
   }
 
@@ -66,7 +66,7 @@ class IncomingApiService {
       final response = await _apiClient.dio.put('/api/incoming/$id', data: data);
       return IncomingDocModel.fromJson(response.data as Map<String, dynamic>);
     } catch (e) {
-      throw Exception('Ошибка обновления накладной: $e');
+      rethrow;
     }
   }
 
@@ -82,7 +82,7 @@ class IncomingApiService {
       );
       return IncomingItemModel.fromJson(response.data as Map<String, dynamic>);
     } catch (e) {
-      throw Exception('Ошибка добавления позиции: $e');
+      rethrow;
     }
   }
 
@@ -91,7 +91,7 @@ class IncomingApiService {
     try {
       await _apiClient.dio.delete('/api/incoming/items/$itemId');
     } catch (e) {
-      throw Exception('Ошибка удаления позиции: $e');
+      rethrow;
     }
   }
 
@@ -101,7 +101,7 @@ class IncomingApiService {
       final response = await _apiClient.dio.post('/api/incoming/$id/process');
       return IncomingDocModel.fromJson(response.data as Map<String, dynamic>);
     } catch (e) {
-      throw Exception('Ошибка проведения накладной: $e');
+      rethrow;
     }
   }
 
@@ -110,7 +110,7 @@ class IncomingApiService {
     try {
       await _apiClient.dio.delete('/api/incoming/$id');
     } catch (e) {
-      throw Exception('Ошибка удаления накладной: $e');
+      rethrow;
     }
   }
 }

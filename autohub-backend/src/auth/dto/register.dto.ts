@@ -1,9 +1,9 @@
-import { IsEmail, IsNotEmpty, IsString, MinLength, IsOptional } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class RegisterDto {
-  @IsEmail()
+  @IsString()
   @IsNotEmpty()
-  email: string;
+  phone: string;
 
   @IsString()
   @IsNotEmpty()
@@ -11,19 +11,14 @@ export class RegisterDto {
   password: string;
 
   @IsString()
-  @IsNotEmpty()
-  name: string;
-
-  @IsString()
-  @IsNotEmpty()
-  phone: string;
+  @IsOptional()
+  name?: string;
 
   @IsString()
   @IsOptional()
-  organizationName?: string; // Название организации (опционально)
+  organizationName?: string;
 
   @IsString()
   @IsOptional()
-  businessType?: string; // Тип бизнеса: 'service', 'parts', 'wash'
+  businessType?: string;
 }
-

@@ -7,6 +7,7 @@ import 'package:dio/dio.dart';
 import 'package:autohub_b2b/models/receipt_document_model.dart';
 import 'package:autohub_b2b/screens/receipt/receipt_preview_screen.dart';
 import 'package:autohub_b2b/services/auth/secure_storage_service.dart';
+import 'package:autohub_b2b/services/api/api_user_message.dart';
 
 class OrderDetailScreen extends StatefulWidget {
   final OrderModel order;
@@ -91,7 +92,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Ошибка обновления заказа: $e'),
+            content: Text(userFacingApiMessage(e, prefix: 'Ошибка обновления заказа')),
             backgroundColor: Colors.red,
           ),
         );

@@ -6,6 +6,9 @@ import 'dart:math' as math;
 import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:intl/intl.dart';
+
+import 'package:autohub_b2b/services/hardware/flutter_blue_adapter_resolve.dart';
 
 /// Thrown when BLE ESC/POS setup or write fails in a user-visible way.
 class BleEscPosException implements Exception {
@@ -21,11 +24,20 @@ class BleEscPosException implements Exception {
 
 /// Low-level BLE session for thermal printers that accept raw ESC/POS over GATT.
 ///
+/// **AiYin IP‑802BT** (`IP-802BT_3801_BLE` и др.): в типичном GATT несколько транспортов — ISS UART
+/// `49535343-fe7d…` (часто основной текстовый тракт через **`49535343-6daa…`**, рядом **`8841`**),
+/// плюс «простые последовательные» **`fee7`/`fec7`**, **`fff0`/`fff2`**, **`ff00`/`ff02`**, **`18f0`/`2af1`**,
+/// **`ff80`/`ff82`**. Если на ISS только щелчок без ленты, цикл профилей: [cycleBleWriteProfile].
+///
 /// Для коммерческого использования может потребоваться лицензия [FlutterBluePlus](https://pub.dev/packages/flutter_blue_plus).
 class BleEscPosSession {
   BluetoothDevice? _device;
   BluetoothCharacteristic? _writeCharacteristic;
   bool _writeWithoutResponse = false;
+
+  /// Все найденные write‑характеристики после discover, порядок: лучшие по счёту первыми; активный профиль через [cycleBleWriteProfile].
+  List<BluetoothCharacteristic> _bleWriteProfilePool = [];
+  int _bleWriteProfileIndex = 0;
 
   /// Часть прошивок **49535343…** после notify на TX обрывает сессию — при **true** notify не включаем.
   static bool skipCompanionNotifyForSsiUart4953 = false;
@@ -39,10 +51,38 @@ class BleEscPosSession {
 
   bool get writeUsesWithoutResponse => _writeWithoutResponse;
 
+  /// Циклически перебираются все подходящие UUID записи см. [bleWriteProfileCaption].
+  bool get canCycleBleWriteProfile => _bleWriteProfilePool.length > 1;
+
+  String get bleWriteProfileCaption {
+    final n = _bleWriteProfilePool.length;
+    if (n <= 1) return '';
+    return 'профиль ${_bleWriteProfileIndex + 1}/$n';
+  }
+
+  /// Полный пул write-характеристик (для ручного перебора / авто-теста).
+  List<BluetoothCharacteristic> get bleWriteProfilePool =>
+      List.unmodifiable(_bleWriteProfilePool);
+
+  int get bleWriteProfileIndex => _bleWriteProfileIndex;
+
   int get mtuNow => _device?.mtuNow ?? 23;
 
   /// Пауза между ATT-чанками при `writeWithoutResponse` (иначе часть прошивок теряет поток).
   static const Duration defaultInterChunkDelay = Duration(milliseconds: 18);
+
+  /// При подтверждённом по ATT большом MTU MCU UART часто ограничен — режем ниже этого значения для ISS‑модуля.
+  static const int issuartBleSafeChunkCeilBytes = 40;
+
+  /// WoR без ATT‑ACK для ISSC UART («49535343…»): 18 ms часто сливают мост принтера под нагрузкой.
+  static const Duration issuartWorMinimumInterChunkDelay = Duration(milliseconds: 52);
+
+  /// Запись **с ответом** уже подтверждена по ATT, но UART‑мост к головке всё ещё ограничен —
+  /// слишком короткая пауза между крупными чанками даёт «BLE OK», пустую ленту.
+  static const Duration issuartAckMinimumInterChunkDelay = Duration(milliseconds: 30);
+
+  /// После последнего чанка даём времени докачать байты в MCU принтера.
+  static const Duration issuartUartDrainTailDelay = Duration(milliseconds: 160);
 
   void _log(String msg) {
     debugPrint('[BleEscPos] $msg');
@@ -103,20 +143,69 @@ class BleEscPosSession {
     return candidates;
   }
 
+  static bool inferPreferWithoutResponse(BluetoothCharacteristic chr) {
+    final uBest = chr.uuid.str.toLowerCase();
+    final hasWith = chr.properties.write;
+    final hasWithout = chr.properties.writeWithoutResponse;
+
+    if (uBest.contains('ae01')) {
+      return hasWithout ? true : (hasWith ? false : true);
+    }
+    // ISS UART (49535343-6daa и др.): прошивка отвечает на ATT‑запись — используем write+response.
+    if (uBest.contains('49535343')) {
+      return hasWith ? false : hasWithout;
+    }
+    // Для dual-mode (и write, и writeNoResp) за пределами ISS/ae01:
+    // прошивки таких принтеров нередко «принимают» ATT write request, но не отвечают ACK → таймаут 30 с.
+    // Безопаснее writeNoResp: нет таймаута, меньше блокировок UI.
+    if (hasWith && hasWithout) {
+      return true;
+    }
+    if (hasWith) {
+      return false;
+    }
+    return hasWithout;
+  }
+
   static int escPosWriteCharacteristicScore(BluetoothCharacteristic c) {
     var s = 0;
     final u = c.uuid.str.toLowerCase();
+    final svcFlat = c.serviceUuid.str.toLowerCase().replaceAll('-', '');
     if (u.contains('ae01')) s += 320;
     if (u.contains('6e400002')) s += 200;
     if (u.contains('ffe1')) s += 175;
     if (u.contains('fff1')) s += 165;
     if (u.contains('fff2')) s += 95;
     if (u.contains('49535343')) {
-      s += 230;
-      if (c.properties.writeWithoutResponse) s += 45;
+      s += 215;
+      if (c.properties.write) {
+        s += 95;
+      }
+      // IP-802BT / ISSC: длинное поле данных на чипах Silicon Labs почти всегда `49535343-6daa-…`;
+      // `8841` при том же сервисе часто вторичный, но набрал бы больший счёт из‑за writeWithoutResponse.
+      if (u.contains('49535343-6daa')) {
+        s += 175;
+      } else if (u.contains('49535343-8841')) {
+        s -= 40;
+      }
     }
     if (u.contains('aec9') || u.contains('ffc1') || u.contains('ffc2')) {
       s += 55;
+    }
+    if (svcFlat.endsWith('fee7') && u.replaceAll('-', '').contains('fec7')) {
+      s += 245;
+    }
+    if (svcFlat.endsWith('fff0') && u.contains('fff2')) {
+      s += 210;
+    }
+    if (svcFlat.endsWith('ff00') && u.contains('ff02')) {
+      s += 212;
+    }
+    if (svcFlat.endsWith('ff80') && u.contains('ff82')) {
+      s += 212;
+    }
+    if (svcFlat.endsWith('18f0') && u.contains('2af1')) {
+      s += 212;
     }
     if (c.properties.write) s += 40;
     if (c.properties.writeWithoutResponse) s += 12;
@@ -133,27 +222,21 @@ class BleEscPosSession {
       (a, b) => escPosWriteCharacteristicScore(b).compareTo(escPosWriteCharacteristicScore(a)),
     );
     final best = candidates.first;
-    final uBest = best.uuid.str.toLowerCase();
-    final hasWith = best.properties.write;
-    final hasWithout = best.properties.writeWithoutResponse;
-
-    final bool withoutResponse;
-    if (uBest.contains('ae01')) {
-      withoutResponse = hasWithout ? true : (hasWith ? false : true);
-    } else if (uBest.contains('49535343')) {
-      withoutResponse = hasWithout ? true : (hasWith ? false : true);
-    } else if (hasWith) {
-      withoutResponse = false;
-    } else {
-      withoutResponse = hasWithout;
-    }
-
-    return (chr: best, withoutResponse: withoutResponse);
+    return (chr: best, withoutResponse: inferPreferWithoutResponse(best));
   }
 
   Future<void> connect(BluetoothDevice device) async {
-    if (FlutterBluePlus.adapterStateNow != BluetoothAdapterState.on) {
+    final adapter = await fbpAwaitAdapterStateResolved();
+    if (adapter == BluetoothAdapterState.off || adapter == BluetoothAdapterState.turningOff) {
       throw BleEscPosException('Включите Bluetooth на устройстве.');
+    }
+    if (adapter == BluetoothAdapterState.unauthorized) {
+      throw BleEscPosException(
+        'Разрешите приложению доступ к Bluetooth в настройках телефона.',
+      );
+    }
+    if (adapter == BluetoothAdapterState.unavailable) {
+      throw BleEscPosException('Bluetooth на этом устройстве недоступен.');
     }
 
     if (FlutterBluePlus.isScanningNow) {
@@ -162,6 +245,8 @@ class BleEscPosSession {
 
     _device = device;
     _writeCharacteristic = null;
+    _bleWriteProfilePool.clear();
+    _bleWriteProfileIndex = 0;
 
     try {
       await device.connect(
@@ -215,12 +300,71 @@ class BleEscPosSession {
 
     _writeCharacteristic = picked.chr;
     _writeWithoutResponse = picked.withoutResponse;
+    _populateBleWriteProfilePool(d, picked.chr);
     _log(
       'Using write char ${picked.chr.uuid.str} '
+      'write=${picked.chr.properties.write} writeNoResp=${picked.chr.properties.writeWithoutResponse} '
       'withoutResponse=$_writeWithoutResponse mtuNow=${d.mtuNow}',
     );
 
     await _ensurePrinterDataChannel(d, picked.chr);
+  }
+
+  void _populateBleWriteProfilePool(BluetoothDevice d, BluetoothCharacteristic picked) {
+    _bleWriteProfilePool.clear();
+    _bleWriteProfileIndex = 0;
+
+    final all = writableCharacteristicsExcludingBleMaintenance(d)
+      ..sort((a, b) => escPosWriteCharacteristicScore(b).compareTo(escPosWriteCharacteristicScore(a)));
+
+    final seenKeys = <String>{};
+    final orderedUnique = <BluetoothCharacteristic>[];
+    for (final chr in all) {
+      final k = '${chr.serviceUuid.str.toLowerCase()}@${chr.uuid.str.toLowerCase()}';
+      if (seenKeys.contains(k)) {
+        continue;
+      }
+      seenKeys.add(k);
+      orderedUnique.add(chr);
+    }
+
+    final pickKey = '${picked.serviceUuid.str.toLowerCase()}@${picked.uuid.str.toLowerCase()}';
+    final startIdx = orderedUnique.indexWhere(
+      (c) => '${c.serviceUuid.str.toLowerCase()}@${c.uuid.str.toLowerCase()}' == pickKey,
+    );
+
+    _bleWriteProfilePool =
+        startIdx <= 0 ? orderedUnique : [...orderedUnique.sublist(startIdx), ...orderedUnique.sublist(0, startIdx)];
+
+    _log(
+      'BLE записываемые профили (${_bleWriteProfilePool.length}): '
+      '${_bleWriteProfilePool.map((c) => '${c.uuid.str}[${c.serviceUuid.str}]').join(' | ')}',
+    );
+  }
+
+  /// IP‑802BT и аналоги: ESC/POS может уходить в **fec7**/**fff2**/…, хотя ACK на ISS уже «ОК».
+  Future<void> cycleBleWriteProfile() async {
+    final d = _device;
+    if (d == null || d.isDisconnected) {
+      throw BleEscPosException('Принтер не подключён.');
+    }
+    if (_bleWriteProfilePool.length < 2) {
+      throw BleEscPosException('Нашёлся только один канал записи на устройстве.');
+    }
+
+    _bleWriteProfileIndex = (_bleWriteProfileIndex + 1) % _bleWriteProfilePool.length;
+    final chr = _bleWriteProfilePool[_bleWriteProfileIndex];
+    _writeCharacteristic = chr;
+    _writeWithoutResponse = inferPreferWithoutResponse(chr);
+
+    _log(
+      'BLE профиль ${_bleWriteProfileIndex + 1}/${_bleWriteProfilePool.length}: '
+      '${chr.uuid.str} srv=${chr.serviceUuid.str} '
+      'write=${chr.properties.write} writeNoResp=${chr.properties.writeWithoutResponse} '
+      'chosenNoResp=$_writeWithoutResponse mtu=${d.mtuNow}',
+    );
+
+    await _ensurePrinterDataChannel(d, chr);
   }
 
   Future<void> _ensurePrinterDataChannel(
@@ -324,6 +468,45 @@ class BleEscPosSession {
     return raw;
   }
 
+  bool _isIssUartLike(BluetoothCharacteristic chr) {
+    final c = chr.uuid.str.toLowerCase().replaceAll('-', '');
+    final s = chr.serviceUuid.str.toLowerCase().replaceAll('-', '');
+    return c.contains('49535343') || s.contains('49535343');
+  }
+
+  Duration _effectiveInterChunkDelay(
+    BluetoothCharacteristic chr,
+    bool withoutResp,
+    Duration base,
+  ) {
+    if (!_isIssUartLike(chr)) return base;
+
+    if (withoutResp) {
+      final ms =
+          math.max(base.inMilliseconds, issuartWorMinimumInterChunkDelay.inMilliseconds);
+      if (ms != base.inMilliseconds) {
+        _log(
+          'ISS UART: extend WoR inter-chunk delay → ${ms}ms (was ${base.inMilliseconds}ms)',
+        );
+      }
+      return Duration(milliseconds: ms);
+    }
+
+    final msAck =
+        math.max(base.inMilliseconds, issuartAckMinimumInterChunkDelay.inMilliseconds);
+    if (msAck != base.inMilliseconds) {
+      _log(
+        'ISS UART: floor write‑with‑response inter-chunk delay → ${msAck}ms (was ${base.inMilliseconds}ms)',
+      );
+    }
+    return Duration(milliseconds: msAck);
+  }
+
+  Future<void> _issUartDrainTail(BluetoothCharacteristic chr) async {
+    if (!_isIssUartLike(chr)) return;
+    await Future<void>.delayed(issuartUartDrainTailDelay);
+  }
+
   Future<void> _writeChunks(
     List<int> bytes, {
     required bool withoutResponse,
@@ -375,53 +558,102 @@ class BleEscPosSession {
   }
 
   /// Сырой ESC/POS по BLE с разбиением на чанки.
+  ///
+  /// Если текущая характеристика не отвечает (таймаут / дисконнект), автоматически
+  /// пробуется следующий профиль из [_bleWriteProfilePool] (до исчерпания всех вариантов).
   Future<void> writeEscPosBytes(
     List<int> bytes, {
     Duration interChunkDelay = defaultInterChunkDelay,
-    int writeTimeoutSec = 30,
+    int writeTimeoutSec = 8,
   }) async {
-    final chr = _writeCharacteristic;
-    final d = _device;
-    if (chr == null || d == null || d.isDisconnected) {
+    if (_writeCharacteristic == null || _device == null) {
       throw BleEscPosException('Принтер не готов к записи (нет соединения или характеристики).');
     }
 
-    final chunkMax = _maxPayloadBytes();
-    var mode = _writeWithoutResponse;
-    _log(
-      'Write → char ${chr.uuid.str} · srv ${chr.serviceUuid.str} · '
-      'mtu=${d.mtuNow} · chunks≤$chunkMax · noResp(first)=$mode · ${bytes.length} B',
-    );
+    // Пробуем текущий профиль, при ошибке автоматически листаем дальше.
+    final poolSize = _bleWriteProfilePool.isEmpty ? 1 : _bleWriteProfilePool.length;
+    BleEscPosException? lastErr;
 
-    try {
-      await _writeChunks(
-        bytes,
-        withoutResponse: mode,
-        chunkMax: chunkMax,
-        interChunkDelay: interChunkDelay,
-        writeTimeoutSec: writeTimeoutSec,
-      );
-      return;
-    } on BleEscPosException {
-      final canFlip = chr.properties.write && chr.properties.writeWithoutResponse;
-      if (!canFlip) {
-        rethrow;
+    for (var attempt = 0; attempt < poolSize; attempt++) {
+      final chr = _writeCharacteristic!;
+      final d = _device!;
+
+      if (d.isDisconnected) {
+        throw BleEscPosException('Принтер отключился во время передачи данных.');
       }
-      mode = !_writeWithoutResponse;
-      _log('Retry full payload with alternating write mode noResp=$mode');
-      await _writeChunks(
-        bytes,
-        withoutResponse: mode,
-        chunkMax: chunkMax,
-        interChunkDelay: interChunkDelay,
-        writeTimeoutSec: writeTimeoutSec,
+
+      final chunkMaxBase = _maxPayloadBytes();
+      var chunkMax = chunkMaxBase;
+      if (_isIssUartLike(chr)) {
+        final safe = math.min(chunkMax, issuartBleSafeChunkCeilBytes);
+        if (safe < chunkMax) {
+          _log('ISS UART: cap chunk payload $chunkMax→$safe (переполнение UART FIFO)');
+          chunkMax = safe;
+        }
+      }
+      final mode = _writeWithoutResponse;
+      _log(
+        '[attempt ${attempt + 1}/$poolSize] Write → char ${chr.uuid.str} · srv ${chr.serviceUuid.str} · '
+        'mtu=${d.mtuNow} · chunks≤$chunkMax · noResp=$mode · ${bytes.length} B',
       );
+
+      final dualMode = chr.properties.write && chr.properties.writeWithoutResponse;
+
+      Future<void> run(bool withoutResp) async {
+        final delay = _effectiveInterChunkDelay(chr, withoutResp, interChunkDelay);
+        await _writeChunks(
+          bytes,
+          withoutResponse: withoutResp,
+          chunkMax: chunkMax,
+          interChunkDelay: delay,
+          writeTimeoutSec: writeTimeoutSec,
+        );
+      }
+
+      try {
+        if (dualMode) {
+          BleEscPosException? dualErr;
+          for (final withoutResp in <bool>[mode, !mode]) {
+            try {
+              await run(withoutResp);
+              await _issUartDrainTail(chr);
+              _log('BLE write OK noResp=$withoutResp mtu=${d.mtuNow} (dual char, attempt ${attempt + 1})');
+              return;
+            } on BleEscPosException catch (e) {
+              dualErr = e;
+              _log('BLE write attempt noResp=$withoutResp failed: ${e.message}');
+            }
+          }
+          throw dualErr!;
+        } else {
+          await run(mode);
+          await _issUartDrainTail(chr);
+          _log('BLE write OK noResp=$mode mtu=${d.mtuNow} (attempt ${attempt + 1})');
+          return;
+        }
+      } on BleEscPosException catch (e) {
+        lastErr = e;
+        _log('Profile ${_bleWriteProfileIndex + 1}/$poolSize failed: ${e.message}');
+        if (attempt + 1 < poolSize) {
+          // Автоматически переключаем на следующий профиль и пробуем снова.
+          try {
+            await cycleBleWriteProfile();
+          } catch (_) {
+            // Если нет других профилей — выходим.
+            break;
+          }
+        }
+      }
     }
+
+    throw lastErr ?? BleEscPosException('Не удалось отправить данные на принтер.');
   }
 
   Future<void> disconnect() async {
     final d = _device;
     _writeCharacteristic = null;
+    _bleWriteProfilePool.clear();
+    _bleWriteProfileIndex = 0;
     if (d != null) {
       try {
         await d.disconnect();
@@ -430,11 +662,81 @@ class BleEscPosSession {
     _device = null;
   }
 
+  /// Ультраминимальные байты: ESC @ (сброс) + несколько LF + одна ASCII-строка.
+  /// Если принтер реагирует хотя бы протяжкой/щелчком — канал ESC/POS работает.
+  static List<int> buildNakedLineFeedBytes() {
+    const lf = 0x0a;
+    const esc = 0x1b;
+    return <int>[
+      esc, 0x40, // ESC @ — сброс принтера
+      ...'>TEST<'.codeUnits,
+      lf, lf, lf, lf,
+    ];
+  }
+
+  /// Компактная «тяжёлая» простейка ESC/POS: часть профилей на нажимает мотор лишь на «тиск» без
+  /// печатаемой строки в буфере; добавляем текст, [ESC d] и [ESC J] протяг точками.
+  static List<int> buildMinimalPaperFeedPulseBytes() {
+    const lf = 0x0a;
+    const cr = 0x0d;
+    const esc = 0x1b;
+    return <int>[
+      esc, 0x40, // ESC @
+      lf, lf,
+      ...'-'.codeUnits,
+      lf,
+      ...'AUTOHUB PULSE'.codeUnits,
+      cr, lf,
+      esc, 0x64, 28, // ESC d — протяг N строк после вывода
+      esc, 0x4a, 200, // ESC J — протяг ~200 точек вертикали
+      esc, 0x4a, 200,
+      esc, 0x64, 15,
+      lf,
+      lf,
+      lf,
+      lf,
+      lf,
+    ];
+  }
+
+  /// Минимальный тест только ASCII-текст + линии + отрез: часть прошивок не понимает
+  /// штрихкод/GS‑QR поверх BLE и «молчит», хотя приложение не получает ошибку GATT.
   static Future<List<int>> buildTestReceiptBytes() async {
+    final profile = await CapabilityProfile.load();
+    final g = Generator(PaperSize.mm80, profile);
+    final stamp = DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now());
+    return [
+      ...g.reset(),
+      ...g.text(
+        'AutoHub / Auto+ Pro',
+        styles: const PosStyles(align: PosAlign.center, bold: true),
+      ),
+      ...g.feed(1),
+      ...g.text(
+        'BLE ESC/POS test OK',
+        styles: const PosStyles(align: PosAlign.center),
+      ),
+      ...g.text(
+        stamp,
+        styles: const PosStyles(align: PosAlign.center),
+      ),
+      ...g.hr(linesAfter: 1),
+      ...g.text(
+        'Minimal test: text only.',
+        styles: const PosStyles(align: PosAlign.left),
+      ),
+      ...g.feed(3),
+      ...g.cut(),
+    ];
+  }
+
+  /// Расширенный прогон GS (штрихкод + QR) — если простой тест уже печатается.
+  static Future<List<int>> buildExtendedTestReceiptBytes() async {
     final profile = await CapabilityProfile.load();
     final g = Generator(PaperSize.mm80, profile);
     final code128Data = '{BHELLO BLE'.split('');
     final bc = Barcode.code128(code128Data);
+    final stamp = DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now());
 
     return [
       ...g.reset(),
@@ -443,7 +745,7 @@ class BleEscPosSession {
         styles: const PosStyles(align: PosAlign.center, bold: true),
       ),
       ...g.emptyLines(1),
-      ...g.text('BLE ESC/POS test', styles: const PosStyles(align: PosAlign.center)),
+      ...g.text(stamp, styles: const PosStyles(align: PosAlign.center)),
       ...g.hr(linesAfter: 1),
       ...g.barcode(bc, height: 72, width: 2, align: PosAlign.center),
       ...g.feed(1),
@@ -453,7 +755,7 @@ class BleEscPosSession {
         size: QRSize.size4,
       ),
       ...g.feed(2),
-      ...g.text('Done.', styles: const PosStyles(align: PosAlign.center)),
+      ...g.text('Extended test done.', styles: const PosStyles(align: PosAlign.center)),
       ...g.feed(2),
       ...g.cut(),
     ];

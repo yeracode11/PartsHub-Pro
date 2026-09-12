@@ -2,6 +2,52 @@ import 'package:flutter/foundation.dart';
 
 import 'package:autohub_b2b/models/item_model.dart';
 
+/// Разбор QR с этикетки [LabelProductData.fromItem]: `SKU:…|ID:n|CELL:…`.
+@immutable
+class LabelQrPayload {
+  const LabelQrPayload({
+    this.id,
+    this.sku,
+    required this.raw,
+  });
+
+  final int? id;
+  final String? sku;
+  final String raw;
+
+  factory LabelQrPayload.parse(String code) {
+    final raw = code.trim();
+    if (raw.isEmpty) {
+      return LabelQrPayload(raw: raw);
+    }
+    final plainId = int.tryParse(raw);
+    if (plainId != null && plainId > 0) {
+      return LabelQrPayload(id: plainId, raw: raw);
+    }
+    final upper = raw.toUpperCase();
+    if (!upper.contains('ID:') && !upper.contains('SKU:')) {
+      return LabelQrPayload(raw: raw);
+    }
+    int? id;
+    String? sku;
+    for (final part in raw.split('|')) {
+      final s = part.trim();
+      final colon = s.indexOf(':');
+      if (colon <= 0) {
+        continue;
+      }
+      final key = s.substring(0, colon).trim().toUpperCase();
+      final val = s.substring(colon + 1).trim();
+      if (key == 'ID') {
+        id = int.tryParse(val);
+      } else if (key == 'SKU' && val.isNotEmpty) {
+        sku = val;
+      }
+    }
+    return LabelQrPayload(id: id, sku: sku, raw: raw);
+  }
+}
+
 /// Данные для термоэтикетки (склад / WMS).
 @immutable
 class LabelProductData {

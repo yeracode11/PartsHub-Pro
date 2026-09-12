@@ -22,6 +22,7 @@ import 'package:autohub_b2b/repositories/items_repository.dart';
 import 'package:autohub_b2b/services/service_locator.dart';
 import 'package:autohub_b2b/utils/dialog_helper.dart';
 import 'package:autohub_b2b/utils/auth_guard.dart';
+import 'package:autohub_b2b/services/api/api_user_message.dart';
 
 class WarehouseScreen extends StatefulWidget {
   const WarehouseScreen({super.key});
@@ -35,7 +36,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
   final _searchController = TextEditingController();
   final WarehouseService _warehouseService = WarehouseService();
   final ItemsRepository _itemsRepo = ServiceLocator().itemsRepository;
-  
+
   List<ItemModel> items = [];
   List<ItemModel> filteredItems = [];
   List<Warehouse> warehouses = [];
@@ -43,11 +44,11 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
   String? error;
   bool isForbidden = false;
   String? forbiddenMessage;
-  
+
   // Активные фильтры
   Map<String, dynamic> activeFilters = {};
   int activeFiltersCount = 0;
-  
+
   // Выбранные товары для массовой печати
   Set<int> selectedItemIds = {};
 
@@ -98,13 +99,15 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
         });
       }
     } on DioException catch (e) {
-      if (e.response?.statusCode == 403) {
+      if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
         if (mounted) {
           setState(() {
             isForbidden = true;
             forbiddenMessage =
-                (e.response?.data is Map<String, dynamic> ? (e.response?.data['message'] as String?) : null) ??
-                    'У вас нет доступа к модулю "Склад". Войдите под владельцем или менеджером.';
+                (e.response?.data is Map<String, dynamic>
+                    ? (e.response?.data['message'] as String?)
+                    : null) ??
+                'У вас нет доступа к модулю "Склад". Войдите под владельцем или менеджером.';
           });
         }
       }
@@ -115,7 +118,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
 
   Future<void> _loadItems() async {
     if (!mounted) return;
-    
+
     setState(() {
       isLoading = true;
       error = null;
@@ -143,17 +146,19 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
     } on DioException catch (e) {
       if (!mounted) return;
 
-      if (e.response?.statusCode == 403) {
+      if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
         setState(() {
           isForbidden = true;
           forbiddenMessage =
-              (e.response?.data is Map<String, dynamic> ? (e.response?.data['message'] as String?) : null) ??
-                  'У вас нет доступа к модулю "Склад". Войдите под владельцем или менеджером.';
+              (e.response?.data is Map<String, dynamic>
+                  ? (e.response?.data['message'] as String?)
+                  : null) ??
+              'У вас нет доступа к модулю "Склад". Войдите под владельцем или менеджером.';
           isLoading = false;
         });
       } else {
         setState(() {
-          error = e.toString();
+          error = userFacingApiMessage(e);
           isLoading = false;
         });
       }
@@ -161,7 +166,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
       if (!mounted) return;
 
       setState(() {
-        error = e.toString();
+        error = userFacingApiMessage(e);
         isLoading = false;
       });
     }
@@ -173,7 +178,9 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
         filteredItems = items;
       } else {
         filteredItems = items.where((item) {
-          return (item.name ?? '').toLowerCase().contains(query.toLowerCase()) ||
+          return (item.name ?? '').toLowerCase().contains(
+                query.toLowerCase(),
+              ) ||
               (item.sku?.toLowerCase().contains(query.toLowerCase()) ?? false);
         }).toList();
       }
@@ -187,14 +194,11 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
       onApplyFilters: _applyFilters,
     );
     if (isMobile) {
-      Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => filterWidget),
-      );
+      Navigator.of(
+        context,
+      ).push(MaterialPageRoute(builder: (_) => filterWidget));
     } else {
-      showDialog(
-        context: context,
-        builder: (context) => filterWidget,
-      );
+      showDialog(context: context, builder: (context) => filterWidget);
     }
   }
 
@@ -220,7 +224,9 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('FilePicker не инициализирован. Перезапустите приложение.'),
+            content: Text(
+              'FilePicker не инициализирован. Перезапустите приложение.',
+            ),
           ),
         );
       }
@@ -243,9 +249,9 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
       final workbook = excel.Excel.decodeBytes(file.bytes!);
       if (workbook.tables.isEmpty) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Файл Excel пуст')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Файл Excel пуст')));
         }
         return;
       }
@@ -294,16 +300,18 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Импортировано товаров: ${importResult.successCount}'),
+            content: Text(
+              'Импортировано товаров: ${importResult.successCount}',
+            ),
             backgroundColor: Colors.green,
           ),
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка импорта: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка импорта'))));
       }
     }
   }
@@ -381,7 +389,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                     successCount++;
                   } catch (e) {
                     final name = itemData['name'] ?? 'Без названия';
-                    errors.add('$name: $e');
+                    errors.add('$name: ${userFacingApiMessage(e)}');
                   } finally {
                     processed++;
                     if (context.mounted) {
@@ -393,10 +401,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                 if (context.mounted) {
                   Navigator.pop(
                     context,
-                    _ImportResult(
-                      successCount: successCount,
-                      errors: errors,
-                    ),
+                    _ImportResult(successCount: successCount, errors: errors),
                   );
                 }
               });
@@ -461,14 +466,22 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
 
     if (rows.isEmpty) {
       errors.add('Нет строк для импорта');
-      return _ImportParseResult(items: itemsToImport, warnings: warnings, errors: errors);
+      return _ImportParseResult(
+        items: itemsToImport,
+        warnings: warnings,
+        errors: errors,
+      );
     }
 
     final headerRow = rows.first;
     final headerMap = _mapHeaderRow(headerRow);
     if (!headerMap.values.contains('name')) {
       errors.add('Не найдена колонка "Название"');
-      return _ImportParseResult(items: itemsToImport, warnings: warnings, errors: errors);
+      return _ImportParseResult(
+        items: itemsToImport,
+        warnings: warnings,
+        errors: errors,
+      );
     }
 
     for (var i = 1; i < rows.length; i++) {
@@ -611,7 +624,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
           children: [
             const Icon(Icons.error_outline, size: 64, color: Colors.red),
             const SizedBox(height: 16),
-            Text('Ошибка: $error'),
+            Text(error!, textAlign: TextAlign.center),
             const SizedBox(height: 16),
             ElevatedButton(
               onPressed: _loadItems,
@@ -649,9 +662,9 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
               items.isEmpty
                   ? 'Начните с добавления первого товара'
                   : 'Попробуйте изменить запрос',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppTheme.textSecondary,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: AppTheme.textSecondary),
             ),
             if (items.isEmpty) ...[
               const SizedBox(height: 24),
@@ -737,9 +750,16 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                             value: 'print',
                             child: Row(
                               children: [
-                                Icon(Icons.picture_as_pdf_outlined, size: 20, color: Colors.blue),
+                                Icon(
+                                  Icons.picture_as_pdf_outlined,
+                                  size: 20,
+                                  color: Colors.blue,
+                                ),
                                 SizedBox(width: 8),
-                                Text('Этикетка PDF', style: TextStyle(color: Colors.blue)),
+                                Text(
+                                  'Этикетка PDF',
+                                  style: TextStyle(color: Colors.blue),
+                                ),
                               ],
                             ),
                           ),
@@ -749,7 +769,10 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                               children: [
                                 Icon(Icons.delete, size: 20, color: Colors.red),
                                 SizedBox(width: 8),
-                                Text('Удалить', style: TextStyle(color: Colors.red)),
+                                Text(
+                                  'Удалить',
+                                  style: TextStyle(color: Colors.red),
+                                ),
                               ],
                             ),
                           ),
@@ -758,7 +781,8 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                           if (value == 'edit') {
                             Navigator.of(context).push(
                               MaterialPageRoute(
-                                builder: (context) => ItemEditScreen(item: item),
+                                builder: (context) =>
+                                    ItemEditScreen(item: item),
                               ),
                             );
                           } else if (value == 'print') {
@@ -855,8 +879,10 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
       return Scaffold(
         backgroundColor: AppTheme.backgroundColor,
         body: UnauthorizedPlaceholder(
-          message: forbiddenMessage ??
+          message:
+              forbiddenMessage ??
               'У вас нет доступа к модулю "Склад". Войдите под владельцем или менеджером.',
+          isForbidden: false,
         ),
       );
     }
@@ -870,9 +896,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
             padding: EdgeInsets.all(padding),
             decoration: const BoxDecoration(
               color: AppTheme.surfaceColor,
-              border: Border(
-                bottom: BorderSide(color: AppTheme.borderColor),
-              ),
+              border: Border(bottom: BorderSide(color: AppTheme.borderColor)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -886,17 +910,15 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                         children: [
                           Text(
                             'Товары',
-                            style: Theme.of(context).textTheme.displayMedium?.copyWith(
-                              fontSize: isMobile ? 24 : 28,
-                            ),
+                            style: Theme.of(context).textTheme.displayMedium
+                                ?.copyWith(fontSize: isMobile ? 24 : 28),
                           ),
                           if (!isMobile) ...[
                             const SizedBox(height: 4),
                             Text(
                               'Управление товарами и запчастями',
-                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    color: AppTheme.textSecondary,
-                                  ),
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(color: AppTheme.textSecondary),
                             ),
                           ],
                         ],
@@ -910,7 +932,8 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                             TextButton.icon(
                               onPressed: () {
                                 setState(() {
-                                  if (selectedItemIds.length == filteredItems.length) {
+                                  if (selectedItemIds.length ==
+                                      filteredItems.length) {
                                     // Снять выбор со всех
                                     selectedItemIds.clear();
                                   } else {
@@ -933,9 +956,10 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                               label: Text(
                                 selectedItemIds.isEmpty
                                     ? 'Выбрать все'
-                                    : selectedItemIds.length == filteredItems.length
-                                        ? 'Снять выбор'
-                                        : 'Выбрано: ${selectedItemIds.length}',
+                                    : selectedItemIds.length ==
+                                          filteredItems.length
+                                    ? 'Снять выбор'
+                                    : 'Выбрано: ${selectedItemIds.length}',
                               ),
                             ),
                           IconButton(
@@ -972,7 +996,8 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                             onPressed: () {
                               Navigator.of(context).push(
                                 MaterialPageRoute(
-                                  builder: (context) => const PrinterSettingsScreen(),
+                                  builder: (context) =>
+                                      const PrinterSettingsScreen(),
                                 ),
                               );
                             },
@@ -1029,7 +1054,8 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                             onPressed: () {
                               Navigator.of(context).push(
                                 MaterialPageRoute(
-                                  builder: (context) => const PrinterSettingsScreen(),
+                                  builder: (context) =>
+                                      const PrinterSettingsScreen(),
                                 ),
                               );
                             },
@@ -1082,7 +1108,9 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                     children: [
                       if (activeFilters['category'] != null)
                         Chip(
-                          label: Text('Категория: ${activeFilters['category']}'),
+                          label: Text(
+                            'Категория: ${activeFilters['category']}',
+                          ),
                           onDeleted: () {
                             setState(() => activeFilters.remove('category'));
                             _applyFilters(activeFilters);
@@ -1090,7 +1118,9 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                         ),
                       if (activeFilters['condition'] != null)
                         Chip(
-                          label: Text('Состояние: ${_getConditionLabel(activeFilters['condition'])}'),
+                          label: Text(
+                            'Состояние: ${_getConditionLabel(activeFilters['condition'])}',
+                          ),
                           onDeleted: () {
                             setState(() => activeFilters.remove('condition'));
                             _applyFilters(activeFilters);
@@ -1098,7 +1128,9 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                         ),
                       if (activeFilters['warehouseId'] != null)
                         Chip(
-                          label: Text('Склад: ${_getWarehouseName(activeFilters['warehouseId'])}'),
+                          label: Text(
+                            'Склад: ${_getWarehouseName(activeFilters['warehouseId'])}',
+                          ),
                           onDeleted: () {
                             setState(() => activeFilters.remove('warehouseId'));
                             _applyFilters(activeFilters);
@@ -1106,15 +1138,22 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                         ),
                       if (activeFilters['inStock'] != null)
                         Chip(
-                          label: Text(activeFilters['inStock'] == true ? 'В наличии' : 'Нет в наличии'),
+                          label: Text(
+                            activeFilters['inStock'] == true
+                                ? 'В наличии'
+                                : 'Нет в наличии',
+                          ),
                           onDeleted: () {
                             setState(() => activeFilters.remove('inStock'));
                             _applyFilters(activeFilters);
                           },
                         ),
-                      if (activeFilters['minPrice'] != null || activeFilters['maxPrice'] != null)
+                      if (activeFilters['minPrice'] != null ||
+                          activeFilters['maxPrice'] != null)
                         Chip(
-                          label: Text('Цена: ${activeFilters['minPrice'] ?? 0} - ${activeFilters['maxPrice'] ?? '∞'} ₸'),
+                          label: Text(
+                            'Цена: ${activeFilters['minPrice'] ?? 0} - ${activeFilters['maxPrice'] ?? '∞'} ₸',
+                          ),
                           onDeleted: () {
                             setState(() {
                               activeFilters.remove('minPrice');
@@ -1142,9 +1181,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
           ),
 
           // Список товаров
-          Expanded(
-            child: _buildItemsList(isMobile: isMobile),
-          ),
+          Expanded(child: _buildItemsList(isMobile: isMobile)),
         ],
       ),
       // Кнопка массовой печати
@@ -1175,9 +1212,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: const BoxDecoration(
-              border: Border(
-                bottom: BorderSide(color: AppTheme.borderColor),
-              ),
+              border: Border(bottom: BorderSide(color: AppTheme.borderColor)),
             ),
             child: Row(
               children: [
@@ -1196,8 +1231,8 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                   child: Text(
                     'Название',
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: AppTheme.textSecondary,
-                        ),
+                      color: AppTheme.textSecondary,
+                    ),
                   ),
                 ),
                 Expanded(
@@ -1205,8 +1240,8 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                   child: Text(
                     'Артикул',
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: AppTheme.textSecondary,
-                        ),
+                      color: AppTheme.textSecondary,
+                    ),
                   ),
                 ),
                 Expanded(
@@ -1214,16 +1249,16 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                   child: Text(
                     'Категория',
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: AppTheme.textSecondary,
-                        ),
+                      color: AppTheme.textSecondary,
+                    ),
                   ),
                 ),
                 Expanded(
                   child: Text(
                     'Количество',
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: AppTheme.textSecondary,
-                        ),
+                      color: AppTheme.textSecondary,
+                    ),
                   ),
                 ),
                 Expanded(
@@ -1231,8 +1266,8 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                   child: Text(
                     'Цена',
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: AppTheme.textSecondary,
-                        ),
+                      color: AppTheme.textSecondary,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 100), // Для кнопок действий
@@ -1279,19 +1314,11 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                         flex: 3,
                         child: Text(
                           item.name ?? 'Без названия',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w500,
-                          ),
+                          style: const TextStyle(fontWeight: FontWeight.w500),
                         ),
                       ),
-                      Expanded(
-                        flex: 2,
-                        child: Text(item.sku ?? '-'),
-                      ),
-                      Expanded(
-                        flex: 2,
-                        child: Text(item.category ?? '-'),
-                      ),
+                      Expanded(flex: 2, child: Text(item.sku ?? '-')),
+                      Expanded(flex: 2, child: Text(item.category ?? '-')),
                       Expanded(
                         child: Container(
                           padding: const EdgeInsets.symmetric(
@@ -1301,11 +1328,11 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                           decoration: BoxDecoration(
                             color: item.quantity > 10
                                 ? AppTheme.successGradient.colors[0]
-                                    .withOpacity(0.1)
+                                      .withOpacity(0.1)
                                 : item.quantity > 0
-                                    ? AppTheme.warningGradient.colors[0]
-                                        .withOpacity(0.1)
-                                    : Colors.red.withOpacity(0.1),
+                                ? AppTheme.warningGradient.colors[0]
+                                      .withOpacity(0.1)
+                                : Colors.red.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
@@ -1314,8 +1341,8 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                               color: item.quantity > 10
                                   ? AppTheme.successGradient.colors[0]
                                   : item.quantity > 0
-                                      ? AppTheme.warningGradient.colors[0]
-                                      : Colors.red,
+                                  ? AppTheme.warningGradient.colors[0]
+                                  : Colors.red,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -1325,9 +1352,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                         flex: 2,
                         child: Text(
                           '${numberFormat.format(item.price)} ₸',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                          ),
+                          style: const TextStyle(fontWeight: FontWeight.w600),
                         ),
                       ),
                       SizedBox(
@@ -1341,8 +1366,10 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                               tooltip: 'Редактировать',
                             ),
                             IconButton(
-                              icon: const Icon(Icons.delete_outline,
-                                  color: Colors.red),
+                              icon: const Icon(
+                                Icons.delete_outline,
+                                color: Colors.red,
+                              ),
                               onPressed: () => _showDeleteDialog(context, item),
                               tooltip: 'Удалить',
                             ),
@@ -1373,9 +1400,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
       },
     );
     if (isMobile) {
-      Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => formWidget),
-      );
+      Navigator.of(context).push(MaterialPageRoute(builder: (_) => formWidget));
     } else {
       showDialog(context: context, builder: (_) => formWidget);
     }
@@ -1387,7 +1412,8 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
     DialogHelper.showConfirm(
       context: context,
       title: 'Удалить товар?',
-      message: 'Вы уверены что хотите удалить "${item.name ?? 'Без названия'}"?',
+      message:
+          'Вы уверены что хотите удалить "${item.name ?? 'Без названия'}"?',
       confirmText: 'Удалить',
       isDestructive: true,
       onConfirm: (ctx) async {
@@ -1395,9 +1421,9 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
         if (context.mounted) {
           Navigator.pop(ctx);
           _loadItems();
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Товар удален')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Товар удален')));
         }
       },
     );
@@ -1409,9 +1435,8 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
     if (!context.mounted) return;
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (context) => LabelPrintScreen(
-          product: LabelProductData.fromItem(item),
-        ),
+        builder: (context) =>
+            LabelPrintScreen(product: LabelProductData.fromItem(item)),
       ),
     );
   }
@@ -1422,7 +1447,9 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
     if (!context.mounted) return;
     if (selectedItemIds.isEmpty) return;
 
-    final selectedItems = items.where((item) => selectedItemIds.contains(item.id)).toList();
+    final selectedItems = items
+        .where((item) => selectedItemIds.contains(item.id))
+        .toList();
     if (selectedItems.isEmpty) return;
 
     final confirmed = await showDialog<bool>(
@@ -1438,7 +1465,10 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
               style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
             ),
             const SizedBox(height: 12),
-            const Text('Товары:', style: TextStyle(fontWeight: FontWeight.w600)),
+            const Text(
+              'Товары:',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
             const SizedBox(height: 8),
             ConstrainedBox(
               constraints: const BoxConstraints(maxHeight: 200),
@@ -1450,7 +1480,11 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                       padding: const EdgeInsets.only(bottom: 4),
                       child: Row(
                         children: [
-                          const Icon(Icons.check_circle, size: 16, color: Colors.green),
+                          const Icon(
+                            Icons.check_circle,
+                            size: 16,
+                            color: Colors.green,
+                          ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
@@ -1533,10 +1567,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
       if (context.mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Ошибка: $e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка')), backgroundColor: Colors.red),
         );
       }
     }
@@ -1546,9 +1577,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
     if (!await ensureAuthenticated(context)) return;
     if (!context.mounted) return;
     final result = await Navigator.of(context).push<ItemModel>(
-      MaterialPageRoute(
-        builder: (context) => ItemEditScreen(item: item),
-      ),
+      MaterialPageRoute(builder: (context) => ItemEditScreen(item: item)),
     );
 
     if (result != null) {
@@ -1608,8 +1637,16 @@ class _ItemFormDialog extends StatefulWidget {
 
 class _ItemFormDialogState extends State<_ItemFormDialog> {
   static const _categories = [
-    'Двигатель', 'Трансмиссия', 'Тормозная система', 'Подвеска',
-    'Электрика', 'Кузов', 'Салон', 'Оптика', 'Фильтры', 'Расходники',
+    'Двигатель',
+    'Трансмиссия',
+    'Тормозная система',
+    'Подвеска',
+    'Электрика',
+    'Кузов',
+    'Салон',
+    'Оптика',
+    'Фильтры',
+    'Расходники',
   ];
 
   late final TextEditingController _nameController;
@@ -1626,10 +1663,18 @@ class _ItemFormDialogState extends State<_ItemFormDialog> {
     final item = widget.item;
     _nameController = TextEditingController(text: item?.name ?? '');
     _skuController = TextEditingController(text: item?.sku ?? '');
-    _priceController = TextEditingController(text: item?.price.toString() ?? '');
-    _quantityController = TextEditingController(text: item?.quantity.toString() ?? '');
-    _descriptionController = TextEditingController(text: item?.description ?? '');
-    _warehouseCellController = TextEditingController(text: item?.warehouseCell ?? '');
+    _priceController = TextEditingController(
+      text: item?.price.toString() ?? '',
+    );
+    _quantityController = TextEditingController(
+      text: item?.quantity.toString() ?? '',
+    );
+    _descriptionController = TextEditingController(
+      text: item?.description ?? '',
+    );
+    _warehouseCellController = TextEditingController(
+      text: item?.warehouseCell ?? '',
+    );
     _selectedCategory = item?.category;
   }
 
@@ -1646,9 +1691,9 @@ class _ItemFormDialogState extends State<_ItemFormDialog> {
 
   Future<void> _save() async {
     if (_nameController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Укажите название товара')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Укажите название товара')));
       return;
     }
     final data = {
@@ -1657,8 +1702,12 @@ class _ItemFormDialogState extends State<_ItemFormDialog> {
       'category': _selectedCategory,
       'price': double.tryParse(_priceController.text) ?? 0,
       'quantity': int.tryParse(_quantityController.text) ?? 0,
-      'description': _descriptionController.text.isEmpty ? null : _descriptionController.text,
-      'warehouseCell': _warehouseCellController.text.isEmpty ? null : _warehouseCellController.text.trim(),
+      'description': _descriptionController.text.isEmpty
+          ? null
+          : _descriptionController.text,
+      'warehouseCell': _warehouseCellController.text.isEmpty
+          ? null
+          : _warehouseCellController.text.trim(),
       'condition': 'new',
     };
     try {
@@ -1670,14 +1719,18 @@ class _ItemFormDialogState extends State<_ItemFormDialog> {
       if (mounted) {
         widget.onSuccess();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(widget.item != null ? 'Товар обновлен' : 'Товар добавлен')),
+          SnackBar(
+            content: Text(
+              widget.item != null ? 'Товар обновлен' : 'Товар добавлен',
+            ),
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка'))));
       }
     }
   }
@@ -1689,19 +1742,30 @@ class _ItemFormDialogState extends State<_ItemFormDialog> {
       children: [
         TextField(
           controller: _nameController,
-          decoration: const InputDecoration(labelText: 'Название *', border: OutlineInputBorder()),
+          decoration: const InputDecoration(
+            labelText: 'Название *',
+            border: OutlineInputBorder(),
+          ),
         ),
         const SizedBox(height: 16),
         TextField(
           controller: _skuController,
-          decoration: const InputDecoration(labelText: 'Артикул', border: OutlineInputBorder()),
+          decoration: const InputDecoration(
+            labelText: 'Артикул',
+            border: OutlineInputBorder(),
+          ),
         ),
         const SizedBox(height: 16),
         DropdownButtonFormField<String>(
           value: _selectedCategory,
-          decoration: const InputDecoration(labelText: 'Категория', border: OutlineInputBorder()),
+          decoration: const InputDecoration(
+            labelText: 'Категория',
+            border: OutlineInputBorder(),
+          ),
           hint: const Text('Выберите категорию'),
-          items: _categories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+          items: _categories
+              .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+              .toList(),
           onChanged: (v) => setState(() => _selectedCategory = v),
         ),
         const SizedBox(height: 16),
@@ -1710,7 +1774,11 @@ class _ItemFormDialogState extends State<_ItemFormDialog> {
             Expanded(
               child: TextField(
                 controller: _priceController,
-                decoration: const InputDecoration(labelText: 'Цена *', border: OutlineInputBorder(), suffixText: '₸'),
+                decoration: const InputDecoration(
+                  labelText: 'Цена *',
+                  border: OutlineInputBorder(),
+                  suffixText: '₸',
+                ),
                 keyboardType: TextInputType.number,
               ),
             ),
@@ -1718,7 +1786,10 @@ class _ItemFormDialogState extends State<_ItemFormDialog> {
             Expanded(
               child: TextField(
                 controller: _quantityController,
-                decoration: const InputDecoration(labelText: 'Количество *', border: OutlineInputBorder()),
+                decoration: const InputDecoration(
+                  labelText: 'Количество *',
+                  border: OutlineInputBorder(),
+                ),
                 keyboardType: TextInputType.number,
               ),
             ),
@@ -1727,7 +1798,10 @@ class _ItemFormDialogState extends State<_ItemFormDialog> {
         const SizedBox(height: 16),
         TextField(
           controller: _descriptionController,
-          decoration: const InputDecoration(labelText: 'Описание', border: OutlineInputBorder()),
+          decoration: const InputDecoration(
+            labelText: 'Описание',
+            border: OutlineInputBorder(),
+          ),
           maxLines: 3,
         ),
         const SizedBox(height: 16),
@@ -1752,7 +1826,10 @@ class _ItemFormDialogState extends State<_ItemFormDialog> {
       return Scaffold(
         appBar: AppBar(
           title: Text(isEdit ? 'Редактировать товар' : 'Добавить товар'),
-          leading: IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+          leading: IconButton(
+            icon: const Icon(Icons.close),
+            onPressed: () => Navigator.pop(context),
+          ),
           actions: [
             FilledButton(
               onPressed: _save,
@@ -1773,8 +1850,14 @@ class _ItemFormDialogState extends State<_ItemFormDialog> {
         child: SingleChildScrollView(child: _buildFormContent()),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
-        FilledButton(onPressed: _save, child: Text(isEdit ? 'Сохранить' : 'Добавить')),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Отмена'),
+        ),
+        FilledButton(
+          onPressed: _save,
+          child: Text(isEdit ? 'Сохранить' : 'Добавить'),
+        ),
       ],
     );
   }
@@ -1796,8 +1879,5 @@ class _ImportResult {
   final int successCount;
   final List<String> errors;
 
-  const _ImportResult({
-    required this.successCount,
-    required this.errors,
-  });
+  const _ImportResult({required this.successCount, required this.errors});
 }

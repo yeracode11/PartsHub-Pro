@@ -6,6 +6,7 @@ import 'package:autohub_b2b/models/receipt_document_model.dart';
 import 'package:autohub_b2b/screens/receipt/receipt_preview_screen.dart';
 import 'package:autohub_b2b/screens/warehouse/ble_printer_scan_screen.dart';
 import 'package:autohub_b2b/screens/warehouse/printer_discovery_screen.dart';
+import 'package:autohub_b2b/services/api/api_user_message.dart';
 import 'package:autohub_b2b/services/hardware/thermal_printer_service.dart';
 
 class PrinterSettingsScreen extends StatefulWidget {
@@ -42,14 +43,12 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
 
   Future<void> _init() async {
     setState(() => _isLoading = true);
-    if (!Platform.isIOS) {
-      await _printer.autoConnectToSavedPrinter();
-      if (_printer.isWifi && _printer.wifiIp != null) {
-        _ipController.text = _printer.wifiIp!;
-        _portController.text = _printer.wifiPort.toString();
-      }
-      await _refresh();
+    await _printer.autoConnectToSavedPrinter();
+    if (_printer.isWifi && _printer.wifiIp != null) {
+      _ipController.text = _printer.wifiIp!;
+      _portController.text = _printer.wifiPort.toString();
     }
+    await _refresh();
     setState(() => _isLoading = false);
   }
 
@@ -91,7 +90,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isConnectingWifi = false);
-        _showSnack('Ошибка: $e', Colors.red);
+        _showSnack(userFacingApiMessage(e), Colors.red);
       }
     }
   }
@@ -114,7 +113,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _connectingAddress = null);
-        _showSnack('Ошибка: $e', Colors.red);
+        _showSnack(userFacingApiMessage(e), Colors.red);
       }
     }
   }
@@ -139,7 +138,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isPrinting = false);
-        _showSnack('Ошибка: $e', Colors.red);
+        _showSnack(userFacingApiMessage(e), Colors.red);
       }
     }
   }
@@ -172,6 +171,8 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                   padding: const EdgeInsets.all(16),
                   children: [
                     _buildBleThermalSection(context),
+                    const SizedBox(height: 24),
+                    _buildWifiSection(),
                     const SizedBox(height: 24),
                     _buildIosPdfReceiptSection(),
                     const SizedBox(height: 24),
@@ -442,7 +443,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
         const SizedBox(height: 4),
         Text(
           Platform.isIOS
-              ? 'Для Xprinter на iOS используйте подключение по WiFi.\nПринтер и телефон должны быть в одной WiFi-сети.'
+              ? 'Порт 9100 (RAW/ESC‑POS или TSPL зависит от модели).\nНа экране этикетки есть «Печать по сети» для ESC/POS. Разрешите доступ к локальной сети на iPhone.'
               : 'Подключение к принтеру по WiFi (порт 9100).\nПринтер и устройство должны быть в одной сети.',
           style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
         ),

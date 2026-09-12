@@ -11,7 +11,7 @@ class ItemsService {
       final List<dynamic> data = response.data;
       return data.map((json) => ItemModel.fromJson(json)).toList();
     } catch (e) {
-      throw Exception('Failed to load items: $e');
+      rethrow;
     }
   }
 
@@ -21,7 +21,7 @@ class ItemsService {
       final response = await _apiClient.dio.get('/api/items/$id');
       return ItemModel.fromJson(response.data);
     } catch (e) {
-      throw Exception('Failed to load item: $e');
+      rethrow;
     }
   }
 

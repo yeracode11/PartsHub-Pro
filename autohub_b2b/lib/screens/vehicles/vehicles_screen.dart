@@ -9,6 +9,7 @@ import 'package:autohub_b2b/models/vehicle_model.dart';
 import 'package:dio/dio.dart';
 import 'package:intl/intl.dart';
 import 'package:autohub_b2b/screens/vehicles/vehicle_detail_screen.dart';
+import 'package:autohub_b2b/services/api/api_user_message.dart';
 
 class VehiclesScreen extends StatefulWidget {
   const VehiclesScreen({super.key});
@@ -50,10 +51,12 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
         isLoading = false;
       });
     } catch (e) {
-      if (e is DioException && e.response?.statusCode == 403) {
+      if (e is DioException &&
+          (e.response?.statusCode == 401 || e.response?.statusCode == 403)) {
         setState(() {
           isForbidden = true;
-          forbiddenMessage = (e.response?.data is Map<String, dynamic>
+          forbiddenMessage =
+              (e.response?.data is Map<String, dynamic>
                   ? (e.response?.data['message'] as String?)
                   : null) ??
               'У вас нет доступа к разделу «Автомобили». Войдите под владельцем или менеджером.';
@@ -69,7 +72,7 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Ошибка загрузки: $e'),
+              content: Text(userFacingApiMessage(e, prefix: 'Ошибка загрузки')),
               backgroundColor: Colors.red,
             ),
           );
@@ -116,9 +119,7 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
       },
     );
     if (isMobile) {
-      Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => dialog),
-      );
+      Navigator.of(context).push(MaterialPageRoute(builder: (_) => dialog));
     } else {
       showDialog(context: context, builder: (_) => dialog);
     }
@@ -151,7 +152,7 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Ошибка удаления: $e'),
+              content: Text(userFacingApiMessage(e, prefix: 'Ошибка удаления')),
               backgroundColor: Colors.red,
             ),
           );
@@ -202,7 +203,8 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
                         children: [
                           Text(
                             '🚗 Автомобили',
-                            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                            style: Theme.of(context).textTheme.headlineMedium
+                                ?.copyWith(
                                   fontWeight: FontWeight.bold,
                                   fontSize: isMobile ? 20 : 24,
                                 ),
@@ -266,56 +268,59 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
           // Список автомобилей
           Expanded(
             child: isForbidden
-                ? UnauthorizedPlaceholder(message: forbiddenMessage)
+                ? UnauthorizedPlaceholder(
+                    message: forbiddenMessage,
+                    isForbidden: false,
+                  )
                 : isLoading
-                    ? const Center(child: CircularProgressIndicator())
-                    : isOffline
-                    ? OfflinePlaceholder(onRetry: _loadVehicles)
-                    : filteredVehicles.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.directions_car_outlined,
-                              size: 64,
-                              color: Colors.grey.shade400,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              searchQuery.isEmpty
-                                  ? 'Нет автомобилей'
-                                  : 'Ничего не найдено',
-                              style: TextStyle(
-                                fontSize: 16,
-                                color: AppTheme.textSecondary,
-                              ),
-                            ),
-                          ],
+                ? const Center(child: CircularProgressIndicator())
+                : isOffline
+                ? OfflinePlaceholder(onRetry: _loadVehicles)
+                : filteredVehicles.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.directions_car_outlined,
+                          size: 64,
+                          color: Colors.grey.shade400,
                         ),
-                      )
-                    : LayoutBuilder(
-                        builder: (context, constraints) {
-                          final crossAxisCount = isMobile ? 1 : 3;
-                          // Увеличиваем aspectRatio для мобильных, чтобы карточки были выше
-                          final aspectRatio = isMobile ? 1.3 : 1.5;
-                          
-                          return GridView.builder(
-                            padding: EdgeInsets.all(padding),
-                            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: crossAxisCount,
-                              childAspectRatio: aspectRatio,
-                              crossAxisSpacing: isMobile ? 0 : 16,
-                              mainAxisSpacing: isMobile ? 12 : 16,
-                            ),
-                            itemCount: filteredVehicles.length,
-                            itemBuilder: (context, index) {
-                              final vehicle = filteredVehicles[index];
-                              return _buildVehicleCard(vehicle);
-                            },
-                          );
+                        const SizedBox(height: 16),
+                        Text(
+                          searchQuery.isEmpty
+                              ? 'Нет автомобилей'
+                              : 'Ничего не найдено',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: AppTheme.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : LayoutBuilder(
+                    builder: (context, constraints) {
+                      final crossAxisCount = isMobile ? 1 : 3;
+                      // Увеличиваем aspectRatio для мобильных, чтобы карточки были выше
+                      final aspectRatio = isMobile ? 1.3 : 1.5;
+
+                      return GridView.builder(
+                        padding: EdgeInsets.all(padding),
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: crossAxisCount,
+                          childAspectRatio: aspectRatio,
+                          crossAxisSpacing: isMobile ? 0 : 16,
+                          mainAxisSpacing: isMobile ? 12 : 16,
+                        ),
+                        itemCount: filteredVehicles.length,
+                        itemBuilder: (context, index) {
+                          final vehicle = filteredVehicles[index];
+                          return _buildVehicleCard(vehicle);
                         },
-                      ),
+                      );
+                    },
+                  ),
           ),
         ],
       ),
@@ -324,7 +329,7 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
 
   Widget _buildVehicleCard(VehicleModel vehicle) {
     final isMobile = MediaQuery.of(context).size.width < 768;
-    
+
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(
@@ -375,7 +380,10 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
                           children: [
                             Icon(Icons.delete, size: 18, color: Colors.red),
                             SizedBox(width: 8),
-                            Text('Удалить', style: TextStyle(color: Colors.red)),
+                            Text(
+                              'Удалить',
+                              style: TextStyle(color: Colors.red),
+                            ),
                           ],
                         ),
                       ),
@@ -415,9 +423,17 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
               SizedBox(height: isMobile ? 6 : 12),
 
               // Информация
-              _buildInfoRow(Icons.person, vehicle.customerName, isMobile: isMobile),
+              _buildInfoRow(
+                Icons.person,
+                vehicle.customerName,
+                isMobile: isMobile,
+              ),
               SizedBox(height: isMobile ? 1 : 4),
-              _buildInfoRow(Icons.speed, '${vehicle.currentMileage} км', isMobile: isMobile),
+              _buildInfoRow(
+                Icons.speed,
+                '${vehicle.currentMileage} км',
+                isMobile: isMobile,
+              ),
               SizedBox(height: isMobile ? 1 : 4),
               _buildInfoRow(
                 Icons.local_gas_station,
@@ -441,7 +457,11 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.warning, size: isMobile ? 14 : 16, color: Colors.orange.shade700),
+                      Icon(
+                        Icons.warning,
+                        size: isMobile ? 14 : 16,
+                        color: Colors.orange.shade700,
+                      ),
                       SizedBox(width: isMobile ? 3 : 4),
                       Text(
                         'Требуется ТО',
@@ -495,10 +515,7 @@ class _VehicleDialog extends StatefulWidget {
   final VehicleModel? vehicle;
   final VoidCallback onSave;
 
-  const _VehicleDialog({
-    this.vehicle,
-    required this.onSave,
-  });
+  const _VehicleDialog({this.vehicle, required this.onSave});
 
   @override
   State<_VehicleDialog> createState() => _VehicleDialogState();
@@ -527,13 +544,13 @@ class _VehicleDialogState extends State<_VehicleDialog> {
   List<Map<String, dynamic>> brands = [];
   List<Map<String, dynamic>> models = [];
   List<Map<String, dynamic>> generations = [];
-  
+
   String? selectedBrandSlug;
   String? selectedBrandName;
   String? selectedModelSlug;
   String? selectedModelName;
   Map<String, dynamic>? selectedGeneration;
-  
+
   bool isLoadingBrands = false;
   bool isLoadingModels = false;
   bool isLoadingGenerations = false;
@@ -547,9 +564,15 @@ class _VehicleDialogState extends State<_VehicleDialog> {
     _colorController = TextEditingController(text: v?.color ?? '');
     _plateNumberController = TextEditingController(text: v?.plateNumber ?? '');
     _vinController = TextEditingController(text: v?.vin ?? '');
-    _engineVolumeController = TextEditingController(text: v?.engineVolume ?? '');
-    _enginePowerController = TextEditingController(text: v?.enginePower?.toString() ?? '');
-    _mileageController = TextEditingController(text: v?.currentMileage.toString() ?? '0');
+    _engineVolumeController = TextEditingController(
+      text: v?.engineVolume ?? '',
+    );
+    _enginePowerController = TextEditingController(
+      text: v?.enginePower?.toString() ?? '',
+    );
+    _mileageController = TextEditingController(
+      text: v?.currentMileage.toString() ?? '0',
+    );
     _notesController = TextEditingController(text: v?.notes ?? '');
 
     _selectedCustomerId = v?.customerId;
@@ -583,7 +606,7 @@ class _VehicleDialogState extends State<_VehicleDialog> {
     try {
       final res = await dio.get('/api/auto-data/brands');
       final data = res.data;
-      
+
       if (mounted) {
         setState(() {
           // Проверяем, что данные есть и это массив
@@ -591,15 +614,18 @@ class _VehicleDialogState extends State<_VehicleDialog> {
             brands = List<Map<String, dynamic>>.from(data);
           } else {
             brands = [];
-            if (data != null) {
-            }
+            if (data != null) {}
           }
-          
+
           // Если редактируем и есть марка, пытаемся найти её в списке
-          if (widget.vehicle != null && widget.vehicle!.brand.isNotEmpty && brands.isNotEmpty) {
+          if (widget.vehicle != null &&
+              widget.vehicle!.brand.isNotEmpty &&
+              brands.isNotEmpty) {
             try {
               final foundBrand = brands.firstWhere(
-                (b) => (b['name'] as String).toLowerCase() == widget.vehicle!.brand.toLowerCase(),
+                (b) =>
+                    (b['name'] as String).toLowerCase() ==
+                    widget.vehicle!.brand.toLowerCase(),
                 orElse: () => {},
               );
               if (foundBrand.isNotEmpty) {
@@ -607,15 +633,16 @@ class _VehicleDialogState extends State<_VehicleDialog> {
                 selectedBrandName = foundBrand['name'] as String;
                 _loadModels(selectedBrandSlug!);
               }
-            } catch (e) {
-            }
+            } catch (e) {}
           }
         });
-        
+
         if (brands.isEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Марки не загружены. Проверьте подключение к серверу.'),
+              content: Text(
+                'Марки не загружены. Проверьте подключение к серверу.',
+              ),
               backgroundColor: Colors.orange,
               duration: Duration(seconds: 3),
             ),
@@ -629,7 +656,7 @@ class _VehicleDialogState extends State<_VehicleDialog> {
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Ошибка загрузки марок: ${e.toString()}'),
+            content: Text(userFacingApiMessage(e, prefix: 'Ошибка загрузки марок')),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 5),
           ),
@@ -656,7 +683,9 @@ class _VehicleDialogState extends State<_VehicleDialog> {
         // Если редактируем и есть модель, пытаемся найти её в списке
         if (widget.vehicle != null && widget.vehicle!.model.isNotEmpty) {
           final foundModel = models.firstWhere(
-            (m) => (m['name'] as String).toLowerCase() == widget.vehicle!.model.toLowerCase(),
+            (m) =>
+                (m['name'] as String).toLowerCase() ==
+                widget.vehicle!.model.toLowerCase(),
             orElse: () => {},
           );
           if (foundModel.isNotEmpty) {
@@ -668,9 +697,9 @@ class _VehicleDialogState extends State<_VehicleDialog> {
       });
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка загрузки моделей: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка загрузки моделей'))));
       }
     } finally {
       if (mounted) setState(() => isLoadingModels = false);
@@ -684,14 +713,16 @@ class _VehicleDialogState extends State<_VehicleDialog> {
       selectedGeneration = null;
     });
     try {
-      final res = await dio.get('/api/auto-data/brands/$brandSlug/models/$modelSlug/generations');
+      final res = await dio.get(
+        '/api/auto-data/brands/$brandSlug/models/$modelSlug/generations',
+      );
       setState(() {
         generations = List<Map<String, dynamic>>.from(res.data ?? []);
       });
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка загрузки поколений: $e')),
+          SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка загрузки поколений'))),
         );
       }
     } finally {
@@ -700,7 +731,7 @@ class _VehicleDialogState extends State<_VehicleDialog> {
   }
 
   Future<void> _save() async {
-    if (!_formKey.currentState!.validate() || 
+    if (!_formKey.currentState!.validate() ||
         _selectedCustomerId == null ||
         (selectedBrandName == null || selectedBrandName!.isEmpty) ||
         (selectedModelName == null || selectedModelName!.isEmpty)) {
@@ -715,7 +746,8 @@ class _VehicleDialogState extends State<_VehicleDialog> {
 
     // Определяем год из поколения или из поля
     int year;
-    if (selectedGeneration != null && selectedGeneration!['year_from'] != null) {
+    if (selectedGeneration != null &&
+        selectedGeneration!['year_from'] != null) {
       year = selectedGeneration!['year_from'] as int;
     } else {
       year = int.parse(_yearController.text);
@@ -731,8 +763,12 @@ class _VehicleDialogState extends State<_VehicleDialog> {
       'vin': _vinController.text.isEmpty ? null : _vinController.text,
       'fuelType': _selectedFuelType,
       'transmission': _selectedTransmission,
-      'engineVolume': _engineVolumeController.text.isEmpty ? null : _engineVolumeController.text,
-      'enginePower': _enginePowerController.text.isEmpty ? null : int.parse(_enginePowerController.text),
+      'engineVolume': _engineVolumeController.text.isEmpty
+          ? null
+          : _engineVolumeController.text,
+      'enginePower': _enginePowerController.text.isEmpty
+          ? null
+          : int.parse(_enginePowerController.text),
       'currentMileage': int.parse(_mileageController.text),
       'notes': _notesController.text.isEmpty ? null : _notesController.text,
     };
@@ -748,7 +784,7 @@ class _VehicleDialogState extends State<_VehicleDialog> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Ошибка сохранения: $e'),
+            content: Text(userFacingApiMessage(e, prefix: 'Ошибка сохранения')),
             backgroundColor: Colors.red,
           ),
         );
@@ -767,16 +803,17 @@ class _VehicleDialogState extends State<_VehicleDialog> {
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
       appBar: AppBar(
-        title: Text(widget.vehicle == null ? 'Добавить автомобиль' : 'Редактировать автомобиль'),
+        title: Text(
+          widget.vehicle == null
+              ? 'Добавить автомобиль'
+              : 'Редактировать автомобиль',
+        ),
         leading: IconButton(
           icon: const Icon(Icons.close),
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
-          FilledButton(
-            onPressed: _save,
-            child: const Text('Сохранить'),
-          ),
+          FilledButton(onPressed: _save, child: const Text('Сохранить')),
         ],
       ),
       body: Form(
@@ -794,7 +831,11 @@ class _VehicleDialogState extends State<_VehicleDialog> {
 
   Widget _buildDesktopDialog(BuildContext context) {
     return AlertDialog(
-      title: Text(widget.vehicle == null ? 'Добавить автомобиль' : 'Редактировать автомобиль'),
+      title: Text(
+        widget.vehicle == null
+            ? 'Добавить автомобиль'
+            : 'Редактировать автомобиль',
+      ),
       content: SizedBox(
         width: 600,
         child: Form(
@@ -812,335 +853,336 @@ class _VehicleDialogState extends State<_VehicleDialog> {
           onPressed: () => Navigator.pop(context),
           child: const Text('Отмена'),
         ),
-        ElevatedButton(
-          onPressed: _save,
-          child: const Text('Сохранить'),
-        ),
+        ElevatedButton(onPressed: _save, child: const Text('Сохранить')),
       ],
     );
   }
 
   List<Widget> _buildFormFields() => [
-        // Владелец
-                if (isLoadingCustomers)
-                  const CircularProgressIndicator()
-                else
-                  DropdownButtonFormField<int>(
-                    value: _selectedCustomerId,
-                    decoration: const InputDecoration(labelText: 'Владелец *'),
-                    items: customers.map((customer) {
-                      return DropdownMenuItem<int>(
-                        value: customer['id'],
-                        child: Text(customer['name']),
-                      );
-                    }).toList(),
-                    onChanged: (value) {
-                      setState(() => _selectedCustomerId = value);
-                    },
-                    validator: (value) => value == null ? 'Выберите владельца' : null,
-                  ),
-                const SizedBox(height: 16),
+    // Владелец
+    if (isLoadingCustomers)
+      const CircularProgressIndicator()
+    else
+      DropdownButtonFormField<int>(
+        value: _selectedCustomerId,
+        decoration: const InputDecoration(labelText: 'Владелец *'),
+        items: customers.map((customer) {
+          return DropdownMenuItem<int>(
+            value: customer['id'],
+            child: Text(customer['name']),
+          );
+        }).toList(),
+        onChanged: (value) {
+          setState(() => _selectedCustomerId = value);
+        },
+        validator: (value) => value == null ? 'Выберите владельца' : null,
+      ),
+    const SizedBox(height: 16),
 
-                // Марка
-                if (isLoadingBrands)
-                  const LinearProgressIndicator()
-                else
-                  DropdownButtonFormField<String>(
-                    value: selectedBrandSlug,
-                    decoration: const InputDecoration(labelText: 'Марка *'),
-                    hint: const Text('Выберите марку'),
-                    items: brands.map((brand) {
-                      return DropdownMenuItem<String>(
-                        value: brand['slug'] as String,
-                        child: Text(brand['name'] as String),
-                      );
-                    }).toList(),
-                    onChanged: (value) {
-                      if (value == null) return;
-                      setState(() {
-                        selectedBrandSlug = value;
-                        selectedBrandName = brands.firstWhere((b) => b['slug'] == value)['name'] as String;
-                        models = [];
-                        generations = [];
-                        selectedModelSlug = null;
-                        selectedModelName = null;
-                        selectedGeneration = null;
-                      });
-                      _loadModels(value);
-                    },
-                    validator: (value) => value == null ? 'Выберите марку' : null,
-                  ),
-                const SizedBox(height: 16),
+    // Марка
+    if (isLoadingBrands)
+      const LinearProgressIndicator()
+    else
+      DropdownButtonFormField<String>(
+        value: selectedBrandSlug,
+        decoration: const InputDecoration(labelText: 'Марка *'),
+        hint: const Text('Выберите марку'),
+        items: brands.map((brand) {
+          return DropdownMenuItem<String>(
+            value: brand['slug'] as String,
+            child: Text(brand['name'] as String),
+          );
+        }).toList(),
+        onChanged: (value) {
+          if (value == null) return;
+          setState(() {
+            selectedBrandSlug = value;
+            selectedBrandName =
+                brands.firstWhere((b) => b['slug'] == value)['name'] as String;
+            models = [];
+            generations = [];
+            selectedModelSlug = null;
+            selectedModelName = null;
+            selectedGeneration = null;
+          });
+          _loadModels(value);
+        },
+        validator: (value) => value == null ? 'Выберите марку' : null,
+      ),
+    const SizedBox(height: 16),
 
-                // Модель
-                if (selectedBrandSlug == null)
-                  const SizedBox.shrink()
-                else if (isLoadingModels)
-                  const LinearProgressIndicator()
-                else
-                  DropdownButtonFormField<String>(
-                    value: selectedModelSlug,
-                    decoration: const InputDecoration(labelText: 'Модель *'),
-                    hint: const Text('Выберите модель'),
-                    items: models.map((model) {
-                      return DropdownMenuItem<String>(
-                        value: model['slug'] as String,
-                        child: Text(model['name'] as String),
-                      );
-                    }).toList(),
-                    onChanged: (value) {
-                      if (value == null || selectedBrandSlug == null) return;
-                      setState(() {
-                        selectedModelSlug = value;
-                        selectedModelName = models.firstWhere((m) => m['slug'] == value)['name'] as String;
-                        generations = [];
-                        selectedGeneration = null;
-                      });
-                      _loadGenerations(selectedBrandSlug!, value);
-                    },
-                    validator: (value) => value == null ? 'Выберите модель' : null,
-                  ),
-                const SizedBox(height: 16),
+    // Модель
+    if (selectedBrandSlug == null)
+      const SizedBox.shrink()
+    else if (isLoadingModels)
+      const LinearProgressIndicator()
+    else
+      DropdownButtonFormField<String>(
+        value: selectedModelSlug,
+        decoration: const InputDecoration(labelText: 'Модель *'),
+        hint: const Text('Выберите модель'),
+        items: models.map((model) {
+          return DropdownMenuItem<String>(
+            value: model['slug'] as String,
+            child: Text(model['name'] as String),
+          );
+        }).toList(),
+        onChanged: (value) {
+          if (value == null || selectedBrandSlug == null) return;
+          setState(() {
+            selectedModelSlug = value;
+            selectedModelName =
+                models.firstWhere((m) => m['slug'] == value)['name'] as String;
+            generations = [];
+            selectedGeneration = null;
+          });
+          _loadGenerations(selectedBrandSlug!, value);
+        },
+        validator: (value) => value == null ? 'Выберите модель' : null,
+      ),
+    const SizedBox(height: 16),
 
-                // Поколение
-                if (selectedModelSlug == null)
-                  const SizedBox.shrink()
-                else if (isLoadingGenerations)
-                  const LinearProgressIndicator()
-                else if (generations.isEmpty)
-                  const SizedBox.shrink()
-                else
-                  DropdownButtonFormField<Map<String, dynamic>>(
-                    value: selectedGeneration,
-                    decoration: const InputDecoration(labelText: 'Поколение'),
-                    hint: const Text('Выберите поколение (необязательно)'),
-                    items: generations.map((gen) {
-                      final yearFrom = gen['year_from'] as int?;
-                      final yearTo = gen['year_to'] as int?;
-                      final yearText = yearFrom != null
-                          ? ' (${yearFrom}${yearTo != null ? '–$yearTo' : '–н.в.'})'
-                          : '';
-                      return DropdownMenuItem<Map<String, dynamic>>(
-                        value: gen,
-                        child: Text('${gen['name']}$yearText'),
-                      );
-                    }).toList(),
-                    onChanged: (value) {
-                      setState(() {
-                        selectedGeneration = value;
-                        // Автоматически заполняем год из поколения, если поле пустое
-                        if (value != null && value['year_from'] != null) {
-                          final yearFrom = value['year_from'] as int;
-                          if (_yearController.text.isEmpty || _yearController.text == '0') {
-                            _yearController.text = yearFrom.toString();
-                          }
-                        }
-                      });
-                    },
-                  ),
-                const SizedBox(height: 16),
+    // Поколение
+    if (selectedModelSlug == null)
+      const SizedBox.shrink()
+    else if (isLoadingGenerations)
+      const LinearProgressIndicator()
+    else if (generations.isEmpty)
+      const SizedBox.shrink()
+    else
+      DropdownButtonFormField<Map<String, dynamic>>(
+        value: selectedGeneration,
+        decoration: const InputDecoration(labelText: 'Поколение'),
+        hint: const Text('Выберите поколение (необязательно)'),
+        items: generations.map((gen) {
+          final yearFrom = gen['year_from'] as int?;
+          final yearTo = gen['year_to'] as int?;
+          final yearText = yearFrom != null
+              ? ' (${yearFrom}${yearTo != null ? '–$yearTo' : '–н.в.'})'
+              : '';
+          return DropdownMenuItem<Map<String, dynamic>>(
+            value: gen,
+            child: Text('${gen['name']}$yearText'),
+          );
+        }).toList(),
+        onChanged: (value) {
+          setState(() {
+            selectedGeneration = value;
+            // Автоматически заполняем год из поколения, если поле пустое
+            if (value != null && value['year_from'] != null) {
+              final yearFrom = value['year_from'] as int;
+              if (_yearController.text.isEmpty || _yearController.text == '0') {
+                _yearController.text = yearFrom.toString();
+              }
+            }
+          });
+        },
+      ),
+    const SizedBox(height: 16),
 
-                // Год и цвет
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final isMobile = constraints.maxWidth < 600;
-                    
-                    if (isMobile) {
-                      return Column(
-                        children: [
-                          TextFormField(
-                            controller: _yearController,
-                            decoration: const InputDecoration(labelText: 'Год *'),
-                            keyboardType: TextInputType.number,
-                            validator: (value) => value?.isEmpty ?? true ? 'Обязательно' : null,
-                          ),
-                          const SizedBox(height: 16),
-                          TextFormField(
-                            controller: _colorController,
-                            decoration: const InputDecoration(labelText: 'Цвет'),
-                          ),
-                        ],
-                      );
-                    }
-                    
-                    return Row(
-                      children: [
-                        Expanded(
-                          child: TextFormField(
-                            controller: _yearController,
-                            decoration: const InputDecoration(labelText: 'Год *'),
-                            keyboardType: TextInputType.number,
-                            validator: (value) => value?.isEmpty ?? true ? 'Обязательно' : null,
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: TextFormField(
-                            controller: _colorController,
-                            decoration: const InputDecoration(labelText: 'Цвет'),
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-                const SizedBox(height: 16),
+    // Год и цвет
+    LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 600;
 
-                // Госномер
-                TextFormField(
-                  controller: _plateNumberController,
-                  decoration: const InputDecoration(labelText: 'Госномер *'),
-                  validator: (value) => value?.isEmpty ?? true ? 'Обязательно' : null,
-                ),
-                const SizedBox(height: 16),
+        if (isMobile) {
+          return Column(
+            children: [
+              TextFormField(
+                controller: _yearController,
+                decoration: const InputDecoration(labelText: 'Год *'),
+                keyboardType: TextInputType.number,
+                validator: (value) =>
+                    value?.isEmpty ?? true ? 'Обязательно' : null,
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _colorController,
+                decoration: const InputDecoration(labelText: 'Цвет'),
+              ),
+            ],
+          );
+        }
 
-                // VIN
-                TextFormField(
-                  controller: _vinController,
-                  decoration: const InputDecoration(labelText: 'VIN'),
-                ),
-                const SizedBox(height: 16),
+        return Row(
+          children: [
+            Expanded(
+              child: TextFormField(
+                controller: _yearController,
+                decoration: const InputDecoration(labelText: 'Год *'),
+                keyboardType: TextInputType.number,
+                validator: (value) =>
+                    value?.isEmpty ?? true ? 'Обязательно' : null,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: TextFormField(
+                controller: _colorController,
+                decoration: const InputDecoration(labelText: 'Цвет'),
+              ),
+            ),
+          ],
+        );
+      },
+    ),
+    const SizedBox(height: 16),
 
-                // Топливо и КПП
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final isMobile = constraints.maxWidth < 600;
-                    
-                    if (isMobile) {
-                      return Column(
-                        children: [
-                          DropdownButtonFormField<String>(
-                            value: _selectedFuelType,
-                            decoration: const InputDecoration(labelText: 'Топливо'),
-                            items: const [
-                              DropdownMenuItem(value: 'petrol', child: Text('Бензин')),
-                              DropdownMenuItem(value: 'diesel', child: Text('Дизель')),
-                              DropdownMenuItem(value: 'electric', child: Text('Электро')),
-                              DropdownMenuItem(value: 'hybrid', child: Text('Гибрид')),
-                              DropdownMenuItem(value: 'gas', child: Text('Газ')),
-                            ],
-                            onChanged: (value) {
-                              setState(() => _selectedFuelType = value!);
-                            },
-                          ),
-                          const SizedBox(height: 16),
-                          DropdownButtonFormField<String>(
-                            value: _selectedTransmission,
-                            decoration: const InputDecoration(labelText: 'КПП'),
-                            items: const [
-                              DropdownMenuItem(value: 'manual', child: Text('Механика')),
-                              DropdownMenuItem(value: 'automatic', child: Text('Автомат')),
-                              DropdownMenuItem(value: 'robot', child: Text('Робот')),
-                              DropdownMenuItem(value: 'cvt', child: Text('Вариатор')),
-                            ],
-                            onChanged: (value) {
-                              setState(() => _selectedTransmission = value!);
-                            },
-                          ),
-                        ],
-                      );
-                    }
-                    
-                    return Row(
-                      children: [
-                        Expanded(
-                          child: DropdownButtonFormField<String>(
-                            value: _selectedFuelType,
-                            decoration: const InputDecoration(labelText: 'Топливо'),
-                            items: const [
-                              DropdownMenuItem(value: 'petrol', child: Text('Бензин')),
-                              DropdownMenuItem(value: 'diesel', child: Text('Дизель')),
-                              DropdownMenuItem(value: 'electric', child: Text('Электро')),
-                              DropdownMenuItem(value: 'hybrid', child: Text('Гибрид')),
-                              DropdownMenuItem(value: 'gas', child: Text('Газ')),
-                            ],
-                            onChanged: (value) {
-                              setState(() => _selectedFuelType = value!);
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: DropdownButtonFormField<String>(
-                            value: _selectedTransmission,
-                            decoration: const InputDecoration(labelText: 'КПП'),
-                            items: const [
-                              DropdownMenuItem(value: 'manual', child: Text('Механика')),
-                              DropdownMenuItem(value: 'automatic', child: Text('Автомат')),
-                              DropdownMenuItem(value: 'robot', child: Text('Робот')),
-                              DropdownMenuItem(value: 'cvt', child: Text('Вариатор')),
-                            ],
-                            onChanged: (value) {
-                              setState(() => _selectedTransmission = value!);
-                            },
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-                const SizedBox(height: 16),
+    // Госномер
+    TextFormField(
+      controller: _plateNumberController,
+      decoration: const InputDecoration(labelText: 'Госномер *'),
+      validator: (value) => value?.isEmpty ?? true ? 'Обязательно' : null,
+    ),
+    const SizedBox(height: 16),
 
-                // Объем и мощность
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final isMobile = constraints.maxWidth < 600;
-                    
-                    if (isMobile) {
-                      return Column(
-                        children: [
-                          TextFormField(
-                            controller: _engineVolumeController,
-                            decoration: const InputDecoration(labelText: 'Объем (л)'),
-                          ),
-                          const SizedBox(height: 16),
-                          TextFormField(
-                            controller: _enginePowerController,
-                            decoration: const InputDecoration(labelText: 'Мощность (л.с.)'),
-                            keyboardType: TextInputType.number,
-                          ),
-                        ],
-                      );
-                    }
-                    
-                    return Row(
-                      children: [
-                        Expanded(
-                          child: TextFormField(
-                            controller: _engineVolumeController,
-                            decoration: const InputDecoration(labelText: 'Объем (л)'),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: TextFormField(
-                            controller: _enginePowerController,
-                            decoration: const InputDecoration(labelText: 'Мощность (л.с.)'),
-                            keyboardType: TextInputType.number,
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-                const SizedBox(height: 16),
+    // VIN
+    TextFormField(
+      controller: _vinController,
+      decoration: const InputDecoration(labelText: 'VIN'),
+    ),
+    const SizedBox(height: 16),
 
-                // Пробег
-                TextFormField(
-                  controller: _mileageController,
-                  decoration: const InputDecoration(labelText: 'Текущий пробег (км) *'),
-                  keyboardType: TextInputType.number,
-                  validator: (value) => value?.isEmpty ?? true ? 'Обязательно' : null,
-                ),
-                const SizedBox(height: 16),
+    // Топливо и КПП
+    LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 600;
 
-                // Примечания
-                TextFormField(
-                  controller: _notesController,
-                  decoration: const InputDecoration(labelText: 'Примечания'),
-                  maxLines: 3,
-                ),
-              ];
+        if (isMobile) {
+          return Column(
+            children: [
+              DropdownButtonFormField<String>(
+                value: _selectedFuelType,
+                decoration: const InputDecoration(labelText: 'Топливо'),
+                items: const [
+                  DropdownMenuItem(value: 'petrol', child: Text('Бензин')),
+                  DropdownMenuItem(value: 'diesel', child: Text('Дизель')),
+                  DropdownMenuItem(value: 'electric', child: Text('Электро')),
+                  DropdownMenuItem(value: 'hybrid', child: Text('Гибрид')),
+                  DropdownMenuItem(value: 'gas', child: Text('Газ')),
+                ],
+                onChanged: (value) {
+                  setState(() => _selectedFuelType = value!);
+                },
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                value: _selectedTransmission,
+                decoration: const InputDecoration(labelText: 'КПП'),
+                items: const [
+                  DropdownMenuItem(value: 'manual', child: Text('Механика')),
+                  DropdownMenuItem(value: 'automatic', child: Text('Автомат')),
+                  DropdownMenuItem(value: 'robot', child: Text('Робот')),
+                  DropdownMenuItem(value: 'cvt', child: Text('Вариатор')),
+                ],
+                onChanged: (value) {
+                  setState(() => _selectedTransmission = value!);
+                },
+              ),
+            ],
+          );
+        }
+
+        return Row(
+          children: [
+            Expanded(
+              child: DropdownButtonFormField<String>(
+                value: _selectedFuelType,
+                decoration: const InputDecoration(labelText: 'Топливо'),
+                items: const [
+                  DropdownMenuItem(value: 'petrol', child: Text('Бензин')),
+                  DropdownMenuItem(value: 'diesel', child: Text('Дизель')),
+                  DropdownMenuItem(value: 'electric', child: Text('Электро')),
+                  DropdownMenuItem(value: 'hybrid', child: Text('Гибрид')),
+                  DropdownMenuItem(value: 'gas', child: Text('Газ')),
+                ],
+                onChanged: (value) {
+                  setState(() => _selectedFuelType = value!);
+                },
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: DropdownButtonFormField<String>(
+                value: _selectedTransmission,
+                decoration: const InputDecoration(labelText: 'КПП'),
+                items: const [
+                  DropdownMenuItem(value: 'manual', child: Text('Механика')),
+                  DropdownMenuItem(value: 'automatic', child: Text('Автомат')),
+                  DropdownMenuItem(value: 'robot', child: Text('Робот')),
+                  DropdownMenuItem(value: 'cvt', child: Text('Вариатор')),
+                ],
+                onChanged: (value) {
+                  setState(() => _selectedTransmission = value!);
+                },
+              ),
+            ),
+          ],
+        );
+      },
+    ),
+    const SizedBox(height: 16),
+
+    // Объем и мощность
+    LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 600;
+
+        if (isMobile) {
+          return Column(
+            children: [
+              TextFormField(
+                controller: _engineVolumeController,
+                decoration: const InputDecoration(labelText: 'Объем (л)'),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _enginePowerController,
+                decoration: const InputDecoration(labelText: 'Мощность (л.с.)'),
+                keyboardType: TextInputType.number,
+              ),
+            ],
+          );
+        }
+
+        return Row(
+          children: [
+            Expanded(
+              child: TextFormField(
+                controller: _engineVolumeController,
+                decoration: const InputDecoration(labelText: 'Объем (л)'),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: TextFormField(
+                controller: _enginePowerController,
+                decoration: const InputDecoration(labelText: 'Мощность (л.с.)'),
+                keyboardType: TextInputType.number,
+              ),
+            ),
+          ],
+        );
+      },
+    ),
+    const SizedBox(height: 16),
+
+    // Пробег
+    TextFormField(
+      controller: _mileageController,
+      decoration: const InputDecoration(labelText: 'Текущий пробег (км) *'),
+      keyboardType: TextInputType.number,
+      validator: (value) => value?.isEmpty ?? true ? 'Обязательно' : null,
+    ),
+    const SizedBox(height: 16),
+
+    // Примечания
+    TextFormField(
+      controller: _notesController,
+      decoration: const InputDecoration(labelText: 'Примечания'),
+      maxLines: 3,
+    ),
+  ];
 
   @override
   void dispose() {
@@ -1155,5 +1197,3 @@ class _VehicleDialogState extends State<_VehicleDialog> {
     super.dispose();
   }
 }
-
-

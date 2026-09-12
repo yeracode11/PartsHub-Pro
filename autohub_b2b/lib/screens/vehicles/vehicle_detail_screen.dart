@@ -5,6 +5,7 @@ import 'package:autohub_b2b/services/api/api_client.dart';
 import 'package:autohub_b2b/models/vehicle_model.dart';
 import 'package:dio/dio.dart';
 import 'package:intl/intl.dart';
+import 'package:autohub_b2b/services/api/api_user_message.dart';
 
 class VehicleDetailScreen extends StatefulWidget {
   final int vehicleId;
@@ -41,10 +42,11 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
         isLoading = false;
       });
     } on DioException catch (e) {
-      if (e.response?.statusCode == 403) {
+      if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
         setState(() {
           isForbidden = true;
-          forbiddenMessage = (e.response?.data is Map<String, dynamic>
+          forbiddenMessage =
+              (e.response?.data is Map<String, dynamic>
                   ? (e.response?.data['message'] as String?)
                   : null) ??
               'У вас нет доступа к просмотру этого автомобиля.';
@@ -55,7 +57,7 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Ошибка загрузки: $e'),
+              content: Text(userFacingApiMessage(e, prefix: 'Ошибка загрузки')),
               backgroundColor: Colors.red,
             ),
           );
@@ -66,7 +68,7 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Ошибка загрузки: $e'),
+            content: Text(userFacingApiMessage(e, prefix: 'Ошибка загрузки')),
             backgroundColor: Colors.red,
           ),
         );
@@ -125,10 +127,7 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Ошибка: $e'),
-              backgroundColor: Colors.red,
-            ),
+            SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка')), backgroundColor: Colors.red),
           );
         }
       }
@@ -174,7 +173,9 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
                   onTap: () async {
                     final date = await showDatePicker(
                       context: context,
-                      initialDate: DateTime.now().add(const Duration(days: 180)),
+                      initialDate: DateTime.now().add(
+                        const Duration(days: 180),
+                      ),
                       firstDate: DateTime.now(),
                       lastDate: DateTime.now().add(const Duration(days: 730)),
                     );
@@ -221,7 +222,9 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
                 Navigator.pop(context, {
                   'mileage': mileage,
                   'serviceDate': DateTime.now().toIso8601String(),
-                  'nextServiceMileage': int.tryParse(nextMileageController.text),
+                  'nextServiceMileage': int.tryParse(
+                    nextMileageController.text,
+                  ),
                   'nextServiceDate': nextServiceDate?.toIso8601String(),
                 });
               },
@@ -250,10 +253,7 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Ошибка: $e'),
-              backgroundColor: Colors.red,
-            ),
+            SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка')), backgroundColor: Colors.red),
           );
         }
       }
@@ -275,33 +275,36 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
         ],
       ),
       body: isForbidden
-          ? UnauthorizedPlaceholder(message: forbiddenMessage)
+          ? UnauthorizedPlaceholder(
+              message: forbiddenMessage,
+              isForbidden: false,
+            )
           : isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : vehicle == null
-                  ? const Center(child: Text('Автомобиль не найден'))
-              : SingleChildScrollView(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Основная информация
-                      _buildMainInfoCard(),
-                      const SizedBox(height: 24),
+          ? const Center(child: CircularProgressIndicator())
+          : vehicle == null
+          ? const Center(child: Text('Автомобиль не найден'))
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Основная информация
+                  _buildMainInfoCard(),
+                  const SizedBox(height: 24),
 
-                      // Технические характеристики
-                      _buildTechSpecsCard(),
-                      const SizedBox(height: 24),
+                  // Технические характеристики
+                  _buildTechSpecsCard(),
+                  const SizedBox(height: 24),
 
-                      // Обслуживание
-                      _buildServiceCard(),
-                      const SizedBox(height: 24),
+                  // Обслуживание
+                  _buildServiceCard(),
+                  const SizedBox(height: 24),
 
-                      // История заказов
-                      _buildOrdersHistory(),
-                    ],
-                  ),
-                ),
+                  // История заказов
+                  _buildOrdersHistory(),
+                ],
+              ),
+            ),
     );
   }
 
@@ -314,7 +317,11 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
           children: [
             Row(
               children: [
-                const Icon(Icons.directions_car, size: 32, color: AppTheme.primaryColor),
+                const Icon(
+                  Icons.directions_car,
+                  size: 32,
+                  color: AppTheme.primaryColor,
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -347,13 +354,9 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
                   child: _buildInfoItem('Госномер', vehicle!.plateNumber),
                 ),
                 if (vehicle!.vin != null)
-                  Expanded(
-                    child: _buildInfoItem('VIN', vehicle!.vin!),
-                  ),
+                  Expanded(child: _buildInfoItem('VIN', vehicle!.vin!)),
                 if (vehicle!.color != null)
-                  Expanded(
-                    child: _buildInfoItem('Цвет', vehicle!.color!),
-                  ),
+                  Expanded(child: _buildInfoItem('Цвет', vehicle!.color!)),
               ],
             ),
           ],
@@ -371,10 +374,7 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
           children: [
             const Text(
               'Технические характеристики',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
             Row(
@@ -387,11 +387,17 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
                 ),
                 if (vehicle!.engineVolume != null)
                   Expanded(
-                    child: _buildInfoItem('Объем двигателя', '${vehicle!.engineVolume} л'),
+                    child: _buildInfoItem(
+                      'Объем двигателя',
+                      '${vehicle!.engineVolume} л',
+                    ),
                   ),
                 if (vehicle!.enginePower != null)
                   Expanded(
-                    child: _buildInfoItem('Мощность', '${vehicle!.enginePower} л.с.'),
+                    child: _buildInfoItem(
+                      'Мощность',
+                      '${vehicle!.enginePower} л.с.',
+                    ),
                   ),
               ],
             ),
@@ -403,7 +409,7 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
 
   Widget _buildServiceCard() {
     final isMobile = MediaQuery.of(context).size.width < 768;
-    
+
     return Card(
       child: Padding(
         padding: EdgeInsets.all(isMobile ? 16 : 24),
@@ -413,10 +419,7 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
             if (isMobile) ...[
               const Text(
                 'Обслуживание',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
               SizedBox(
@@ -441,10 +444,7 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
                 children: [
                   const Text(
                     'Обслуживание',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   const Spacer(),
                   OutlinedButton.icon(
@@ -472,7 +472,11 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.speed, size: 32, color: AppTheme.primaryColor),
+                  const Icon(
+                    Icons.speed,
+                    size: 32,
+                    color: AppTheme.primaryColor,
+                  ),
                   const SizedBox(width: 16),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -523,7 +527,9 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            DateFormat('dd.MM.yyyy').format(vehicle!.lastServiceDate!),
+                            DateFormat(
+                              'dd.MM.yyyy',
+                            ).format(vehicle!.lastServiceDate!),
                             style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
@@ -541,7 +547,8 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
                       ),
                     ),
                   ),
-                if (vehicle!.lastServiceDate != null && vehicle!.nextServiceDate != null)
+                if (vehicle!.lastServiceDate != null &&
+                    vehicle!.nextServiceDate != null)
                   const SizedBox(width: 16),
                 if (vehicle!.nextServiceDate != null)
                   Expanded(
@@ -581,7 +588,9 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            DateFormat('dd.MM.yyyy').format(vehicle!.nextServiceDate!),
+                            DateFormat(
+                              'dd.MM.yyyy',
+                            ).format(vehicle!.nextServiceDate!),
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
@@ -672,10 +681,7 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
           children: [
             const Text(
               'История заказов',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
             if (orders.isEmpty)
@@ -698,17 +704,21 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
                   final order = orders[index];
                   return ListTile(
                     leading: CircleAvatar(
-                      backgroundColor: _getStatusColor(order['status']).withOpacity(0.2),
+                      backgroundColor: _getStatusColor(
+                        order['status'],
+                      ).withOpacity(0.2),
                       child: Icon(
                         Icons.receipt,
                         color: _getStatusColor(order['status']),
                       ),
                     ),
-                    title: Text(order['orderNumber'] ?? 'Заказ #${order['id']}'),
+                    title: Text(
+                      order['orderNumber'] ?? 'Заказ #${order['id']}',
+                    ),
                     subtitle: Text(
-                      DateFormat('dd.MM.yyyy').format(
-                        DateTime.parse(order['createdAt']),
-                      ),
+                      DateFormat(
+                        'dd.MM.yyyy',
+                      ).format(DateTime.parse(order['createdAt'])),
                     ),
                     trailing: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -728,7 +738,9 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
                             vertical: 2,
                           ),
                           decoration: BoxDecoration(
-                            color: _getStatusColor(order['status']).withOpacity(0.2),
+                            color: _getStatusColor(
+                              order['status'],
+                            ).withOpacity(0.2),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
@@ -757,18 +769,12 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
       children: [
         Text(
           label,
-          style: TextStyle(
-            fontSize: 12,
-            color: AppTheme.textSecondary,
-          ),
+          style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
         ),
         const SizedBox(height: 4),
         Text(
           value,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w500,
-          ),
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
         ),
       ],
     );
@@ -802,4 +808,3 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
     }
   }
 }
-

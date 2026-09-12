@@ -1,480 +1,224 @@
 import 'package:flutter/material.dart';
-import '../../core/theme.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
+import 'package:table_calendar/table_calendar.dart';
+import '../../blocs/vehicle/vehicle_bloc.dart';
+import '../../blocs/vehicle/vehicle_state.dart';
+import '../../core/design/app_colors.dart';
+import '../../core/design/app_spacing.dart';
 import '../../models/service_model.dart';
-import '../../models/vehicle_model.dart';
-import '../../services/services_api_service.dart';
-import '../../services/vehicles_api_service.dart';
 import '../../services/api_client.dart';
+import '../../services/services_api_service.dart';
+import '../../utils/formatters.dart';
+import '../../widgets/app_ui.dart';
 
 class BookAppointmentScreen extends StatefulWidget {
   final AutoService service;
 
-  const BookAppointmentScreen({
-    super.key,
-    required this.service,
-  });
+  const BookAppointmentScreen({super.key, required this.service});
 
   @override
   State<BookAppointmentScreen> createState() => _BookAppointmentScreenState();
 }
 
 class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
-  final ServicesApiService _servicesApiService = ServicesApiService(ApiClient());
-  final VehiclesApiService _vehiclesApiService = VehiclesApiService(ApiClient());
-  
-  final _formKey = GlobalKey<FormState>();
-  final _notesController = TextEditingController();
-  
-  List<Vehicle> _vehicles = [];
-  Vehicle? _selectedVehicle;
+  DateTime _focusedDay = DateTime.now();
+  DateTime? _selectedDay;
   String? _selectedService;
-  DateTime? _selectedDate;
-  String? _selectedTimeSlot;
-  List<String> _availableTimeSlots = [];
-  bool _isLoading = false;
-  bool _isLoadingTimeSlots = false;
-  bool _isLoadingVehicles = true;
+  String? _selectedSlot;
+  List<String> _slots = [];
+  bool _loadingSlots = false;
+  bool _submitting = false;
+  final _notes = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _loadVehicles();
+    _selectedService = widget.service.services.isNotEmpty
+        ? widget.service.services.first
+        : null;
+    _selectedDay = DateTime.now().add(const Duration(days: 1));
+    _loadSlots();
   }
 
   @override
   void dispose() {
-    _notesController.dispose();
+    _notes.dispose();
     super.dispose();
   }
 
-  Future<void> _loadVehicles() async {
-    setState(() {
-      _isLoadingVehicles = true;
-    });
-    
+  Future<void> _loadSlots() async {
+    if (_selectedDay == null) return;
+    setState(() => _loadingSlots = true);
     try {
-      final vehicles = await _vehiclesApiService.getUserVehicles();
-      setState(() {
-        _vehicles = vehicles;
-        if (vehicles.isNotEmpty) {
-          _selectedVehicle = vehicles.first;
-        }
-        _isLoadingVehicles = false;
-      });
-    } catch (e) {
-      // Если API недоступен, используем моковые данные для демонстрации
-      print('API недоступен, используем моковые данные: $e');
-      final mockVehicles = [
-        Vehicle(
-          id: 1,
-          brand: 'Toyota',
-          model: 'Camry',
-          year: 2020,
-          vin: '1HGBH41JXMN109186',
-          plateNumber: '123ABC01',
-          color: 'Белый',
-          fuelType: FuelType.petrol,
-          transmission: TransmissionType.automatic,
-          engineVolume: '2.5L',
-          currentMileage: 45000,
-          lastServiceDate: DateTime.now().subtract(const Duration(days: 30)),
-          nextServiceDate: DateTime.now().add(const Duration(days: 30)),
-          createdAt: DateTime.now().subtract(const Duration(days: 365)),
-          updatedAt: DateTime.now(),
-        ),
-        Vehicle(
-          id: 2,
-          brand: 'BMW',
-          model: 'X5',
-          year: 2019,
-          vin: 'WBAFR9C50BC123456',
-          plateNumber: '456DEF02',
-          color: 'Черный',
-          fuelType: FuelType.petrol,
-          transmission: TransmissionType.automatic,
-          engineVolume: '3.0L',
-          currentMileage: 62000,
-          lastServiceDate: DateTime.now().subtract(const Duration(days: 15)),
-          nextServiceDate: DateTime.now().add(const Duration(days: 45)),
-          createdAt: DateTime.now().subtract(const Duration(days: 730)),
-          updatedAt: DateTime.now(),
-        ),
-      ];
-      
-      setState(() {
-        _vehicles = mockVehicles;
-        if (mockVehicles.isNotEmpty) {
-          _selectedVehicle = mockVehicles.first;
-        }
-        _isLoadingVehicles = false;
-      });
-    }
-  }
-
-  Future<void> _loadTimeSlots() async {
-    if (_selectedDate == null) return;
-
-    setState(() {
-      _isLoadingTimeSlots = true;
-    });
-
-    try {
-      final timeSlots = await _servicesApiService.getAvailableTimeSlots(
+      final api = ServicesApiService(ApiClient());
+      _slots = await api.getAvailableTimeSlots(
         widget.service.id,
-        _selectedDate!,
+        _selectedDay!,
       );
-      setState(() {
-        _availableTimeSlots = timeSlots;
-        _isLoadingTimeSlots = false;
-        if (timeSlots.isNotEmpty) {
-          _selectedTimeSlot = timeSlots.first;
-        }
-      });
+      _selectedSlot = _slots.isNotEmpty ? _slots.first : null;
+    } catch (_) {
+      _slots = ['09:00', '10:00', '11:00', '14:00', '15:00', '16:00'];
+      _selectedSlot = _slots.first;
+    }
+    if (mounted) setState(() => _loadingSlots = false);
+  }
+
+  Future<void> _submit() async {
+    if (_selectedDay == null ||
+        _selectedService == null ||
+        _selectedSlot == null) {
+      return;
+    }
+
+    final vehicleState = context.read<VehicleBloc>().state;
+    final vehicleId = vehicleState is VehicleLoaded && vehicleState.selected != null
+        ? vehicleState.selected!.id.toString()
+        : '1';
+
+    setState(() => _submitting = true);
+    try {
+      final api = ServicesApiService(ApiClient());
+      final price = widget.service.servicePrices[_selectedService!] ?? 0;
+      await api.createAppointment(
+        serviceId: widget.service.id,
+        vehicleId: vehicleId,
+        serviceName: _selectedService!,
+        appointmentDate: _selectedDay!,
+        timeSlot: _selectedSlot!,
+        notes: _notes.text.trim(),
+        estimatedPrice: price,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Запись создана')),
+      );
+      context.go('/orders');
     } catch (e) {
-      setState(() {
-        _isLoadingTimeSlots = false;
-      });
-    }
-  }
-
-  Future<void> _selectDate(BuildContext context) async {
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedDate ?? DateTime.now(),
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 90)),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.light(
-              primary: AppTheme.primaryColor,
-              onPrimary: Colors.white,
-              onSurface: AppTheme.textPrimary,
-            ),
-            textButtonTheme: TextButtonThemeData(
-              style: TextButton.styleFrom(
-                foregroundColor: AppTheme.primaryColor,
-              ),
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
-    if (picked != null && picked != _selectedDate) {
-      setState(() {
-        _selectedDate = picked;
-      });
-      _loadTimeSlots();
-    }
-  }
-
-  Future<void> _submitAppointment() async {
-    if (_formKey.currentState!.validate()) {
-      if (_selectedVehicle == null || _selectedService == null || _selectedDate == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Пожалуйста, заполните все поля для записи.'),
-            backgroundColor: Colors.red,
-          ),
-        );
-        return;
-      }
-
-      setState(() {
-        _isLoading = true;
-      });
-
-      try {
-        final estimatedPrice = widget.service.servicePrices[_selectedService!] ?? 0.0;
-        
-        await _servicesApiService.createAppointment(
-          serviceId: widget.service.id,
-          userId: 'user1', // Получение userId из auth service будет реализовано позже
-          vehicleId: _selectedVehicle!.id.toString(),
-          serviceName: _selectedService!,
-          appointmentDate: _selectedDate!,
-          timeSlot: _selectedTimeSlot ?? '10:00',
-          notes: _notesController.text,
-          estimatedPrice: estimatedPrice,
-        );
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Запись успешно создана!'),
-              backgroundColor: AppTheme.successColor,
-            ),
-          );
-          Navigator.of(context).pop();
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Ошибка при создании записи: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      } finally {
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
-        }
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _submitting = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final price = _selectedService != null
+        ? widget.service.servicePrices[_selectedService!]
+        : null;
+
     return Scaffold(
-      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Запись на сервис'),
-        backgroundColor: AppTheme.primaryColor,
-        foregroundColor: Colors.white,
-        elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.of(context).pop(),
+          icon: const Icon(Icons.arrow_back_rounded),
+          onPressed: () => context.pop(),
+        ),
+        title: const Text('Запись на сервис'),
+      ),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: ElevatedButton(
+            onPressed: _submitting ? null : _submit,
+            child: _submitting
+                ? const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : Text(
+                    price != null
+                        ? 'Подтвердить · ${Formatters.price(price)}'
+                        : 'Подтвердить запись',
+                  ),
+          ),
         ),
       ),
-      body: _isLoadingVehicles
-          ? const Center(child: CircularProgressIndicator())
-          : _vehicles.isEmpty
-              ? const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(32.0),
-                    child: Text(
-                      'У вас нет добавленных автомобилей.\nПожалуйста, добавьте автомобиль в профиле.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 16),
-                    ),
-                  ),
-                )
-              : SingleChildScrollView(
-                  padding: const EdgeInsets.all(16),
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Информация о сервисе
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Colors.grey[50],
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: AppTheme.borderColor),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'СТО: ${widget.service.name}',
-                                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Адрес: ${widget.service.address}',
-                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                      color: AppTheme.textSecondary,
-                                    ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Телефон: ${widget.service.phone}',
-                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                      color: AppTheme.textSecondary,
-                                    ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-
-                        // Выбор автомобиля
-                        Text(
-                          'Выберите автомобиль:',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
-                        ),
-                        const SizedBox(height: 12),
-                        DropdownButtonFormField<Vehicle>(
-                          initialValue: _selectedVehicle,
-                          decoration: InputDecoration(
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 12,
-                            ),
-                          ),
-                          items: _vehicles.map((vehicle) {
-                            return DropdownMenuItem(
-                              value: vehicle,
-                              child: Text('${vehicle.brand} ${vehicle.model} (${vehicle.year})'),
-                            );
-                          }).toList(),
-                          onChanged: (vehicle) {
-                            setState(() {
-                              _selectedVehicle = vehicle;
-                            });
-                          },
-                          validator: (value) {
-                            if (value == null) {
-                              return 'Выберите автомобиль';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 24),
-
-                        // Выбор услуги
-                        Text(
-                          'Выберите услугу:',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
-                        ),
-                        const SizedBox(height: 12),
-                        DropdownButtonFormField<String>(
-                          initialValue: _selectedService,
-                          decoration: InputDecoration(
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 12,
-                            ),
-                          ),
-                          items: widget.service.services.map((service) {
-                            final price = widget.service.servicePrices[service] ?? 0.0;
-                            return DropdownMenuItem(
-                              value: service,
-                              child: Text('$service - ${price.toStringAsFixed(0)} ₸'),
-                            );
-                          }).toList(),
-                          onChanged: (service) {
-                            setState(() {
-                              _selectedService = service;
-                            });
-                          },
-                          validator: (value) {
-                            if (value == null) {
-                              return 'Выберите услугу';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 24),
-
-                        // Выбор даты
-                        Text(
-                          'Выберите дату:',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
-                        ),
-                        const SizedBox(height: 12),
-                        GestureDetector(
-                          onTap: () => _selectDate(context),
-                          child: AbsorbPointer(
-                            child: TextFormField(
-                              controller: TextEditingController(
-                                text: _selectedDate == null
-                                    ? ''
-                                    : '${_selectedDate!.day}.${_selectedDate!.month}.${_selectedDate!.year}',
-                              ),
-                              decoration: InputDecoration(
-                                hintText: 'Выберите дату',
-                                prefixIcon: const Icon(Icons.calendar_today),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 12,
-                                ),
-                              ),
-                              validator: (value) {
-                                if (value == null || value.isEmpty) {
-                                  return 'Выберите дату';
-                                }
-                                return null;
-                              },
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-
-                        // Дополнительные примечания
-                        Text(
-                          'Дополнительные примечания:',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _notesController,
-                          maxLines: 3,
-                          decoration: InputDecoration(
-                            hintText: 'Опишите проблему или пожелания...',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 12,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 32),
-
-                        // Кнопка записи
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: _submitAppointment,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppTheme.primaryColor,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            child: _isLoading
-                                ? const SizedBox(
-                                    height: 20,
-                                    width: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                    ),
-                                  )
-                                : const Text(
-                                    'Записаться на сервис',
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                      ],
-                    ),
-                  ),
+      body: ListView(
+        padding: const EdgeInsets.all(AppSpacing.xxl),
+        children: [
+          Text(widget.service.name, style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: AppSpacing.xl),
+          Text('Услуга', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: AppSpacing.sm),
+          DropdownButtonFormField<String>(
+            initialValue: _selectedService,
+            items: widget.service.services
+                .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+                .toList(),
+            onChanged: (v) => setState(() => _selectedService = v),
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          Text('Дата', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: AppSpacing.sm),
+          AppCard(
+            padding: const EdgeInsets.all(AppSpacing.sm),
+            child: TableCalendar(
+              firstDay: DateTime.now(),
+              lastDay: DateTime.now().add(const Duration(days: 60)),
+              focusedDay: _focusedDay,
+              selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+              onDaySelected: (selected, focused) {
+                setState(() {
+                  _selectedDay = selected;
+                  _focusedDay = focused;
+                });
+                _loadSlots();
+              },
+              calendarStyle: const CalendarStyle(
+                selectedDecoration: BoxDecoration(
+                  color: AppColors.primary,
+                  shape: BoxShape.circle,
                 ),
+                todayDecoration: BoxDecoration(
+                  color: AppColors.accentSoft,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              headerStyle: const HeaderStyle(
+                formatButtonVisible: false,
+                titleCentered: true,
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          Text('Время', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: AppSpacing.sm),
+          if (_loadingSlots)
+            const Center(child: CircularProgressIndicator())
+          else if (_slots.isEmpty)
+            const Text('Нет свободных слотов на выбранную дату')
+          else
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: _slots.map((slot) {
+                final selected = slot == _selectedSlot;
+                return ChoiceChip(
+                  label: Text(slot),
+                  selected: selected,
+                  onSelected: (_) => setState(() => _selectedSlot = slot),
+                  selectedColor: AppColors.accentSoft,
+                );
+              }).toList(),
+            ),
+          const SizedBox(height: AppSpacing.xl),
+          TextField(
+            controller: _notes,
+            maxLines: 3,
+            decoration: const InputDecoration(
+              labelText: 'Комментарий (необязательно)',
+              alignLabelWithHint: true,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -1,161 +1,113 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import '../../core/theme.dart';
+import '../../core/design/app_colors.dart';
+import '../../core/design/app_spacing.dart';
 import '../../models/cart_model.dart';
 import '../../services/api_client.dart';
+import '../../utils/formatters.dart';
+import 'app_ui.dart';
 
 class CartItemWidget extends StatelessWidget {
   final CartItem item;
-  final Function(int) onQuantityChanged;
+  final VoidCallback onIncrement;
+  final VoidCallback onDecrement;
   final VoidCallback onRemove;
 
   const CartItemWidget({
     super.key,
     required this.item,
-    required this.onQuantityChanged,
+    required this.onIncrement,
+    required this.onDecrement,
     required this.onRemove,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            // Изображение товара
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(8),
-                color: Colors.grey[100],
-              ),
-              child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: CachedNetworkImage(
-                    imageUrl: ApiClient.getImageUrl(
-                      item.product.images.isNotEmpty ? item.product.images.first : '',
-                      width: 200,
-                      height: 200,
+    final imageUrl = item.product.images.isNotEmpty
+        ? ApiClient.getImageUrl(item.product.images.first, width: 120, height: 120)
+        : null;
+
+    return AppCard(
+      child: Row(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+            child: SizedBox(
+              width: 72,
+              height: 72,
+              child: imageUrl != null
+                  ? CachedNetworkImage(imageUrl: imageUrl, fit: BoxFit.cover)
+                  : Container(
+                      color: AppColors.surfaceElevated,
+                      child: const Icon(Icons.settings_suggest_rounded),
                     ),
-                    fit: BoxFit.cover,
-                    placeholder: (context, url) => Container(
-                      color: Colors.grey[200],
-                      child: const Center(
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.grey),
-                        ),
-                      ),
-                    ),
-                    errorWidget: (context, url, error) => const Icon(
-                      Icons.image_not_supported,
-                      color: Colors.grey,
-                    ),
-                  ),
-                ),
             ),
-
-            const SizedBox(width: 12),
-
-            // Информация о товаре
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item.product.name,
-                    style: Theme.of(context).textTheme.titleSmall,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    item.product.brand,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppTheme.textSecondary,
-                        ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    item.product.priceFormatted,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.primaryColor,
-                        ),
-                  ),
-                ],
-              ),
-            ),
-
-            // Количество и кнопки
-            Column(
+          ),
+          const SizedBox(width: AppSpacing.lg),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Кнопка удаления
-                IconButton(
-                  onPressed: onRemove,
-                  icon: const Icon(Icons.delete_outline),
-                  color: Colors.red,
-                  iconSize: 20,
+                Text(
+                  item.product.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleMedium,
                 ),
-                
-                // Счетчик количества
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  Formatters.price(item.product.price),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primary,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
                 Row(
-                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    IconButton(
-                      onPressed: item.quantity > 1
-                          ? () => onQuantityChanged(item.quantity - 1)
-                          : null,
-                      icon: const Icon(Icons.remove),
-                      iconSize: 16,
-                      padding: const EdgeInsets.all(4),
-                      constraints: const BoxConstraints(
-                        minWidth: 24,
-                        minHeight: 24,
-                      ),
+                    _QtyButton(icon: Icons.remove, onTap: onDecrement),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Text('${item.quantity}',
+                          style: Theme.of(context).textTheme.titleMedium),
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey[300]!),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        item.quantity.toString(),
-                        style: Theme.of(context).textTheme.titleSmall,
-                      ),
-                    ),
+                    _QtyButton(icon: Icons.add, onTap: onIncrement),
+                    const Spacer(),
                     IconButton(
-                      onPressed: () => onQuantityChanged(item.quantity + 1),
-                      icon: const Icon(Icons.add),
-                      iconSize: 16,
-                      padding: const EdgeInsets.all(4),
-                      constraints: const BoxConstraints(
-                        minWidth: 24,
-                        minHeight: 24,
-                      ),
+                      onPressed: onRemove,
+                      icon: const Icon(Icons.delete_outline_rounded,
+                          color: AppColors.error),
                     ),
                   ],
                 ),
-                
-                // Общая сумма
-                Text(
-                  item.totalPriceFormatted,
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: AppTheme.primaryColor,
-                      ),
-                ),
               ],
             ),
-          ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QtyButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _QtyButton({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          border: Border.all(color: AppColors.border),
+          borderRadius: BorderRadius.circular(8),
         ),
+        child: Icon(icon, size: 18),
       ),
     );
   }

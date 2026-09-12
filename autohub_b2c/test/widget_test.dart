@@ -16,6 +16,6 @@ void main() {
     await tester.pumpWidget(const AutoHubB2CApp(initialRoute: '/login'));
 
     // Verify that app starts without crashing
-    expect(find.text('AutoHub B2C'), findsOneWidget);
+    expect(find.text('Вход'), findsOneWidget);
   });
 }

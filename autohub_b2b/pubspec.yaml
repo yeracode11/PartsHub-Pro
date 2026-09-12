@@ -50,6 +50,7 @@ dependencies:
   # Barcode Scanner & Printer
   printing: ^5.13.3
   pdf: ^3.11.1
+  image: ^4.3.0
   # google_fonts — не используется (PDF/экраны берут локальные Roboto из assets/fonts).
   # Печать этикеток с телефона: PDF через системную печать; BLE‑термопринтер — настройки → скан BLE.
   permission_handler: ^11.3.1

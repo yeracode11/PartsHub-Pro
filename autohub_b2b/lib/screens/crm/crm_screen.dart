@@ -9,6 +9,7 @@ import 'package:autohub_b2b/repositories/customers_repository.dart';
 import 'package:autohub_b2b/services/service_locator.dart';
 import 'package:autohub_b2b/utils/dialog_helper.dart';
 import 'package:autohub_b2b/utils/auth_guard.dart';
+import 'package:autohub_b2b/services/api/api_user_message.dart';
 
 class CrmScreen extends StatefulWidget {
   const CrmScreen({super.key});
@@ -20,7 +21,8 @@ class CrmScreen extends StatefulWidget {
 class _CrmScreenState extends State<CrmScreen> {
   final dio = ApiClient().dio;
   final _searchController = TextEditingController();
-  final CustomersRepository _customersRepo = ServiceLocator().customersRepository;
+  final CustomersRepository _customersRepo =
+      ServiceLocator().customersRepository;
   List<CustomerModel> customers = [];
   List<CustomerModel> filteredCustomers = [];
   bool isLoading = true;
@@ -50,10 +52,12 @@ class _CrmScreenState extends State<CrmScreen> {
         isLoading = false;
       });
     } catch (e) {
-      if (e is DioException && e.response?.statusCode == 403) {
+      if (e is DioException &&
+          (e.response?.statusCode == 401 || e.response?.statusCode == 403)) {
         setState(() {
           isForbidden = true;
-          forbiddenMessage = (e.response?.data is Map<String, dynamic>
+          forbiddenMessage =
+              (e.response?.data is Map<String, dynamic>
                   ? (e.response?.data['message'] as String?)
                   : null) ??
               'У вас нет доступа к разделу «CRM». Войдите под владельцем или менеджером.';
@@ -61,7 +65,7 @@ class _CrmScreenState extends State<CrmScreen> {
         });
       } else {
         setState(() {
-          error = e.toString();
+          error = userFacingApiMessage(e);
           isLoading = false;
         });
       }
@@ -103,9 +107,7 @@ class _CrmScreenState extends State<CrmScreen> {
             ),
             decoration: const BoxDecoration(
               color: AppTheme.surfaceColor,
-              border: Border(
-                bottom: BorderSide(color: AppTheme.borderColor),
-              ),
+              border: Border(bottom: BorderSide(color: AppTheme.borderColor)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -114,15 +116,15 @@ class _CrmScreenState extends State<CrmScreen> {
                   Text(
                     'CRM',
                     style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     'Управление клиентами',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AppTheme.textSecondary,
-                        ),
+                      color: AppTheme.textSecondary,
+                    ),
                   ),
                   const SizedBox(height: 14),
                   SizedBox(
@@ -148,12 +150,8 @@ class _CrmScreenState extends State<CrmScreen> {
                             const SizedBox(height: 4),
                             Text(
                               'Управление клиентами',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodyMedium
-                                  ?.copyWith(
-                                    color: AppTheme.textSecondary,
-                                  ),
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(color: AppTheme.textSecondary),
                             ),
                           ],
                         ),
@@ -226,9 +224,7 @@ class _CrmScreenState extends State<CrmScreen> {
           ),
 
           // Список клиентов
-          Expanded(
-            child: _buildCustomersList(),
-          ),
+          Expanded(child: _buildCustomersList()),
         ],
       ),
     );
@@ -236,7 +232,10 @@ class _CrmScreenState extends State<CrmScreen> {
 
   Widget _buildCustomersList() {
     if (isForbidden) {
-      return UnauthorizedPlaceholder(message: forbiddenMessage);
+      return UnauthorizedPlaceholder(
+        message: forbiddenMessage,
+        isForbidden: false,
+      );
     }
 
     if (isLoading) {
@@ -250,7 +249,7 @@ class _CrmScreenState extends State<CrmScreen> {
           children: [
             const Icon(Icons.error_outline, size: 64, color: Colors.red),
             const SizedBox(height: 16),
-            Text('Ошибка: $error'),
+            Text(error!, textAlign: TextAlign.center),
             const SizedBox(height: 16),
             ElevatedButton(
               onPressed: _loadCustomers,
@@ -288,9 +287,9 @@ class _CrmScreenState extends State<CrmScreen> {
               customers.isEmpty
                   ? 'Добавьте первого клиента'
                   : 'Попробуйте изменить запрос',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppTheme.textSecondary,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: AppTheme.textSecondary),
             ),
             if (customers.isEmpty) ...[
               const SizedBox(height: 24),
@@ -324,9 +323,9 @@ class _CrmScreenState extends State<CrmScreen> {
               child: Text(
                 text,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppTheme.textSecondary,
-                      height: 1.35,
-                    ),
+                  color: AppTheme.textSecondary,
+                  height: 1.35,
+                ),
               ),
             ),
           ],
@@ -361,8 +360,9 @@ class _CrmScreenState extends State<CrmScreen> {
                 children: [
                   CircleAvatar(
                     radius: 24,
-                    backgroundColor:
-                        AppTheme.primaryColor.withValues(alpha: 0.12),
+                    backgroundColor: AppTheme.primaryColor.withValues(
+                      alpha: 0.12,
+                    ),
                     child: Text(
                       initial,
                       style: const TextStyle(
@@ -379,7 +379,8 @@ class _CrmScreenState extends State<CrmScreen> {
                       children: [
                         Text(
                           customer.name,
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(
                                 fontWeight: FontWeight.w600,
                                 color: AppTheme.textPrimary,
                               ),
@@ -399,9 +400,8 @@ class _CrmScreenState extends State<CrmScreen> {
                           padding: const EdgeInsets.only(top: 8),
                           child: Text(
                             'С ${dateFormat.format(customer.createdAt)}',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: AppTheme.textSecondary,
-                                ),
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: AppTheme.textSecondary),
                           ),
                         ),
                       ],
@@ -417,7 +417,10 @@ class _CrmScreenState extends State<CrmScreen> {
                         tooltip: 'Редактировать',
                       ),
                       IconButton(
-                        icon: const Icon(Icons.delete_outline, color: Colors.red),
+                        icon: const Icon(
+                          Icons.delete_outline,
+                          color: Colors.red,
+                        ),
                         onPressed: () => _showDeleteDialog(context, customer),
                         tooltip: 'Удалить',
                       ),
@@ -448,9 +451,7 @@ class _CrmScreenState extends State<CrmScreen> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: const BoxDecoration(
-              border: Border(
-                bottom: BorderSide(color: AppTheme.borderColor),
-              ),
+              border: Border(bottom: BorderSide(color: AppTheme.borderColor)),
             ),
             child: Row(
               children: [
@@ -459,8 +460,8 @@ class _CrmScreenState extends State<CrmScreen> {
                   child: Text(
                     'Имя',
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: AppTheme.textSecondary,
-                        ),
+                      color: AppTheme.textSecondary,
+                    ),
                   ),
                 ),
                 Expanded(
@@ -468,8 +469,8 @@ class _CrmScreenState extends State<CrmScreen> {
                   child: Text(
                     'Телефон',
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: AppTheme.textSecondary,
-                        ),
+                      color: AppTheme.textSecondary,
+                    ),
                   ),
                 ),
                 Expanded(
@@ -477,8 +478,8 @@ class _CrmScreenState extends State<CrmScreen> {
                   child: Text(
                     'Email',
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: AppTheme.textSecondary,
-                        ),
+                      color: AppTheme.textSecondary,
+                    ),
                   ),
                 ),
                 Expanded(
@@ -486,8 +487,8 @@ class _CrmScreenState extends State<CrmScreen> {
                   child: Text(
                     'Автомобиль',
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: AppTheme.textSecondary,
-                        ),
+                      color: AppTheme.textSecondary,
+                    ),
                   ),
                 ),
                 Expanded(
@@ -495,8 +496,8 @@ class _CrmScreenState extends State<CrmScreen> {
                   child: Text(
                     'Дата регистрации',
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: AppTheme.textSecondary,
-                        ),
+                      color: AppTheme.textSecondary,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 100), // Для кнопок действий
@@ -526,8 +527,9 @@ class _CrmScreenState extends State<CrmScreen> {
                         child: Row(
                           children: [
                             CircleAvatar(
-                              backgroundColor:
-                                  AppTheme.primaryColor.withValues(alpha: 0.1),
+                              backgroundColor: AppTheme.primaryColor.withValues(
+                                alpha: 0.1,
+                              ),
                               child: Text(
                                 customer.name.isNotEmpty
                                     ? customer.name.trim()[0].toUpperCase()
@@ -554,19 +556,11 @@ class _CrmScreenState extends State<CrmScreen> {
                       Expanded(
                         flex: 2,
                         child: Text(
-                          customer.phone.trim().isEmpty
-                              ? '-'
-                              : customer.phone,
+                          customer.phone.trim().isEmpty ? '-' : customer.phone,
                         ),
                       ),
-                      Expanded(
-                        flex: 2,
-                        child: Text(customer.email ?? '-'),
-                      ),
-                      Expanded(
-                        flex: 2,
-                        child: Text(customer.carModel ?? '-'),
-                      ),
+                      Expanded(flex: 2, child: Text(customer.email ?? '-')),
+                      Expanded(flex: 2, child: Text(customer.carModel ?? '-')),
                       Expanded(
                         flex: 2,
                         child: Text(dateFormat.format(customer.createdAt)),
@@ -607,7 +601,10 @@ class _CrmScreenState extends State<CrmScreen> {
     );
   }
 
-  Future<void> _showCustomerDialog(BuildContext context, {CustomerModel? customer}) async {
+  Future<void> _showCustomerDialog(
+    BuildContext context, {
+    CustomerModel? customer,
+  }) async {
     if (!await ensureAuthenticated(context)) return;
     if (!context.mounted) return;
     final isMobile = MediaQuery.of(context).size.width < 768;
@@ -620,15 +617,16 @@ class _CrmScreenState extends State<CrmScreen> {
       },
     );
     if (isMobile) {
-      Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => formWidget),
-      );
+      Navigator.of(context).push(MaterialPageRoute(builder: (_) => formWidget));
     } else {
       showDialog(context: context, builder: (_) => formWidget);
     }
   }
 
-  Future<void> _showDeleteDialog(BuildContext context, CustomerModel customer) async {
+  Future<void> _showDeleteDialog(
+    BuildContext context,
+    CustomerModel customer,
+  ) async {
     if (!await ensureAuthenticated(context)) return;
     if (!context.mounted) return;
     DialogHelper.showConfirm(
@@ -642,9 +640,9 @@ class _CrmScreenState extends State<CrmScreen> {
         if (context.mounted) {
           Navigator.pop(ctx);
           _loadCustomers();
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Клиент удален')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Клиент удален')));
         }
       },
     );
@@ -702,35 +700,44 @@ class _CustomerFormDialogState extends State<_CustomerFormDialog> {
 
   Future<void> _save() async {
     if (_nameController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Укажите имя клиента')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Укажите имя клиента')));
       return;
     }
     final data = {
       'name': _nameController.text,
       'phone': _phoneController.text.isEmpty ? null : _phoneController.text,
       'email': _emailController.text.isEmpty ? null : _emailController.text,
-      'carModel': _carModelController.text.isEmpty ? null : _carModelController.text,
+      'carModel': _carModelController.text.isEmpty
+          ? null
+          : _carModelController.text,
       'notes': _notesController.text.isEmpty ? null : _notesController.text,
     };
     try {
       if (widget.customer != null) {
-        await widget.dio.put('/api/customers/${widget.customer!.id}', data: data);
+        await widget.dio.put(
+          '/api/customers/${widget.customer!.id}',
+          data: data,
+        );
       } else {
         await widget.dio.post('/api/customers', data: data);
       }
       if (mounted) {
         widget.onSuccess();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(widget.customer != null ? 'Клиент обновлен' : 'Клиент добавлен')),
+          SnackBar(
+            content: Text(
+              widget.customer != null ? 'Клиент обновлен' : 'Клиент добавлен',
+            ),
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка'))));
       }
     }
   }
@@ -799,7 +806,10 @@ class _CustomerFormDialogState extends State<_CustomerFormDialog> {
       return Scaffold(
         appBar: AppBar(
           title: Text(isEdit ? 'Редактировать клиента' : 'Добавить клиента'),
-          leading: IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+          leading: IconButton(
+            icon: const Icon(Icons.close),
+            onPressed: () => Navigator.pop(context),
+          ),
           actions: [
             FilledButton(
               onPressed: _save,
@@ -820,10 +830,15 @@ class _CustomerFormDialogState extends State<_CustomerFormDialog> {
         child: SingleChildScrollView(child: _buildFormContent()),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
-        FilledButton(onPressed: _save, child: Text(isEdit ? 'Сохранить' : 'Добавить')),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Отмена'),
+        ),
+        FilledButton(
+          onPressed: _save,
+          child: Text(isEdit ? 'Сохранить' : 'Добавить'),
+        ),
       ],
     );
   }
 }
-

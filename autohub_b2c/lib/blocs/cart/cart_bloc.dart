@@ -2,7 +2,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../../models/cart_model.dart';
-import '../../models/product_model.dart';
 import 'cart_event.dart';
 import 'cart_state.dart';
 
@@ -69,69 +68,66 @@ class CartBloc extends Bloc<CartEvent, CartState> {
     }
   }
 
+  Future<Cart> _currentCart() async {
+    if (state is CartLoaded) {
+      return (state as CartLoaded).cart;
+    }
+    return _loadCartFromStorage();
+  }
+
   void _onItemAdded(
     CartItemAdded event,
     Emitter<CartState> emit,
   ) async {
-    if (state is CartLoaded) {
-      final currentState = state as CartLoaded;
-      final newCart = currentState.cart.addItem(
-        event.product,
-        quantity: event.quantity,
-      );
-      
-      // Сохраняем корзину в локальное хранилище
-      await _saveCartToStorage(newCart);
-      
-      if (!isClosed) emit(CartLoaded(cart: newCart));
-    }
+    final currentCart = await _currentCart();
+    final newCart = currentCart.addItem(
+      event.product,
+      quantity: event.quantity,
+    );
+
+    await _saveCartToStorage(newCart);
+
+    if (!isClosed) emit(CartLoaded(cart: newCart));
   }
 
   void _onItemRemoved(
     CartItemRemoved event,
     Emitter<CartState> emit,
   ) async {
-    if (state is CartLoaded) {
-      final currentState = state as CartLoaded;
-      final newCart = currentState.cart.removeItem(event.productId);
-      
-      // Сохраняем корзину в локальное хранилище
-      await _saveCartToStorage(newCart);
-      
-      if (!isClosed) emit(CartLoaded(cart: newCart));
-    }
+    final currentCart = await _currentCart();
+    final newCart = currentCart.removeItem(event.productId);
+
+    await _saveCartToStorage(newCart);
+
+    if (!isClosed) emit(CartLoaded(cart: newCart));
   }
 
   void _onQuantityUpdated(
     CartQuantityUpdated event,
     Emitter<CartState> emit,
   ) async {
-    if (state is CartLoaded) {
-      final currentState = state as CartLoaded;
-      final newCart = currentState.cart.updateQuantity(
-        event.productId,
-        event.quantity,
-      );
-      
-      // Сохраняем корзину в локальное хранилище
-      await _saveCartToStorage(newCart);
-      
-      if (!isClosed) emit(CartLoaded(cart: newCart));
-    }
+    final currentCart = await _currentCart();
+    final newCart = currentCart.updateQuantity(
+      event.productId,
+      event.quantity,
+    );
+
+    await _saveCartToStorage(newCart);
+
+    if (!isClosed) emit(CartLoaded(cart: newCart));
   }
 
   void _onCleared(
     CartCleared event,
     Emitter<CartState> emit,
   ) async {
-    if (state is CartLoaded) {
-      final currentState = state as CartLoaded;
-      final newCart = currentState.cart.clear();
-      
-      // Сохраняем корзину в локальное хранилище
-      await _saveCartToStorage(newCart);
-      
-      if (!isClosed) emit(CartLoaded(cart: newCart));
-    }
+    final newCart = Cart(
+      items: [],
+      lastUpdated: DateTime.now(),
+    );
+
+    await _saveCartToStorage(newCart);
+
+    if (!isClosed) emit(CartLoaded(cart: newCart));
   }
 }

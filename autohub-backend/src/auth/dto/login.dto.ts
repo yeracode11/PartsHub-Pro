@@ -1,12 +1,12 @@
-import { IsEmail, IsNotEmpty, IsString } from 'class-validator';
+import { IsNotEmpty, IsString, MinLength } from 'class-validator';
 
 export class LoginDto {
-  @IsEmail()
+  @IsString()
   @IsNotEmpty()
-  email: string;
+  phone: string;
 
   @IsString()
   @IsNotEmpty()
-  password: string; // Пароль для авторизации
+  @MinLength(6, { message: 'Пароль должен быть не менее 6 символов' })
+  password: string;
 }
-

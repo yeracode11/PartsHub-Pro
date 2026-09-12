@@ -1,10 +1,10 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../config/environment.dart';
 
 class ApiClient {
-  // Используем production API для всех режимов
-  static const String baseUrl = 'http://108.174.78.106:3000/api';
+  static String get baseUrl => Environment.apiBaseUrl;
 
   late final Dio _dio;
 
@@ -12,8 +12,8 @@ class ApiClient {
     _dio = Dio(
       BaseOptions(
         baseUrl: baseUrl,
-        connectTimeout: const Duration(seconds: 30),
-        receiveTimeout: const Duration(seconds: 30),
+        connectTimeout: Environment.connectTimeout,
+        receiveTimeout: Environment.receiveTimeout,
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
@@ -23,14 +23,15 @@ class ApiClient {
 
     // Добавляем интерцепторы
     _dio.interceptors.addAll([
-      LogInterceptor(
-        request: true,
-        requestHeader: true,
-        requestBody: true,
-        responseHeader: true,
-        responseBody: true,
-        error: true,
-      ),
+      if (kDebugMode)
+        LogInterceptor(
+          request: true,
+          requestHeader: false,
+          requestBody: true,
+          responseHeader: false,
+          responseBody: true,
+          error: true,
+        ),
       InterceptorsWrapper(
         onRequest: (options, handler) async {
           // Добавляем токен авторизации если есть
@@ -57,27 +58,24 @@ class ApiClient {
   // Преобразует относительный URL изображения в полный URL
   static String getImageUrl(String imageUrl, {int? width, int? height}) {
     if (imageUrl.isEmpty) {
-      // Если нет изображения, возвращаем placeholder из интернета
-      return _getPlaceholderImageUrl(width ?? 400, height ?? 400);
+      return '';
     }
-    
-    if (imageUrl.startsWith('http')) {
-      return imageUrl;
-    }
-    // Извлекаем базовый URL без /api
-    final baseUrlWithoutApi = baseUrl.replaceAll('/api', '');
-    return '$baseUrlWithoutApi$imageUrl';
-  }
 
-  // Получает URL placeholder изображения из интернета
-  static String _getPlaceholderImageUrl(int width, int height) {
-    // Используем Picsum Photos - бесплатный сервис placeholder изображений
-    // Можно также использовать: placeholder.com, dummyimage.com
-    return 'https://picsum.photos/$width/$height?random=${DateTime.now().millisecondsSinceEpoch}';
-    
-    // Альтернативные источники placeholder изображений:
-    // 'https://via.placeholder.com/${width}x${height}?text=No+Image'
-    // 'https://dummyimage.com/${width}x${height}/cccccc/999999&text=No+Image'
+    final assetBase = Uri.parse(baseUrl.replaceAll(RegExp(r'/api/?$'), ''));
+    final resolved = imageUrl.startsWith('http')
+        ? imageUrl
+        : '${assetBase.origin}${imageUrl.startsWith('/') ? imageUrl : '/$imageUrl'}';
+
+    final uri = Uri.tryParse(resolved);
+    if (uri == null) return resolved;
+
+    // В БД часто сохранены URL с :3000, а API слушает :3001
+    if (uri.port == 3000 && assetBase.host == uri.host) {
+      final port = assetBase.hasPort ? assetBase.port : 3001;
+      return uri.replace(port: port).toString();
+    }
+
+    return resolved;
   }
 
   Dio get dio => _dio;
@@ -96,6 +94,8 @@ class ApiClient {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('auth_token');
   }
+
+  Future<SharedPreferences> getPrefs() => SharedPreferences.getInstance();
 
   // Generic GET request
   Future<Response<T>> get<T>(

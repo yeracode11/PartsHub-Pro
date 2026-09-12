@@ -8,6 +8,9 @@ import 'package:autohub_b2b/services/api/api_client.dart';
 import 'package:autohub_b2b/services/api/incoming_api_service.dart';
 import 'package:autohub_b2b/services/hardware/thermal_printer_service.dart';
 import 'package:autohub_b2b/screens/warehouse/incoming_add_item_screen.dart';
+import 'package:autohub_b2b/widgets/unauthorized_placeholder.dart';
+import 'package:dio/dio.dart';
+import 'package:autohub_b2b/services/api/api_user_message.dart';
 
 class IncomingDocScreen extends StatefulWidget {
   final String? docId;
@@ -22,7 +25,7 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
   final IncomingApiService _apiService = IncomingApiService(ApiClient());
   final ApiClient _apiClient = ApiClient();
   final ThermalPrinterService _printer = ThermalPrinterService();
-  
+
   final _formKey = GlobalKey<FormState>();
   final _dateController = TextEditingController();
   final _supplierNameController = TextEditingController();
@@ -35,6 +38,8 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
   IncomingDocType _selectedType = IncomingDocType.newParts;
   bool _isLoading = false;
   bool _isLoadingDoc = true;
+  bool _isAuthRequired = false;
+  String? _authRequiredMessage;
 
   @override
   void initState() {
@@ -62,6 +67,8 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
 
     setState(() {
       _isLoadingDoc = true;
+      _isAuthRequired = false;
+      _authRequiredMessage = null;
     });
 
     try {
@@ -77,13 +84,14 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
         _isLoadingDoc = false;
       });
     } catch (e) {
+      if (_markAuthRequiredIfNeeded(e)) return;
       setState(() {
         _isLoadingDoc = false;
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка загрузки: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка загрузки'))));
       }
     }
   }
@@ -97,8 +105,7 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
             .map((json) => CustomerModel.fromJson(json as Map<String, dynamic>))
             .toList();
       });
-    } catch (e) {
-    }
+    } catch (_) {}
   }
 
   Future<void> _saveDocument() async {
@@ -114,8 +121,8 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
         'type': _selectedType == IncomingDocType.usedParts
             ? 'used_parts'
             : _selectedType == IncomingDocType.newParts
-                ? 'new_parts'
-                : 'own_production',
+            ? 'new_parts'
+            : 'own_production',
       };
 
       // Добавляем supplierId только если он выбран
@@ -124,7 +131,8 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
       }
 
       // Добавляем supplierName только если он указан и supplierId не выбран
-      if (_selectedSupplierId == null && _supplierNameController.text.isNotEmpty) {
+      if (_selectedSupplierId == null &&
+          _supplierNameController.text.isNotEmpty) {
         data['supplierName'] = _supplierNameController.text;
       }
 
@@ -139,7 +147,7 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
 
       if (_document == null) {
         // Создание новой накладной
-        final doc = await _apiService.createDocument(data);
+        await _apiService.createDocument(data);
         if (mounted) {
           Navigator.of(context).pop(true);
         }
@@ -157,10 +165,11 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
         }
       }
     } catch (e) {
+      if (_markAuthRequiredIfNeeded(e)) return;
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Ошибка сохранения: $e'),
+            content: Text(userFacingApiMessage(e, prefix: 'Ошибка сохранения')),
             backgroundColor: Colors.red,
           ),
         );
@@ -215,10 +224,11 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
         );
       }
     } catch (e) {
+      if (_markAuthRequiredIfNeeded(e)) return;
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Ошибка проведения: $e'),
+            content: Text(userFacingApiMessage(e, prefix: 'Ошибка проведения')),
             backgroundColor: Colors.red,
           ),
         );
@@ -232,8 +242,35 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
     }
   }
 
+  bool _markAuthRequiredIfNeeded(Object error) {
+    if (error is! DioException) return false;
+    final statusCode = error.response?.statusCode;
+    if (statusCode != 401 && statusCode != 403) return false;
+    if (!mounted) return true;
+
+    setState(() {
+      _isAuthRequired = true;
+      _authRequiredMessage =
+          'Для работы с оприходованием войдите в систему или используйте пользователя с нужными правами.';
+      _isLoading = false;
+      _isLoadingDoc = false;
+    });
+    return true;
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (_isAuthRequired) {
+      return Scaffold(
+        backgroundColor: AppTheme.backgroundColor,
+        appBar: AppBar(title: const Text('Приходная накладная')),
+        body: UnauthorizedPlaceholder(
+          message: _authRequiredMessage,
+          isForbidden: false,
+        ),
+      );
+    }
+
     if (_isLoadingDoc) {
       return Scaffold(
         appBar: AppBar(title: const Text('Приходная накладная')),
@@ -244,20 +281,20 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
       appBar: AppBar(
-        title: Text(_document == null
-            ? 'Новая накладная'
-            : 'Накладная ${_document!.docNumber}'),
+        title: Text(
+          _document == null
+              ? 'Новая накладная'
+              : 'Накладная ${_document!.docNumber}',
+        ),
         actions: [
-          if (_document != null &&
-              _document!.status == IncomingDocStatus.done)
+          if (_document != null && _document!.status == IncomingDocStatus.done)
             IconButton(
               icon: const Icon(Icons.check_circle),
               color: Colors.green,
               onPressed: null,
               tooltip: 'Проведена',
             ),
-          if (_document != null &&
-              _document!.status == IncomingDocStatus.draft)
+          if (_document != null && _document!.status == IncomingDocStatus.draft)
             IconButton(
               icon: const Icon(Icons.check),
               onPressed: _isLoading ? null : _processDocument,
@@ -329,8 +366,9 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
                         lastDate: DateTime(2030),
                       );
                       if (date != null) {
-                        _dateController.text =
-                            DateFormat('yyyy-MM-dd').format(date);
+                        _dateController.text = DateFormat(
+                          'yyyy-MM-dd',
+                        ).format(date);
                       }
                     },
             ),
@@ -404,9 +442,11 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
                 border: OutlineInputBorder(),
                 hintText: 'Если поставщик не в справочнике',
               ),
-              readOnly: _document?.status == IncomingDocStatus.done ||
+              readOnly:
+                  _document?.status == IncomingDocStatus.done ||
                   _selectedSupplierId != null,
-              enabled: _selectedSupplierId == null &&
+              enabled:
+                  _selectedSupplierId == null &&
                   _document?.status != IncomingDocStatus.done,
             ),
             const SizedBox(height: 16),
@@ -453,7 +493,7 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
             LayoutBuilder(
               builder: (context, constraints) {
                 final isMobile = constraints.maxWidth < 600;
-                
+
                 if (isMobile) {
                   // На мобильных устройствах размещаем вертикально
                   return Column(
@@ -470,14 +510,16 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
                             Expanded(
                               child: ElevatedButton.icon(
                                 onPressed: () async {
-                                  final result = await Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (context) => IncomingAddItemScreen(
-                                        docId: _document!.id,
-                                        docType: _selectedType,
-                                      ),
-                                    ),
-                                  );
+                                  final result = await Navigator.of(context)
+                                      .push(
+                                        MaterialPageRoute(
+                                          builder: (context) =>
+                                              IncomingAddItemScreen(
+                                                docId: _document!.id,
+                                                docType: _selectedType,
+                                              ),
+                                        ),
+                                      );
                                   if (result == true) {
                                     _loadDocument();
                                   }
@@ -502,7 +544,7 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
                     ],
                   );
                 }
-                
+
                 // На десктопе оставляем горизонтально
                 return Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -552,8 +594,11 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
                   padding: const EdgeInsets.all(32),
                   child: Column(
                     children: [
-                      Icon(Icons.inventory_2_outlined,
-                          size: 64, color: Colors.grey[400]),
+                      Icon(
+                        Icons.inventory_2_outlined,
+                        size: 64,
+                        color: Colors.grey[400],
+                      ),
                       const SizedBox(height: 16),
                       Text(
                         'Нет позиций',
@@ -569,16 +614,13 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  'Итого:',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
+                Text('Итого:', style: Theme.of(context).textTheme.titleLarge),
                 Text(
                   '${numberFormat.format(_document!.totalAmount)} ₸',
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: AppTheme.primaryColor,
-                      ),
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.primaryColor,
+                  ),
                 ),
               ],
             ),
@@ -644,9 +686,9 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
                       _loadDocument();
                     } catch (e) {
                       if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Ошибка: $e')),
-                        );
+                        ScaffoldMessenger.of(
+                          context,
+                        ).showSnackBar(SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка'))));
                       }
                     }
                   }
@@ -689,13 +731,12 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
         showDialog(
           context: context,
           barrierDismissible: false,
-          builder: (context) => const Center(
-            child: CircularProgressIndicator(),
-          ),
+          builder: (context) =>
+              const Center(child: CircularProgressIndicator()),
         );
 
         final connected = await _printer.connectUSB();
-        
+
         if (mounted) {
           Navigator.of(context).pop(); // Закрываем индикатор загрузки
         }
@@ -704,7 +745,9 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                content: Text('Не удалось подключиться к принтеру. Проверьте подключение.'),
+                content: Text(
+                  'Не удалось подключиться к принтеру. Проверьте подключение.',
+                ),
                 backgroundColor: Colors.red,
               ),
             );
@@ -767,7 +810,7 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
         Navigator.of(context).pop(); // Закрываем индикатор, если открыт
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Ошибка печати: $e'),
+            content: Text(userFacingApiMessage(e, prefix: 'Ошибка печати')),
             backgroundColor: Colors.red,
           ),
         );
@@ -828,13 +871,12 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
         showDialog(
           context: context,
           barrierDismissible: false,
-          builder: (context) => const Center(
-            child: CircularProgressIndicator(),
-          ),
+          builder: (context) =>
+              const Center(child: CircularProgressIndicator()),
         );
 
         final connected = await _printer.connectUSB();
-        
+
         if (mounted) {
           Navigator.of(context).pop(); // Закрываем индикатор загрузки
         }
@@ -843,7 +885,9 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                content: Text('Не удалось подключиться к принтеру. Проверьте подключение.'),
+                content: Text(
+                  'Не удалось подключиться к принтеру. Проверьте подключение.',
+                ),
                 backgroundColor: Colors.red,
               ),
             );
@@ -884,7 +928,7 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
           warehouseCell: item.warehouseCell,
           quantity: item.quantity,
         );
-        
+
         if (success) {
           totalPrinted += item.quantity;
         }
@@ -904,7 +948,7 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
         Navigator.of(context).pop(); // Закрываем индикатор, если открыт
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Ошибка печати: $e'),
+            content: Text(userFacingApiMessage(e, prefix: 'Ошибка печати')),
             backgroundColor: Colors.red,
           ),
         );
@@ -912,4 +956,3 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
     }
   }
 }
-

@@ -11,6 +11,7 @@ import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/models/generated_pdf_document.dart';
 import 'package:autohub_b2b/services/pdf/pdf_file_export_service.dart';
 import 'package:autohub_b2b/services/pdf/system_pdf_print_service.dart';
+import 'package:autohub_b2b/services/api/api_user_message.dart';
 
 /// Предпросмотр PDF с действиями: печать (системный диалог), сохранение в файл, пересборка.
 ///
@@ -70,7 +71,7 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Не удалось открыть печать: $e')),
+        SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Не удалось открыть печать'))),
       );
     }
   }
@@ -92,7 +93,7 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка сохранения: $e')),
+        SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка сохранения'))),
       );
     }
   }
@@ -124,7 +125,7 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка отправки: $e')),
+        SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка отправки'))),
       );
     }
   }
@@ -156,7 +157,10 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
                     child: Padding(
                       padding: const EdgeInsets.all(24),
                       child: Text(
-                        'Ошибка: ${snapshot.error}',
+                        userFacingApiMessage(
+                          snapshot.error ?? 'Не удалось загрузить PDF',
+                          prefix: 'Ошибка',
+                        ),
                         textAlign: TextAlign.center,
                       ),
                     ),

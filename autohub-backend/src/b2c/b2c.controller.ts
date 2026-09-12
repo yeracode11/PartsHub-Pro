@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Put,
   Query,
   Param,
   Body,
@@ -17,6 +18,7 @@ import { Order, OrderWorkStage } from '../orders/entities/order.entity';
 @Controller('api/b2c')
 export class B2CController {
   private readonly logger = new Logger(B2CController.name);
+  private readonly b2cAppointments: Array<Record<string, unknown>> = [];
 
   constructor(
     @InjectRepository(Order)
@@ -25,6 +27,26 @@ export class B2CController {
     private readonly organizationsService: OrganizationsService,
     private readonly ordersService: OrdersService,
   ) {}
+
+  private getAssetBaseUrl(): string {
+    if (process.env.API_BASE_URL) {
+      return process.env.API_BASE_URL.replace(/\/api\/?$/, '');
+    }
+    const host = process.env.PUBLIC_HOST || '108.174.78.106';
+    const port = process.env.PORT || '3001';
+    return `http://${host}:${port}`;
+  }
+
+  private resolveImageUrl(img: string, baseUrl: string): string {
+    if (!img) return img;
+    let url = img.startsWith('http')
+      ? img
+      : `${baseUrl}${img.startsWith('/') ? img : `/${img}`}`;
+    const origin = new URL(baseUrl).origin;
+    url = url.replace(/^https?:\/\/108\.174\.78\.106:3000/, origin);
+    url = url.replace(/^https?:\/\/localhost:3000/, origin);
+    return url;
+  }
 
   // Публичный endpoint для получения всех запчастей для B2C
   @Get('parts')
@@ -43,21 +65,13 @@ export class B2CController {
     });
 
     // Преобразуем в формат для B2C
-    const baseUrl = process.env.API_BASE_URL || 'http://108.174.78.106:3000';
+    const baseUrl = this.getAssetBaseUrl();
     
     return {
       data: items.map(item => {
         // Обрабатываем изображения - конвертируем относительные пути в полные URL
         let images = item.images && item.images.length > 0 ? item.images : (item.imageUrl ? [item.imageUrl] : []);
-        images = images.map(img => {
-          // Если URL уже полный (начинается с http), возвращаем как есть
-          if (img.startsWith('http')) {
-            return img;
-          }
-          // Иначе добавляем базовый URL из переменной окружения
-          const fullUrl = `${baseUrl}${img}`;
-          return fullUrl;
-        });
+        images = images.map(img => this.resolveImageUrl(img, baseUrl));
 
         return {
           id: item.id,
@@ -90,18 +104,12 @@ export class B2CController {
     const items = await this.itemsService.getPopularForB2C(limitNum);
     
     // Используем тот же baseUrl для изображений
-    const baseUrl = process.env.API_BASE_URL || 'http://108.174.78.106:3000';
+    const baseUrl = this.getAssetBaseUrl();
 
     return {
       data: items.map(item => {
-        // Обрабатываем изображения - конвертируем относительные пути в полные URL
         let images = item.images && item.images.length > 0 ? item.images : (item.imageUrl ? [item.imageUrl] : []);
-        images = images.map(img => {
-          if (img.startsWith('http')) {
-            return img;
-          }
-          return `${baseUrl}${img}`;
-        });
+        images = images.map(img => this.resolveImageUrl(img, baseUrl));
 
         return {
           id: item.id,
@@ -136,13 +144,9 @@ export class B2CController {
     }
 
     // Обрабатываем изображения - конвертируем относительные пути в полные URL
+    const baseUrl = this.getAssetBaseUrl();
     let images = item.images && item.images.length > 0 ? item.images : (item.imageUrl ? [item.imageUrl] : []);
-    images = images.map(img => {
-      if (img.startsWith('http')) {
-        return img;
-      }
-      return `http://localhost:3000${img}`;
-    });
+    images = images.map(img => this.resolveImageUrl(img, baseUrl));
 
     return {
       data: {
@@ -410,5 +414,48 @@ export class B2CController {
       this.logger.error('Error creating B2C order', error.stack);
       throw error;
     }
+  }
+
+  @Get('appointments')
+  getAppointments() {
+    return {
+      data: this.b2cAppointments,
+      total: this.b2cAppointments.length,
+    };
+  }
+
+  @Post('appointments')
+  createAppointment(@Body() data: Record<string, unknown>) {
+    const now = new Date().toISOString();
+    const appointment = {
+      id: `apt-${Date.now()}`,
+      serviceId: data.serviceId ?? '',
+      userId: data.userId ?? null,
+      vehicleId: data.vehicleId ?? '',
+      serviceName: data.serviceName ?? '',
+      appointmentDate: data.appointmentDate ?? now,
+      timeSlot: data.timeSlot ?? '',
+      status: 'pending',
+      notes: data.notes ?? '',
+      estimatedPrice: Number(data.estimatedPrice ?? 0),
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.b2cAppointments.unshift(appointment);
+    return { data: appointment };
+  }
+
+  @Put('appointments/:id/cancel')
+  cancelAppointment(@Param('id') id: string) {
+    const index = this.b2cAppointments.findIndex((a) => a.id === id);
+    if (index === -1) {
+      return { data: null, message: 'Appointment not found' };
+    }
+    this.b2cAppointments[index] = {
+      ...this.b2cAppointments[index],
+      status: 'cancelled',
+      updatedAt: new Date().toISOString(),
+    };
+    return { data: this.b2cAppointments[index] };
   }
 }

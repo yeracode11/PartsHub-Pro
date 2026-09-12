@@ -6,6 +6,9 @@ import 'package:autohub_b2b/services/api/api_client.dart';
 import 'package:autohub_b2b/services/api/incoming_api_service.dart';
 import 'package:autohub_b2b/services/hardware/barcode_scanner_service.dart';
 import 'package:autohub_b2b/services/hardware/thermal_printer_service.dart';
+import 'package:autohub_b2b/widgets/unauthorized_placeholder.dart';
+import 'package:dio/dio.dart';
+import 'package:autohub_b2b/services/api/api_user_message.dart';
 
 class IncomingAddItemScreen extends StatefulWidget {
   final String docId;
@@ -44,6 +47,8 @@ class _IncomingAddItemScreenState extends State<IncomingAddItemScreen> {
   bool _isLoading = false;
   bool _isSearchingItems = false;
   bool _isSearchingByBarcode = false;
+  bool _isAuthRequired = false;
+  String? _authRequiredMessage;
   final FocusNode _skuFocusNode = FocusNode();
 
   @override
@@ -52,10 +57,10 @@ class _IncomingAddItemScreenState extends State<IncomingAddItemScreen> {
     if (widget.docType == IncomingDocType.newParts) {
       _loadItems();
     }
-    
+
     // Настройка обработчика сканера штрих-кодов
     _barcodeScanner.onBarcodeScanned = _onBarcodeScanned;
-    
+
     // Автофокус на поле SKU для удобства сканирования
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _skuFocusNode.requestFocus();
@@ -93,6 +98,7 @@ class _IncomingAddItemScreenState extends State<IncomingAddItemScreen> {
         _isSearchingItems = false;
       });
     } catch (e) {
+      if (_markAuthRequiredIfNeeded(e)) return;
       setState(() {
         _isSearchingItems = false;
       });
@@ -115,7 +121,7 @@ class _IncomingAddItemScreenState extends State<IncomingAddItemScreen> {
   /// Обработка отсканированного штрих-кода
   Future<void> _onBarcodeScanned(String barcode) async {
     if (widget.docType != IncomingDocType.newParts) return;
-    
+
     setState(() {
       _isSearchingByBarcode = true;
     });
@@ -124,21 +130,17 @@ class _IncomingAddItemScreenState extends State<IncomingAddItemScreen> {
       // Ищем товар по SKU/штрих-коду
       final foundItem = _items.firstWhere(
         (item) => item.sku?.toLowerCase() == barcode.toLowerCase(),
-        orElse: () => ItemModel(
-          name: '',
-          price: 0,
-          quantity: 0,
-          condition: 'new',
-        ),
+        orElse: () =>
+            ItemModel(name: '', price: 0, quantity: 0, condition: 'new'),
       );
 
       if (foundItem.name.isNotEmpty) {
         // Товар найден - заполняем форму
         _onItemSelected(foundItem);
-        
+
         // Воспроизводим звуковой сигнал (опционально)
         await _barcodeScanner.playBeep();
-        
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -151,11 +153,13 @@ class _IncomingAddItemScreenState extends State<IncomingAddItemScreen> {
       } else {
         // Товар не найден - заполняем только SKU
         _skuController.text = barcode;
-        
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Товар с артикулом "$barcode" не найден. Заполните данные вручную.'),
+              content: Text(
+                'Товар с артикулом "$barcode" не найден. Заполните данные вручную.',
+              ),
               backgroundColor: Colors.orange,
               duration: const Duration(seconds: 3),
             ),
@@ -228,10 +232,12 @@ class _IncomingAddItemScreenState extends State<IncomingAddItemScreen> {
         if (printLabel == true) {
           await _printLabel(
             itemName: _nameController.text.trim(),
-            sku: _skuController.text.trim().isEmpty ? null : _skuController.text.trim(),
+            sku: _skuController.text.trim().isEmpty
+                ? null
+                : _skuController.text.trim(),
             price: double.parse(_priceController.text),
-            warehouseCell: _warehouseCellController.text.trim().isEmpty 
-                ? null 
+            warehouseCell: _warehouseCellController.text.trim().isEmpty
+                ? null
                 : _warehouseCellController.text.trim(),
             quantity: int.parse(_quantityController.text),
           );
@@ -240,10 +246,11 @@ class _IncomingAddItemScreenState extends State<IncomingAddItemScreen> {
         Navigator.of(context).pop(true);
       }
     } catch (e) {
+      if (_markAuthRequiredIfNeeded(e)) return;
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Ошибка добавления: $e'),
+            content: Text(userFacingApiMessage(e, prefix: 'Ошибка добавления')),
             backgroundColor: Colors.red,
           ),
         );
@@ -257,6 +264,23 @@ class _IncomingAddItemScreenState extends State<IncomingAddItemScreen> {
     }
   }
 
+  bool _markAuthRequiredIfNeeded(Object error) {
+    if (error is! DioException) return false;
+    final statusCode = error.response?.statusCode;
+    if (statusCode != 401 && statusCode != 403) return false;
+    if (!mounted) return true;
+
+    setState(() {
+      _isAuthRequired = true;
+      _authRequiredMessage =
+          'Для работы с оприходованием войдите в систему или используйте пользователя с нужными правами.';
+      _isLoading = false;
+      _isSearchingItems = false;
+      _isSearchingByBarcode = false;
+    });
+    return true;
+  }
+
   @override
   Widget build(BuildContext context) {
     final isUsedParts = widget.docType == IncomingDocType.usedParts;
@@ -266,14 +290,20 @@ class _IncomingAddItemScreenState extends State<IncomingAddItemScreen> {
       appBar: AppBar(
         title: const Text('Добавить позицию'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.save),
-            onPressed: _isLoading ? null : _saveItem,
-            tooltip: 'Сохранить',
-          ),
+          if (!_isAuthRequired)
+            IconButton(
+              icon: const Icon(Icons.save),
+              onPressed: _isLoading ? null : _saveItem,
+              tooltip: 'Сохранить',
+            ),
         ],
       ),
-      body: _isLoading
+      body: _isAuthRequired
+          ? UnauthorizedPlaceholder(
+              message: _authRequiredMessage,
+              isForbidden: false,
+            )
+          : _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
               padding: const EdgeInsets.all(24),
@@ -342,7 +372,9 @@ class _IncomingAddItemScreenState extends State<IncomingAddItemScreen> {
                   ..._items.map((item) {
                     return DropdownMenuItem<ItemModel?>(
                       value: item,
-                      child: Text('${item.name} (${item.sku ?? 'нет артикула'})'),
+                      child: Text(
+                        '${item.name} (${item.sku ?? 'нет артикула'})',
+                      ),
                     );
                   }),
                 ],
@@ -410,7 +442,9 @@ class _IncomingAddItemScreenState extends State<IncomingAddItemScreen> {
                               child: SizedBox(
                                 width: 20,
                                 height: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
                               ),
                             )
                           : null,
@@ -441,7 +475,10 @@ class _IncomingAddItemScreenState extends State<IncomingAddItemScreen> {
               items: const [
                 DropdownMenuItem(value: 'new', child: Text('Новое')),
                 DropdownMenuItem(value: 'used', child: Text('Б/У')),
-                DropdownMenuItem(value: 'refurbished', child: Text('Восстановленное')),
+                DropdownMenuItem(
+                  value: 'refurbished',
+                  child: Text('Восстановленное'),
+                ),
               ],
               onChanged: (value) {
                 if (value != null) {
@@ -579,10 +616,7 @@ class _IncomingAddItemScreenState extends State<IncomingAddItemScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Хранение',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
+            Text('Хранение', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 16),
             TextFormField(
               controller: _warehouseCellController,
@@ -642,13 +676,12 @@ class _IncomingAddItemScreenState extends State<IncomingAddItemScreen> {
         showDialog(
           context: context,
           barrierDismissible: false,
-          builder: (context) => const Center(
-            child: CircularProgressIndicator(),
-          ),
+          builder: (context) =>
+              const Center(child: CircularProgressIndicator()),
         );
 
         final connected = await _printer.connectUSB();
-        
+
         if (mounted) {
           Navigator.of(context).pop(); // Закрываем индикатор загрузки
         }
@@ -657,7 +690,9 @@ class _IncomingAddItemScreenState extends State<IncomingAddItemScreen> {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                content: Text('Не удалось подключиться к принтеру. Проверьте подключение.'),
+                content: Text(
+                  'Не удалось подключиться к принтеру. Проверьте подключение.',
+                ),
                 backgroundColor: Colors.red,
               ),
             );
@@ -720,7 +755,7 @@ class _IncomingAddItemScreenState extends State<IncomingAddItemScreen> {
         Navigator.of(context).pop(); // Закрываем индикатор, если открыт
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Ошибка печати: $e'),
+            content: Text(userFacingApiMessage(e, prefix: 'Ошибка печати')),
             backgroundColor: Colors.red,
           ),
         );
@@ -728,4 +763,3 @@ class _IncomingAddItemScreenState extends State<IncomingAddItemScreen> {
     }
   }
 }
-

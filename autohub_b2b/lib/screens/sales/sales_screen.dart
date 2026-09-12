@@ -15,6 +15,8 @@ import 'package:autohub_b2b/repositories/orders_repository.dart';
 import 'package:autohub_b2b/services/service_locator.dart';
 import 'package:autohub_b2b/utils/dialog_helper.dart';
 import 'package:autohub_b2b/utils/auth_guard.dart';
+import 'package:autohub_b2b/models/label_product_model.dart';
+import 'package:autohub_b2b/services/api/api_user_message.dart';
 
 class SalesScreen extends StatefulWidget {
   const SalesScreen({super.key});
@@ -40,7 +42,7 @@ class _SalesScreenState extends State<SalesScreen> {
 
   Future<void> _loadOrders() async {
     if (!mounted) return;
-    
+
     setState(() {
       isLoading = true;
       error = null;
@@ -49,19 +51,21 @@ class _SalesScreenState extends State<SalesScreen> {
 
     try {
       final loadedOrders = await _ordersRepo.getOrders();
-      
+
       if (!mounted) return;
-      
+
       setState(() {
         orders = loadedOrders;
         isLoading = false;
       });
     } catch (e) {
       if (!mounted) return;
-      if (e is DioException && e.response?.statusCode == 403) {
+      if (e is DioException &&
+          (e.response?.statusCode == 401 || e.response?.statusCode == 403)) {
         setState(() {
           isForbidden = true;
-          forbiddenMessage = (e.response?.data is Map<String, dynamic>
+          forbiddenMessage =
+              (e.response?.data is Map<String, dynamic>
                   ? (e.response?.data['message'] as String?)
                   : null) ??
               'У вас нет доступа к разделу «Продажи». Войдите под владельцем или менеджером.';
@@ -69,7 +73,7 @@ class _SalesScreenState extends State<SalesScreen> {
         });
       } else {
         setState(() {
-          error = e.toString();
+          error = userFacingApiMessage(e);
           isLoading = false;
         });
       }
@@ -90,55 +94,49 @@ class _SalesScreenState extends State<SalesScreen> {
             padding: EdgeInsets.all(padding),
             decoration: const BoxDecoration(
               color: AppTheme.surfaceColor,
-              border: Border(
-                bottom: BorderSide(color: AppTheme.borderColor),
-              ),
+              border: Border(bottom: BorderSide(color: AppTheme.borderColor)),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Expanded(
                   child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Продажи',
-                        style: Theme.of(context).textTheme.displayMedium?.copyWith(
-                          fontSize: isMobile ? 24 : 28,
-                    ),
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Продажи',
+                        style: Theme.of(context).textTheme.displayMedium
+                            ?.copyWith(fontSize: isMobile ? 24 : 28),
                       ),
                       if (!isMobile) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      'Управление заказами и продажами',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: AppTheme.textSecondary,
-                          ),
-                    ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Управление заказами и продажами',
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(color: AppTheme.textSecondary),
+                        ),
                       ],
-                  ],
-                ),
+                    ],
+                  ),
                 ),
                 if (!isMobile)
-                FilledButton.icon(
-                  onPressed: () => _showOrderDialog(context),
-                  icon: const Icon(Icons.add),
-                  label: const Text('Новый заказ'),
+                  FilledButton.icon(
+                    onPressed: () => _showOrderDialog(context),
+                    icon: const Icon(Icons.add),
+                    label: const Text('Новый заказ'),
                   )
                 else
                   IconButton(
                     icon: const Icon(Icons.add),
                     onPressed: () => _showOrderDialog(context),
                     tooltip: 'Новый заказ',
-                ),
+                  ),
               ],
             ),
           ),
 
           // Список заказов
-          Expanded(
-            child: _buildOrdersList(isMobile: isMobile),
-          ),
+          Expanded(child: _buildOrdersList(isMobile: isMobile)),
         ],
       ),
     );
@@ -146,7 +144,10 @@ class _SalesScreenState extends State<SalesScreen> {
 
   Widget _buildOrdersList({bool isMobile = false}) {
     if (isForbidden) {
-      return UnauthorizedPlaceholder(message: forbiddenMessage);
+      return UnauthorizedPlaceholder(
+        message: forbiddenMessage,
+        isForbidden: false,
+      );
     }
 
     if (isLoading) {
@@ -160,7 +161,7 @@ class _SalesScreenState extends State<SalesScreen> {
           children: [
             const Icon(Icons.error_outline, size: 64, color: Colors.red),
             const SizedBox(height: 16),
-            Text('Ошибка: $error'),
+            Text(error!, textAlign: TextAlign.center),
             const SizedBox(height: 16),
             ElevatedButton(
               onPressed: _loadOrders,
@@ -196,9 +197,9 @@ class _SalesScreenState extends State<SalesScreen> {
             const SizedBox(height: 8),
             Text(
               'Создайте первый заказ',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppTheme.textSecondary,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: AppTheme.textSecondary),
             ),
             const SizedBox(height: 24),
             FilledButton.icon(
@@ -265,7 +266,10 @@ class _SalesScreenState extends State<SalesScreen> {
                               children: [
                                 Icon(Icons.delete, size: 20, color: Colors.red),
                                 SizedBox(width: 8),
-                                Text('Удалить', style: TextStyle(color: Colors.red)),
+                                Text(
+                                  'Удалить',
+                                  style: TextStyle(color: Colors.red),
+                                ),
                               ],
                             ),
                           ),
@@ -361,9 +365,7 @@ class _SalesScreenState extends State<SalesScreen> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: const BoxDecoration(
-              border: Border(
-                bottom: BorderSide(color: AppTheme.borderColor),
-              ),
+              border: Border(bottom: BorderSide(color: AppTheme.borderColor)),
             ),
             child: Row(
               children: [
@@ -372,8 +374,8 @@ class _SalesScreenState extends State<SalesScreen> {
                   child: Text(
                     'Номер заказа',
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: AppTheme.textSecondary,
-                        ),
+                      color: AppTheme.textSecondary,
+                    ),
                   ),
                 ),
                 Expanded(
@@ -381,8 +383,8 @@ class _SalesScreenState extends State<SalesScreen> {
                   child: Text(
                     'Сумма',
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: AppTheme.textSecondary,
-                        ),
+                      color: AppTheme.textSecondary,
+                    ),
                   ),
                 ),
                 Expanded(
@@ -390,8 +392,8 @@ class _SalesScreenState extends State<SalesScreen> {
                   child: Text(
                     'Статус',
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: AppTheme.textSecondary,
-                        ),
+                      color: AppTheme.textSecondary,
+                    ),
                   ),
                 ),
                 Expanded(
@@ -399,8 +401,8 @@ class _SalesScreenState extends State<SalesScreen> {
                   child: Text(
                     'Оплата',
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: AppTheme.textSecondary,
-                        ),
+                      color: AppTheme.textSecondary,
+                    ),
                   ),
                 ),
                 Expanded(
@@ -408,8 +410,8 @@ class _SalesScreenState extends State<SalesScreen> {
                   child: Text(
                     'Дата создания',
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: AppTheme.textSecondary,
-                        ),
+                      color: AppTheme.textSecondary,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 100), // Для кнопок действий
@@ -438,9 +440,7 @@ class _SalesScreenState extends State<SalesScreen> {
                         flex: 2,
                         child: Text(
                           order.orderNumber ?? '#${order.id}',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                          ),
+                          style: const TextStyle(fontWeight: FontWeight.w600),
                         ),
                       ),
                       Expanded(
@@ -453,10 +453,7 @@ class _SalesScreenState extends State<SalesScreen> {
                           ),
                         ),
                       ),
-                      Expanded(
-                        flex: 2,
-                        child: _buildStatusBadge(order.status),
-                      ),
+                      Expanded(flex: 2, child: _buildStatusBadge(order.status)),
                       Expanded(
                         flex: 2,
                         child: _buildPaymentBadge(order.paymentStatus),
@@ -472,10 +469,8 @@ class _SalesScreenState extends State<SalesScreen> {
                           children: [
                             IconButton(
                               icon: const Icon(Icons.edit_outlined),
-                              onPressed: () => _showOrderDialog(
-                                context,
-                                order: order,
-                              ),
+                              onPressed: () =>
+                                  _showOrderDialog(context, order: order),
                               tooltip: 'Редактировать',
                             ),
                             IconButton(
@@ -483,7 +478,8 @@ class _SalesScreenState extends State<SalesScreen> {
                                 Icons.delete_outline,
                                 color: Colors.red,
                               ),
-                              onPressed: () => _showDeleteDialog(context, order),
+                              onPressed: () =>
+                                  _showDeleteDialog(context, order),
                               tooltip: 'Удалить',
                             ),
                           ],
@@ -582,45 +578,48 @@ class _SalesScreenState extends State<SalesScreen> {
     );
   }
 
-  Future<void> _showOrderDialog(BuildContext context, {OrderModel? order}) async {
+  Future<void> _showOrderDialog(
+    BuildContext context, {
+    OrderModel? order,
+  }) async {
     if (!await ensureAuthenticated(context)) return;
     if (!context.mounted) return;
     if (order == null) {
       // Создание нового заказа
       final isEdit = false;
-    
-    // Загружаем список товаров
-    List<Map<String, dynamic>> availableItems = [];
-    try {
-      final response = await dio.get('/api/items');
-      availableItems = List<Map<String, dynamic>>.from(response.data);
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка загрузки товаров: $e')),
-        );
+
+      // Загружаем список товаров
+      List<Map<String, dynamic>> availableItems = [];
+      try {
+        final response = await dio.get('/api/items');
+        availableItems = List<Map<String, dynamic>>.from(response.data);
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка загрузки товаров'))),
+          );
+        }
+        return;
       }
-      return;
-    }
 
-    if (!context.mounted) return;
+      if (!context.mounted) return;
 
-    final isMobile = MediaQuery.of(context).size.width < 768;
-    final orderDialog = _OrderDialog(
-      isEdit: isEdit,
-      order: order,
-      availableItems: availableItems,
-      dio: dio,
-      onSuccess: _loadOrders,
-    );
-
-    if (isMobile) {
-      Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => orderDialog),
+      final isMobile = MediaQuery.of(context).size.width < 768;
+      final orderDialog = _OrderDialog(
+        isEdit: isEdit,
+        order: order,
+        availableItems: availableItems,
+        dio: dio,
+        onSuccess: _loadOrders,
       );
-    } else {
-      showDialog(context: context, builder: (_) => orderDialog);
-    }
+
+      if (isMobile) {
+        Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => orderDialog));
+      } else {
+        showDialog(context: context, builder: (_) => orderDialog);
+      }
     } else {
       // Просмотр/редактирование существующего заказа
       // Загружаем полную информацию о заказе с товарами
@@ -628,15 +627,16 @@ class _SalesScreenState extends State<SalesScreen> {
         final response = await dio.get('/api/orders/${order.id}');
         final orderData = response.data;
         final fullOrder = OrderModel.fromJson(orderData);
-        
+
         if (!context.mounted) return;
-        
+
         // Если это B2C заказ, показываем детальный просмотр
         if (fullOrder.isB2C) {
           final result = await Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => OrderDetailScreen(order: fullOrder, dio: dio),
+              builder: (context) =>
+                  OrderDetailScreen(order: fullOrder, dio: dio),
             ),
           );
           // Если заказ был обновлен, перезагружаем список
@@ -648,16 +648,18 @@ class _SalesScreenState extends State<SalesScreen> {
           List<Map<String, dynamic>> availableItems = [];
           try {
             final itemsResponse = await dio.get('/api/items');
-            availableItems = List<Map<String, dynamic>>.from(itemsResponse.data);
+            availableItems = List<Map<String, dynamic>>.from(
+              itemsResponse.data,
+            );
           } catch (e) {
             if (context.mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Ошибка загрузки товаров: $e')),
+                SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка загрузки товаров'))),
               );
             }
             return;
           }
-          
+
           if (!context.mounted) return;
 
           final isMobile = MediaQuery.of(context).size.width < 768;
@@ -670,18 +672,18 @@ class _SalesScreenState extends State<SalesScreen> {
           );
 
           if (isMobile) {
-            Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => editDialog),
-            );
+            Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => editDialog));
           } else {
             showDialog(context: context, builder: (_) => editDialog);
           }
         }
       } catch (e) {
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Ошибка загрузки заказа: $e')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка загрузки заказа'))));
         }
       }
     }
@@ -760,18 +762,21 @@ class _OrderDialogState extends State<_OrderDialog> {
       // Если заказ уже имеет позиции, заполняем selectedItems для редактирования
       if (widget.order!.items != null && widget.order!.items!.isNotEmpty) {
         selectedItems = widget.order!.items!
-            .map((oi) => {
-                  'id': oi.id,
-                  'itemId': oi.itemId,
-                  'name': oi.item?['name'] ?? 'Товар #${oi.itemId}',
-                  'price': oi.priceAtTime,
-                  'quantity': oi.quantity,
-                  'imageUrl': (oi.item?['images'] != null &&
-                          (oi.item!['images'] as List).isNotEmpty)
-                      ? (oi.item!['images'][0] as String)
-                      : oi.item?['imageUrl'],
-                  'sku': oi.item?['sku'],
-                })
+            .map(
+              (oi) => {
+                'id': oi.id,
+                'itemId': oi.itemId,
+                'name': oi.item?['name'] ?? 'Товар #${oi.itemId}',
+                'price': oi.priceAtTime,
+                'quantity': oi.quantity,
+                'imageUrl':
+                    (oi.item?['images'] != null &&
+                        (oi.item!['images'] as List).isNotEmpty)
+                    ? (oi.item!['images'][0] as String)
+                    : oi.item?['imageUrl'],
+                'sku': oi.item?['sku'],
+              },
+            )
             .toList();
       }
     }
@@ -807,9 +812,7 @@ class _OrderDialogState extends State<_OrderDialog> {
   /// Открывает камеру для сканирования штрих-кода / QR-кода (мобильные устройства)
   Future<void> _openCameraScanner() async {
     final result = await Navigator.of(context).push<String>(
-      MaterialPageRoute(
-        builder: (context) => const _BarcodeScannerPage(),
-      ),
+      MaterialPageRoute(builder: (context) => const _BarcodeScannerPage()),
     );
     if (result != null && result.isNotEmpty && mounted) {
       _onBarcodeScanned(result);
@@ -822,19 +825,36 @@ class _OrderDialogState extends State<_OrderDialog> {
     final trimmed = barcode.trim();
     if (trimmed.isEmpty) return;
 
-    // Ищем товар по SKU / коду
-    final lower = trimmed.toLowerCase();
-    final matchedItem = widget.availableItems.firstWhere(
-      (it) {
-        final sku = (it['sku'] ?? '').toString().toLowerCase();
-        return sku == lower;
-      },
-      orElse: () => {},
-    );
+    // QR этикетки: `SKU:…|ID:n|CELL:…` — как в [LabelProductData.fromItem]
+    final parsed = LabelQrPayload.parse(trimmed);
+    final lowerRaw = trimmed.toLowerCase();
+
+    Map<String, dynamic> matchedItem = {};
+    for (final it in widget.availableItems) {
+      final skuLower = (it['sku'] ?? '').toString().toLowerCase();
+      var idMatch = false;
+      if (parsed.id != null) {
+        final v = it['id'];
+        if (v is int) {
+          idMatch = v == parsed.id;
+        } else if (v is num) {
+          idMatch = v.toInt() == parsed.id;
+        }
+      }
+      final skuMatchParsed =
+          parsed.sku != null &&
+          parsed.sku!.isNotEmpty &&
+          skuLower == parsed.sku!.toLowerCase();
+      final skuMatchRaw = skuLower == lowerRaw;
+      if (idMatch || skuMatchParsed || skuMatchRaw) {
+        matchedItem = it;
+        break;
+      }
+    }
 
     if (matchedItem.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
+        SnackBar(
           content: Text('Товар с кодом "$trimmed" не найден'),
           backgroundColor: Colors.red,
         ),
@@ -849,21 +869,20 @@ class _OrderDialogState extends State<_OrderDialog> {
         ? double.tryParse(priceRaw) ?? 0
         : (priceRaw is num ? priceRaw.toDouble() : 0);
     final images = matchedItem['images'] as List?;
-    final firstImage =
-        images != null && images.isNotEmpty ? images.first.toString() : null;
+    final firstImage = images != null && images.isNotEmpty
+        ? images.first.toString()
+        : null;
     final sku = matchedItem['sku']?.toString();
 
     // Проверяем, есть ли уже этот товар в чеке — увеличиваем количество
-    final existingIndex =
-        selectedItems.indexWhere((e) => e['id'] == itemId || e['itemId'] == itemId);
+    final existingIndex = selectedItems.indexWhere(
+      (e) => e['id'] == itemId || e['itemId'] == itemId,
+    );
     if (existingIndex != -1) {
       setState(() {
         final current = selectedItems[existingIndex];
         final currentQty = (current['quantity'] as int? ?? 0) + 1;
-        selectedItems[existingIndex] = {
-          ...current,
-          'quantity': currentQty,
-        };
+        selectedItems[existingIndex] = {...current, 'quantity': currentQty};
       });
     } else {
       setState(() {
@@ -914,10 +933,7 @@ class _OrderDialogState extends State<_OrderDialog> {
             value: reserveEnabled,
             contentPadding: EdgeInsets.zero,
             title: const Text('Резерв запчасти'),
-            subtitle: Text(
-              reserveLabel,
-              style: const TextStyle(fontSize: 12),
-            ),
+            subtitle: Text(reserveLabel, style: const TextStyle(fontSize: 12)),
             onChanged: (value) {
               setState(() {
                 reserveEnabled = value;
@@ -1011,7 +1027,10 @@ class _OrderDialogState extends State<_OrderDialog> {
                         focusNode: _barcodeFocusNode,
                         decoration: InputDecoration(
                           hintText: 'Штрихкод / артикул',
-                          prefixIcon: const Icon(Icons.qr_code_scanner, size: 20),
+                          prefixIcon: const Icon(
+                            Icons.qr_code_scanner,
+                            size: 20,
+                          ),
                           suffixIcon: _isMobilePlatform
                               ? IconButton(
                                   icon: const Icon(Icons.camera_alt),
@@ -1021,10 +1040,14 @@ class _OrderDialogState extends State<_OrderDialog> {
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
                           isDense: true,
                         ),
-                        onChanged: (value) => _barcodeScanner.handleInput(value),
+                        onChanged: (value) =>
+                            _barcodeScanner.handleInput(value),
                         onEditingComplete: () {
                           _barcodeScanner.clearBuffer();
                           _barcodeController.clear();
@@ -1037,7 +1060,10 @@ class _OrderDialogState extends State<_OrderDialog> {
                       icon: const Icon(Icons.add, size: 18),
                       label: const Text('Товар'),
                       style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
                       ),
                     ),
                   ],
@@ -1055,21 +1081,32 @@ class _OrderDialogState extends State<_OrderDialog> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.shopping_cart_outlined, size: 56, color: Colors.grey.shade300),
+                        Icon(
+                          Icons.shopping_cart_outlined,
+                          size: 56,
+                          color: Colors.grey.shade300,
+                        ),
                         const SizedBox(height: 12),
                         Text(
                           'Сканируйте товар\nили добавьте вручную',
                           textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.grey.shade500, fontSize: 15),
+                          style: TextStyle(
+                            color: Colors.grey.shade500,
+                            fontSize: 15,
+                          ),
                         ),
                       ],
                     ),
                   )
                 : ListView.separated(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
                     itemCount: selectedItems.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 8),
-                    itemBuilder: (context, index) => _buildMobileItemCard(index),
+                    itemBuilder: (context, index) =>
+                        _buildMobileItemCard(index),
                   ),
           ),
 
@@ -1110,11 +1147,20 @@ class _OrderDialogState extends State<_OrderDialog> {
                       maxHeightDiskCache: 200,
                       memCacheWidth: 200,
                       memCacheHeight: 200,
-                      placeholder: (_, __) => Container(width: 56, height: 56, color: Colors.grey.shade200),
-                      errorWidget: (_, __, ___) => Container(
-                        width: 56, height: 56,
+                      placeholder: (_, __) => Container(
+                        width: 56,
+                        height: 56,
                         color: Colors.grey.shade200,
-                        child: const Icon(Icons.image_not_supported, color: Colors.grey, size: 20),
+                      ),
+                      errorWidget: (_, __, ___) => Container(
+                        width: 56,
+                        height: 56,
+                        color: Colors.grey.shade200,
+                        child: const Icon(
+                          Icons.image_not_supported,
+                          color: Colors.grey,
+                          size: 20,
+                        ),
                       ),
                     )
                   : Container(
@@ -1124,7 +1170,11 @@ class _OrderDialogState extends State<_OrderDialog> {
                         color: AppTheme.primaryColor.withOpacity(0.08),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const Icon(Icons.inventory_2, color: AppTheme.primaryColor, size: 24),
+                      child: const Icon(
+                        Icons.inventory_2,
+                        color: AppTheme.primaryColor,
+                        size: 24,
+                      ),
                     ),
             ),
             const SizedBox(width: 12),
@@ -1136,14 +1186,23 @@ class _OrderDialogState extends State<_OrderDialog> {
                 children: [
                   Text(
                     item['name'] ?? '',
-                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                    ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
                   if (sku != null && sku.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 2),
-                      child: Text(sku, style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+                      child: Text(
+                        sku,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppTheme.textSecondary,
+                        ),
+                      ),
                     ),
                   const SizedBox(height: 8),
 
@@ -1165,17 +1224,31 @@ class _OrderDialogState extends State<_OrderDialog> {
                                 if (q <= 0) {
                                   selectedItems.removeAt(index);
                                 } else {
-                                  selectedItems[index] = {...item, 'quantity': q};
+                                  selectedItems[index] = {
+                                    ...item,
+                                    'quantity': q,
+                                  };
                                 }
                               });
                             }),
                             Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 12),
-                              child: Text('$quantity', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                              ),
+                              child: Text(
+                                '$quantity',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 15,
+                                ),
+                              ),
                             ),
                             _stepperBtn(Icons.add, () {
                               setState(() {
-                                selectedItems[index] = {...item, 'quantity': quantity + 1};
+                                selectedItems[index] = {
+                                  ...item,
+                                  'quantity': quantity + 1,
+                                };
                               });
                             }),
                           ],
@@ -1184,7 +1257,10 @@ class _OrderDialogState extends State<_OrderDialog> {
                       const Spacer(),
                       Text(
                         '${NumberFormat('#,###', 'ru_RU').format(subtotal)} ₸',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
                       ),
                     ],
                   ),
@@ -1222,7 +1298,13 @@ class _OrderDialogState extends State<_OrderDialog> {
     return Container(
       decoration: BoxDecoration(
         color: Theme.of(context).cardColor,
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 8, offset: const Offset(0, -2))],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 8,
+            offset: const Offset(0, -2),
+          ),
+        ],
       ),
       child: SafeArea(
         child: Padding(
@@ -1234,11 +1316,20 @@ class _OrderDialogState extends State<_OrderDialog> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Итого (${selectedItems.length} поз.)',
-                      style: const TextStyle(fontSize: 15, color: AppTheme.textSecondary)),
+                  Text(
+                    'Итого (${selectedItems.length} поз.)',
+                    style: const TextStyle(
+                      fontSize: 15,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
                   Text(
                     '${NumberFormat('#,###', 'ru_RU').format(totalAmount)} ₸',
-                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppTheme.primaryColor),
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.primaryColor,
+                    ),
                   ),
                 ],
               ),
@@ -1254,15 +1345,33 @@ class _OrderDialogState extends State<_OrderDialog> {
                         labelText: 'Статус',
                         border: OutlineInputBorder(),
                         isDense: true,
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
                       ),
                       items: const [
-                        DropdownMenuItem(value: 'pending', child: Text('Ожидание')),
-                        DropdownMenuItem(value: 'processing', child: Text('В работе')),
-                        DropdownMenuItem(value: 'reserved', child: Text('Бронь')),
+                        DropdownMenuItem(
+                          value: 'pending',
+                          child: Text('Ожидание'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'processing',
+                          child: Text('В работе'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'reserved',
+                          child: Text('Бронь'),
+                        ),
                         DropdownMenuItem(value: 'ready', child: Text('Готов')),
-                        DropdownMenuItem(value: 'completed', child: Text('Завершен')),
-                        DropdownMenuItem(value: 'cancelled', child: Text('Отменен')),
+                        DropdownMenuItem(
+                          value: 'completed',
+                          child: Text('Завершен'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'cancelled',
+                          child: Text('Отменен'),
+                        ),
                       ],
                       onChanged: (value) {
                         setState(() {
@@ -1286,14 +1395,24 @@ class _OrderDialogState extends State<_OrderDialog> {
                         labelText: 'Оплата',
                         border: OutlineInputBorder(),
                         isDense: true,
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
                       ),
                       items: const [
-                        DropdownMenuItem(value: 'pending', child: Text('Не оплачен')),
-                        DropdownMenuItem(value: 'partially_paid', child: Text('Частично')),
+                        DropdownMenuItem(
+                          value: 'pending',
+                          child: Text('Не оплачен'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'partially_paid',
+                          child: Text('Частично'),
+                        ),
                         DropdownMenuItem(value: 'paid', child: Text('Оплачен')),
                       ],
-                      onChanged: (v) => setState(() => selectedPaymentStatus = v!),
+                      onChanged: (v) =>
+                          setState(() => selectedPaymentStatus = v!),
                     ),
                   ),
                 ],
@@ -1314,214 +1433,349 @@ class _OrderDialogState extends State<_OrderDialog> {
         width: 700,
         height: 600,
         child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Товары в заказе',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Товары в заказе',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _showAddItemDialog,
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('Добавить товар'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Container(
+                height: 250,
+                decoration: BoxDecoration(
+                  border: Border.all(color: AppTheme.borderColor),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  children: [
+                    TextField(
+                      controller: _barcodeController,
+                      focusNode: _barcodeFocusNode,
+                      decoration: const InputDecoration(
+                        labelText: 'Штрихкод / артикул',
+                        hintText: 'Поднесите сканер и отсканируйте товар',
+                        prefixIcon: Icon(Icons.qr_code_scanner),
+                        border: InputBorder.none,
+                      ),
+                      onChanged: (value) => _barcodeScanner.handleInput(value),
+                      onEditingComplete: () {
+                        _barcodeScanner.clearBuffer();
+                        _barcodeController.clear();
+                      },
+                    ),
+                    const Divider(height: 1),
+                    Expanded(
+                      child: selectedItems.isEmpty
+                          ? Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.shopping_cart_outlined,
+                                    size: 48,
+                                    color: Colors.grey.shade400,
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Сканируйте товар или добавьте вручную',
+                                    style: TextStyle(
+                                      color: Colors.grey.shade600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : ListView.builder(
+                              itemCount: selectedItems.length,
+                              itemBuilder: (context, index) {
+                                final item = selectedItems[index];
+                                final price =
+                                    double.tryParse(item['price'].toString()) ??
+                                    0;
+                                final quantity = item['quantity'] as int;
+                                final subtotal = price * quantity;
+                                final imageUrl = item['imageUrl'] as String?;
+                                final sku = item['sku'] as String?;
+                                return ListTile(
+                                  leading: imageUrl != null
+                                      ? ClipRRect(
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                          child: CachedNetworkImage(
+                                            imageUrl:
+                                                imageUrl.startsWith('http')
+                                                ? imageUrl
+                                                : 'http://108.174.78.106:3000$imageUrl',
+                                            width: 48,
+                                            height: 48,
+                                            fit: BoxFit.cover,
+                                            maxWidthDiskCache: 200,
+                                            maxHeightDiskCache: 200,
+                                            memCacheWidth: 200,
+                                            memCacheHeight: 200,
+                                            placeholder: (_, __) => Container(
+                                              width: 48,
+                                              height: 48,
+                                              color: Colors.grey.shade200,
+                                              child: const Center(
+                                                child:
+                                                    CircularProgressIndicator(
+                                                      strokeWidth: 2,
+                                                    ),
+                                              ),
+                                            ),
+                                            errorWidget: (_, __, ___) =>
+                                                Container(
+                                                  width: 48,
+                                                  height: 48,
+                                                  color: Colors.grey.shade200,
+                                                  child: const Icon(
+                                                    Icons.image_not_supported,
+                                                    color: Colors.grey,
+                                                  ),
+                                                ),
+                                          ),
+                                        )
+                                      : CircleAvatar(
+                                          backgroundColor: AppTheme.primaryColor
+                                              .withOpacity(0.1),
+                                          child: const Icon(
+                                            Icons.inventory_2,
+                                            color: AppTheme.primaryColor,
+                                          ),
+                                        ),
+                                  title: Text(
+                                    item['name'],
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
+                                  ),
+                                  subtitle: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        '${NumberFormat('#,###', 'ru_RU').format(price)} ₸ × $quantity',
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      if (sku != null && sku.isNotEmpty)
+                                        Text(
+                                          'Артикул: $sku',
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: AppTheme.textSecondary,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                    ],
+                                  ),
+                                  trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(
+                                          Icons.remove_circle_outline,
+                                        ),
+                                        onPressed: () {
+                                          setState(() {
+                                            final q =
+                                                (item['quantity'] as int? ??
+                                                    1) -
+                                                1;
+                                            if (q <= 0) {
+                                              selectedItems.removeAt(index);
+                                            } else {
+                                              selectedItems[index] = {
+                                                ...item,
+                                                'quantity': q,
+                                              };
+                                            }
+                                          });
+                                        },
+                                      ),
+                                      Text(
+                                        '$quantity',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(
+                                          Icons.add_circle_outline,
+                                        ),
+                                        onPressed: () {
+                                          setState(() {
+                                            selectedItems[index] = {
+                                              ...item,
+                                              'quantity': quantity + 1,
+                                            };
+                                          });
+                                        },
+                                      ),
+                                      Text(
+                                        '${NumberFormat('#,###', 'ru_RU').format(subtotal)} ₸',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      IconButton(
+                                        icon: const Icon(
+                                          Icons.delete_outline,
+                                          color: Colors.red,
+                                        ),
+                                        onPressed: () => setState(
+                                          () => selectedItems.removeAt(index),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryColor.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: AppTheme.primaryColor.withOpacity(0.2),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Итого:',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
-                ),
-                OutlinedButton.icon(
-                  onPressed: _showAddItemDialog,
-                  icon: const Icon(Icons.add, size: 18),
-                  label: const Text('Добавить товар'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Container(
-              height: 250,
-              decoration: BoxDecoration(
-                border: Border.all(color: AppTheme.borderColor),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Column(
-                children: [
-                  TextField(
-                    controller: _barcodeController,
-                    focusNode: _barcodeFocusNode,
-                    decoration: const InputDecoration(
-                      labelText: 'Штрихкод / артикул',
-                      hintText: 'Поднесите сканер и отсканируйте товар',
-                      prefixIcon: Icon(Icons.qr_code_scanner),
-                      border: InputBorder.none,
                     ),
-                    onChanged: (value) => _barcodeScanner.handleInput(value),
-                    onEditingComplete: () {
-                      _barcodeScanner.clearBuffer();
-                      _barcodeController.clear();
-                    },
-                  ),
-                  const Divider(height: 1),
-                  Expanded(
-              child: selectedItems.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.shopping_cart_outlined, size: 48, color: Colors.grey.shade400),
-                          const SizedBox(height: 8),
-                          Text('Сканируйте товар или добавьте вручную',
-                              style: TextStyle(color: Colors.grey.shade600)),
-                        ],
+                    Text(
+                      '${NumberFormat('#,###', 'ru_RU').format(totalAmount)} ₸',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.primaryColor,
                       ),
-                    )
-                  : ListView.builder(
-                      itemCount: selectedItems.length,
-                      itemBuilder: (context, index) {
-                        final item = selectedItems[index];
-                        final price = double.tryParse(item['price'].toString()) ?? 0;
-                        final quantity = item['quantity'] as int;
-                        final subtotal = price * quantity;
-                        final imageUrl = item['imageUrl'] as String?;
-                        final sku = item['sku'] as String?;
-                        return ListTile(
-                          leading: imageUrl != null
-                              ? ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: CachedNetworkImage(
-                                    imageUrl: imageUrl.startsWith('http')
-                                        ? imageUrl
-                                        : 'http://108.174.78.106:3000$imageUrl',
-                                    width: 48, height: 48, fit: BoxFit.cover,
-                                    maxWidthDiskCache: 200, maxHeightDiskCache: 200,
-                                    memCacheWidth: 200, memCacheHeight: 200,
-                                    placeholder: (_, __) => Container(width: 48, height: 48, color: Colors.grey.shade200,
-                                        child: const Center(child: CircularProgressIndicator(strokeWidth: 2))),
-                                    errorWidget: (_, __, ___) => Container(width: 48, height: 48,
-                                        color: Colors.grey.shade200,
-                                        child: const Icon(Icons.image_not_supported, color: Colors.grey)),
-                                  ),
-                                )
-                              : CircleAvatar(
-                                  backgroundColor: AppTheme.primaryColor.withOpacity(0.1),
-                                  child: const Icon(Icons.inventory_2, color: AppTheme.primaryColor),
-                                ),
-                          title: Text(item['name'], overflow: TextOverflow.ellipsis, maxLines: 1),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text('${NumberFormat('#,###', 'ru_RU').format(price)} ₸ × $quantity',
-                                  overflow: TextOverflow.ellipsis),
-                              if (sku != null && sku.isNotEmpty)
-                                Text('Артикул: $sku',
-                                    style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
-                                    overflow: TextOverflow.ellipsis),
-                            ],
-                          ),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                icon: const Icon(Icons.remove_circle_outline),
-                                onPressed: () {
-                                  setState(() {
-                                    final q = (item['quantity'] as int? ?? 1) - 1;
-                                    if (q <= 0) { selectedItems.removeAt(index); }
-                                    else { selectedItems[index] = {...item, 'quantity': q}; }
-                                  });
-                                },
-                              ),
-                              Text('$quantity', style: const TextStyle(fontWeight: FontWeight.w600)),
-                              IconButton(
-                                icon: const Icon(Icons.add_circle_outline),
-                                onPressed: () {
-                                  setState(() { selectedItems[index] = {...item, 'quantity': quantity + 1}; });
-                                },
-                              ),
-                              Text('${NumberFormat('#,###', 'ru_RU').format(subtotal)} ₸',
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                              const SizedBox(width: 4),
-                              IconButton(
-                                icon: const Icon(Icons.delete_outline, color: Colors.red),
-                                onPressed: () => setState(() => selectedItems.removeAt(index)),
-                              ),
-                            ],
-                          ),
-                        );
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              _buildReserveSection(),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
+                      value: selectedStatus,
+                      decoration: const InputDecoration(
+                        labelText: 'Статус',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'pending',
+                          child: Text('Ожидание'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'processing',
+                          child: Text('В работе'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'reserved',
+                          child: Text('Забронирован'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'ready',
+                          child: Text('Готов к выдаче'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'completed',
+                          child: Text('Завершен'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'cancelled',
+                          child: Text('Отменен'),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        setState(() {
+                          selectedStatus = value!;
+                          if (selectedStatus == 'reserved') {
+                            reserveEnabled = true;
+                            _setReserveUntilFromDays();
+                          } else {
+                            reserveEnabled = false;
+                            reserveUntil = null;
+                          }
+                        });
                       },
                     ),
                   ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
+                      value: selectedPaymentStatus,
+                      decoration: const InputDecoration(
+                        labelText: 'Статус оплаты',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'pending',
+                          child: Text('Не оплачен'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'partially_paid',
+                          child: Text('Частично'),
+                        ),
+                        DropdownMenuItem(value: 'paid', child: Text('Оплачен')),
+                      ],
+                      onChanged: (v) =>
+                          setState(() => selectedPaymentStatus = v!),
+                    ),
+                  ),
                 ],
               ),
-            ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppTheme.primaryColor.withOpacity(0.05),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppTheme.primaryColor.withOpacity(0.2)),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Итого:', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-                  Text('${NumberFormat('#,###', 'ru_RU').format(totalAmount)} ₸',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold, color: AppTheme.primaryColor)),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            _buildReserveSection(),
-            const SizedBox(height: 24),
-            Row(
-              children: [
-                Expanded(
-                  child: DropdownButtonFormField<String>(
-                    value: selectedStatus,
-                    decoration: const InputDecoration(labelText: 'Статус', border: OutlineInputBorder()),
-                    items: const [
-                      DropdownMenuItem(value: 'pending', child: Text('Ожидание')),
-                      DropdownMenuItem(value: 'processing', child: Text('В работе')),
-                      DropdownMenuItem(value: 'reserved', child: Text('Забронирован')),
-                      DropdownMenuItem(value: 'ready', child: Text('Готов к выдаче')),
-                      DropdownMenuItem(value: 'completed', child: Text('Завершен')),
-                      DropdownMenuItem(value: 'cancelled', child: Text('Отменен')),
-                    ],
-                    onChanged: (value) {
-                      setState(() {
-                        selectedStatus = value!;
-                        if (selectedStatus == 'reserved') { reserveEnabled = true; _setReserveUntilFromDays(); }
-                        else { reserveEnabled = false; reserveUntil = null; }
-                      });
-                    },
-                  ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: notesController,
+                decoration: const InputDecoration(
+                  labelText: 'Примечания',
+                  border: OutlineInputBorder(),
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: DropdownButtonFormField<String>(
-                    value: selectedPaymentStatus,
-                    decoration: const InputDecoration(labelText: 'Статус оплаты', border: OutlineInputBorder()),
-                    items: const [
-                      DropdownMenuItem(value: 'pending', child: Text('Не оплачен')),
-                      DropdownMenuItem(value: 'partially_paid', child: Text('Частично')),
-                      DropdownMenuItem(value: 'paid', child: Text('Оплачен')),
-                    ],
-                    onChanged: (v) => setState(() => selectedPaymentStatus = v!),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: notesController,
-              decoration: const InputDecoration(labelText: 'Примечания', border: OutlineInputBorder()),
-              maxLines: 2,
-            ),
-          ],
-        ),
+                maxLines: 2,
+              ),
+            ],
+          ),
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Отмена'),
+        ),
         FilledButton(
           onPressed: selectedItems.isEmpty ? null : _createOrder,
           child: Text(widget.isEdit ? 'Сохранить' : 'Создать заказ'),
@@ -1559,9 +1813,9 @@ class _OrderDialogState extends State<_OrderDialog> {
     );
 
     if (isMobile) {
-      Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => addItemWidget),
-      );
+      Navigator.of(
+        context,
+      ).push(MaterialPageRoute(builder: (_) => addItemWidget));
     } else {
       showDialog(context: context, builder: (_) => addItemWidget);
     }
@@ -1577,10 +1831,9 @@ class _OrderDialogState extends State<_OrderDialog> {
       'paymentStatus': selectedPaymentStatus,
       'notes': notesController.text.isEmpty ? null : notesController.text,
       'reservedUntil': reserveEnabled ? reserveUntil?.toIso8601String() : null,
-      'items': selectedItems.map((item) => {
-        'itemId': item['id'],
-        'quantity': item['quantity'],
-      }).toList(),
+      'items': selectedItems
+          .map((item) => {'itemId': item['id'], 'quantity': item['quantity']})
+          .toList(),
     };
 
     try {
@@ -1603,12 +1856,11 @@ class _OrderDialogState extends State<_OrderDialog> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка')), backgroundColor: Colors.red),
         );
       }
     }
   }
-
 }
 
 class _AddItemToOrderDialog extends StatefulWidget {
@@ -1646,9 +1898,9 @@ class _AddItemToOrderDialogState extends State<_AddItemToOrderDialog> {
     final quantity = int.tryParse(_quantityController.text) ?? 1;
     final maxQty = _selectedItem!['quantity'] as int;
     if (quantity <= 0 || quantity > maxQty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Некорректное количество')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Некорректное количество')));
       return;
     }
     widget.onAdd(_selectedItem!, quantity);
@@ -1713,7 +1965,10 @@ class _AddItemToOrderDialogState extends State<_AddItemToOrderDialog> {
       return Scaffold(
         appBar: AppBar(
           title: const Text('Добавить товар'),
-          leading: IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+          leading: IconButton(
+            icon: const Icon(Icons.close),
+            onPressed: () => Navigator.pop(context),
+          ),
           actions: [
             FilledButton(
               onPressed: _selectedItem == null ? null : _submit,
@@ -1729,12 +1984,12 @@ class _AddItemToOrderDialogState extends State<_AddItemToOrderDialog> {
     }
     return AlertDialog(
       title: const Text('Добавить товар'),
-      content: SizedBox(
-        width: 400,
-        child: _buildContent(),
-      ),
+      content: SizedBox(width: 400, child: _buildContent()),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Отмена'),
+        ),
         FilledButton(
           onPressed: _selectedItem == null ? null : _submit,
           child: const Text('Добавить'),
@@ -1769,7 +2024,10 @@ class _BarcodeScannerPageState extends State<_BarcodeScannerPage> {
   void _onDetect(BarcodeCapture capture) {
     if (_returned) return;
     final barcode = capture.barcodes.firstOrNull;
-    if (barcode == null || barcode.rawValue == null || barcode.rawValue!.isEmpty) return;
+    if (barcode == null ||
+        barcode.rawValue == null ||
+        barcode.rawValue!.isEmpty)
+      return;
     _returned = true;
     Navigator.of(context).pop(barcode.rawValue);
   }
@@ -1801,10 +2059,7 @@ class _BarcodeScannerPageState extends State<_BarcodeScannerPage> {
       ),
       body: Stack(
         children: [
-          MobileScanner(
-            controller: _controller,
-            onDetect: _onDetect,
-          ),
+          MobileScanner(controller: _controller, onDetect: _onDetect),
           Center(
             child: Container(
               width: 260,

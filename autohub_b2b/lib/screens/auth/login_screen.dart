@@ -4,6 +4,11 @@ import 'package:autohub_b2b/blocs/auth/auth_bloc.dart';
 import 'package:autohub_b2b/blocs/auth/auth_event.dart';
 import 'package:autohub_b2b/blocs/auth/auth_state.dart';
 import 'package:autohub_b2b/screens/auth/register_screen.dart';
+import 'package:autohub_b2b/widgets/auth/auth_design.dart';
+import 'package:autohub_b2b/widgets/auth/auth_form_field.dart';
+import 'package:autohub_b2b/widgets/auth/auth_phone_field.dart';
+import 'package:autohub_b2b/widgets/auth/auth_primary_button.dart';
+import 'package:autohub_b2b/widgets/auth/auth_screen_shell.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -14,209 +19,121 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController();
+  final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
+  String? _errorMessage;
 
   @override
   Widget build(BuildContext context) {
     final canDismiss = Navigator.of(context, rootNavigator: true).canPop();
 
-    return Scaffold(
-      appBar: canDismiss
-          ? AppBar(
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              automaticallyImplyLeading: false,
-              leading: IconButton(
-                icon: const Icon(Icons.close),
-                tooltip: 'Закрыть',
-                onPressed: () => Navigator.of(context, rootNavigator: true).maybePop(),
-              ),
-            )
-          : null,
-      body: BlocConsumer<AuthBloc, AuthState>(
-        listener: (context, state) {
-          if (state is AuthError) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(state.message),
-                backgroundColor: Colors.red,
-                duration: const Duration(seconds: 5),
-              ),
-            );
-          } else if (state is AuthAuthenticated) {
-            // После входа закрываем только экран логина (не сбрасываем весь стек до root).
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (!context.mounted) return;
-              final nav = Navigator.of(context, rootNavigator: true);
-              if (nav.canPop()) {
-                nav.pop();
-              }
-            });
-          }
-        },
-        builder: (context, state) {
-          return _buildLoginForm(context, state);
-        },
-      ),
+    return BlocConsumer<AuthBloc, AuthState>(
+      listener: (context, state) {
+        if (state is AuthError) {
+          setState(() => _errorMessage = state.message);
+        } else if (state is AuthAuthenticated) {
+          setState(() => _errorMessage = null);
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!context.mounted) return;
+            final nav = Navigator.of(context, rootNavigator: true);
+            if (nav.canPop()) {
+              nav.pop();
+            }
+          });
+        } else if (state is AuthLoading) {
+          setState(() => _errorMessage = null);
+        }
+      },
+      builder: (context, state) {
+        return AuthScreenShell(
+          errorMessage: _errorMessage,
+          leading: canDismiss
+              ? AuthIconButton(
+                  icon: Icons.close,
+                  tooltip: 'Закрыть',
+                  onPressed: () =>
+                      Navigator.of(context, rootNavigator: true).maybePop(),
+                )
+              : null,
+          form: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                AuthPhoneField(
+                  controller: _phoneController,
+                  textInputAction: TextInputAction.next,
+                ),
+                const SizedBox(height: 16),
+                AuthFormField(
+                  controller: _passwordController,
+                  label: 'Пароль',
+                  icon: Icons.lock_outline,
+                  obscureText: _obscurePassword,
+                  textInputAction: TextInputAction.done,
+                  onFieldSubmitted: (_) => _submit(state),
+                  suffix: IconButton(
+                    icon: Icon(
+                      _obscurePassword
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
+                      color: AuthDesign.textMuted,
+                    ),
+                    onPressed: () {
+                      setState(() => _obscurePassword = !_obscurePassword);
+                    },
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Введите пароль';
+                    }
+                    if (value.length < 6) {
+                      return 'Пароль должен быть минимум 6 символов';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 24),
+                AuthPrimaryButton(
+                  label: 'Войти',
+                  isLoading: state is AuthLoading,
+                  onPressed: state is AuthLoading ? null : () => _submit(state),
+                ),
+              ],
+            ),
+          ),
+          footer: AuthLinkRow(
+            prompt: 'Нет аккаунта?',
+            actionLabel: 'Зарегистрироваться',
+            onAction: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (context) => const RegisterScreen()),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildLoginForm(BuildContext context, AuthState state) {
-    final logoSize = MediaQuery.sizeOf(context).width < 600 ? 104.0 : 88.0;
+  void _submit(AuthState state) {
+    if (state is AuthLoading) return;
+    if (_formKey.currentState?.validate() != true) return;
 
-    return Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(32.0),
-            child: Card(
-              elevation: 8,
-              child: Container(
-                constraints: const BoxConstraints(maxWidth: 400),
-                padding: const EdgeInsets.all(32.0),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // Логотип (крупнее на телефонах)
-                      Image.asset(
-                        'assets/icons/auto-plus-logo.png',
-                        width: logoSize,
-                        height: logoSize,
-                        fit: BoxFit.contain,
-                      ),
-                      // Заголовок
-                      Text(
-                        'Auto+ Pro',
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Управление автобизнесом',
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: Colors.grey[600],
-                            ),
-                      ),
-                      const SizedBox(height: 32),
-
-                      // Email поле
-                      TextFormField(
-                        controller: _emailController,
-                        decoration: const InputDecoration(
-                          labelText: 'Email',
-                          prefixIcon: Icon(Icons.email),
-                          border: OutlineInputBorder(),
-                        ),
-                        keyboardType: TextInputType.emailAddress,
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Введите email';
-                          }
-                          if (!value.contains('@')) {
-                            return 'Введите корректный email';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Пароль поле
-                      TextFormField(
-                        controller: _passwordController,
-                        decoration: InputDecoration(
-                          labelText: 'Пароль',
-                          prefixIcon: const Icon(Icons.lock),
-                          border: const OutlineInputBorder(),
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              _obscurePassword
-                                  ? Icons.visibility
-                                  : Icons.visibility_off,
-                            ),
-                            onPressed: () {
-                              setState(() {
-                                _obscurePassword = !_obscurePassword;
-                              });
-                            },
-                          ),
-                        ),
-                        obscureText: _obscurePassword,
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Введите пароль';
-                          }
-                          if (value.length < 6) {
-                            return 'Пароль должен быть минимум 6 символов';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 24),
-
-                      // Кнопка входа
-                      FilledButton(
-                        onPressed: state is AuthLoading
-                            ? null
-                            : () {
-                                if (_formKey.currentState!.validate()) {
-                                  context.read<AuthBloc>().add(
-                                        AuthSignInRequested(
-                                          email: _emailController.text.trim(),
-                                          password: _passwordController.text,
-                                        ),
-                                      );
-                                }
-                              },
-                        style: FilledButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                        ),
-                        child: state is AuthLoading
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Text(
-                                'Войти',
-                                style: TextStyle(fontSize: 16),
-                              ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Ссылка на регистрацию
-                      TextButton(
-                        onPressed: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (context) => const RegisterScreen(),
-                            ),
-                          );
-                        },
-                        child: const Text('Нет аккаунта? Зарегистрироваться'),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+    FocusScope.of(context).unfocus();
+    context.read<AuthBloc>().add(
+          AuthSignInRequested(
+            phone: _phoneController.text.trim(),
+            password: _passwordController.text,
           ),
         );
   }
 
   @override
   void dispose() {
-    _emailController.dispose();
+    _phoneController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 }
-

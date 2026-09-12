@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/utils/auth_guard.dart';
+import 'package:autohub_b2b/services/api/api_user_message.dart';
 
 /// Редактор одного шаблона WhatsApp (создание или изменение).
 class WhatsAppTemplateEditorPage extends StatefulWidget {
@@ -114,26 +115,16 @@ class _WhatsAppTemplateEditorPageState extends State<WhatsAppTemplateEditorPage>
         );
         Navigator.of(context).pop(true);
       }
-    } on DioException catch (e) {
+    } catch (e) {
       if (!mounted) return;
-      final msg = e.response?.data is Map
-          ? (e.response?.data['message']?.toString() ??
-              e.response?.data['error']?.toString())
-          : null;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            msg ?? e.message ?? 'Не удалось сохранить шаблон',
+            userFacingApiMessage(e, prefix: 'Не удалось сохранить шаблон'),
           ),
           backgroundColor: Colors.red,
         ),
       );
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red),
-        );
-      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }

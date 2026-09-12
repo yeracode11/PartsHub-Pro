@@ -1,4 +1,5 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:autohub_b2b/services/api/api_user_message.dart';
 import 'package:autohub_b2b/blocs/warehouse/warehouse_event.dart';
 import 'package:autohub_b2b/blocs/warehouse/warehouse_state.dart';
 import 'package:autohub_b2b/services/database/database.dart';
@@ -24,7 +25,7 @@ class WarehouseBloc extends Bloc<WarehouseEvent, WarehouseState> {
       final itemModels = items.map(_itemToModel).toList();
       emit(WarehouseLoaded(items: itemModels));
     } catch (e) {
-      emit(WarehouseError(e.toString()));
+      emit(WarehouseError(userFacingApiMessage(e)));
     }
   }
 
@@ -36,7 +37,7 @@ class WarehouseBloc extends Bloc<WarehouseEvent, WarehouseState> {
       final itemModels = items.map(_itemToModel).toList();
       emit(WarehouseLoaded(items: itemModels, currentCategory: event.category));
     } catch (e) {
-      emit(WarehouseError(e.toString()));
+      emit(WarehouseError(userFacingApiMessage(e)));
     }
   }
 
@@ -52,7 +53,7 @@ class WarehouseBloc extends Bloc<WarehouseEvent, WarehouseState> {
       final itemModels = filteredItems.map(_itemToModel).toList();
       emit(WarehouseLoaded(items: itemModels, searchQuery: event.query));
     } catch (e) {
-      emit(WarehouseError(e.toString()));
+      emit(WarehouseError(userFacingApiMessage(e)));
     }
   }
 
@@ -71,7 +72,7 @@ class WarehouseBloc extends Bloc<WarehouseEvent, WarehouseState> {
       await database.insertItem(companion);
       add(LoadItems());
     } catch (e) {
-      emit(WarehouseError(e.toString()));
+      emit(WarehouseError(userFacingApiMessage(e)));
     }
   }
 
@@ -91,7 +92,7 @@ class WarehouseBloc extends Bloc<WarehouseEvent, WarehouseState> {
       await database.updateItem(companion);
       add(LoadItems());
     } catch (e) {
-      emit(WarehouseError(e.toString()));
+      emit(WarehouseError(userFacingApiMessage(e)));
     }
   }
 
@@ -100,7 +101,7 @@ class WarehouseBloc extends Bloc<WarehouseEvent, WarehouseState> {
       await database.deleteItem(event.itemId);
       add(LoadItems());
     } catch (e) {
-      emit(WarehouseError(e.toString()));
+      emit(WarehouseError(userFacingApiMessage(e)));
     }
   }
 

@@ -53,7 +53,9 @@ class AutoService {
       rating: (json['rating'] ?? 0.0).toDouble(),
       reviewCount: json['reviewCount'] ?? 0,
       services: List<String>.from(json['services'] ?? []),
-      workingHours: List<String>.from(json['workingHours'] ?? []),
+      workingHours: json['workingHours'] is String
+          ? [json['workingHours'] as String]
+          : List<String>.from(json['workingHours'] ?? []),
       availability: Map<String, List<String>>.from(
         json['availability']?.map((key, value) => MapEntry(key, List<String>.from(value))) ?? {},
       ),

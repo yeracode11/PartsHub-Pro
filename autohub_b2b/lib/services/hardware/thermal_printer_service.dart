@@ -457,9 +457,8 @@ class ThermalPrinterService {
 
   // ===================== WiFi TCP (работает на iOS, Android, Desktop) =====================
 
-  /// Подключение к принтеру по WiFi (TCP порт 9100). На iOS не используется (PDF / AirPrint).
+  /// Подключение к принтеру по WiFi (TCP порт 9100). На iOS нужен доступ к локальной сети.
   Future<bool> connectWifi(String ip, {int port = 9100}) async {
-    if (Platform.isIOS) return false;
     try {
       // Проверяем доступность принтера
       final socket = await Socket.connect(
@@ -502,6 +501,13 @@ class ThermalPrinterService {
     } catch (e) {
       return false;
     }
+  }
+
+  /// Сырой ESC/POS (растр/текст) на сохранённый Wi‑Fi принтер (порт 9100).
+  /// Используйте для этикеток из [PdfLabelBlePrintService], если BLE недоступен.
+  Future<bool> sendEscPosWifi(List<int> bytes) async {
+    if (!_isWifi || _wifiIp == null || bytes.isEmpty) return false;
+    return _sendToWifi(bytes);
   }
 
   /// Печать наклейки на WiFi-принтере с помощью TSPL (язык Xprinter XP-420B).
@@ -701,21 +707,15 @@ class ThermalPrinterService {
   /// Автоматическое подключение к сохраненному принтеру
   Future<bool> autoConnectToSavedPrinter() async {
     try {
-      // На iOS печать — через PDF / системный диалог; прямой TCP к принтеру не используем.
-      if (Platform.isIOS) return false;
-
       final settings = await loadPrinterSettings();
       final savedType = settings['type'];
-      final savedName = settings['name'];
-
-      if (savedName == null) return false;
 
       // Раньше сохраняли type bluetooth — больше не поддерживается
       if (savedType == 'bluetooth') {
         return false;
       }
 
-      // WiFi auto-reconnect
+      // Wi‑Fi ESC/POS (в т.ч. iOS при разрешении «Локальная сеть»)
       if (savedType == 'wifi') {
         final ip = settings['ip'];
         final port = int.tryParse(settings['port'] ?? '') ?? 9100;
@@ -724,6 +724,11 @@ class ThermalPrinterService {
         }
         return false;
       }
+
+      if (Platform.isIOS) return false;
+
+      final savedName = settings['name'];
+      if (savedName == null) return false;
 
       // System printer auto-reconnect (Desktop)
       if (savedType == 'system' || savedType == null) {

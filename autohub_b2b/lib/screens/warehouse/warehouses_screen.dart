@@ -40,7 +40,7 @@ class _WarehousesScreenState extends State<WarehousesScreen> {
     try {
       final warehouses = await _warehouseService.getWarehouses();
       final counts = <String, int>{};
-      
+
       for (var warehouse in warehouses) {
         final count = await _warehouseService.getItemsCount(warehouse.id);
         counts[warehouse.id] = count;
@@ -52,14 +52,16 @@ class _WarehousesScreenState extends State<WarehousesScreen> {
         _isLoading = false;
       });
     } on DioException catch (e) {
-      if (e.response?.statusCode == 403) {
+      if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
         if (mounted) {
           setState(() {
             _isForbidden = true;
             _isLoading = false;
             _forbiddenMessage =
-                (e.response?.data is Map<String, dynamic> ? (e.response?.data['message'] as String?) : null) ??
-                    'У вас нет доступа к разделу "Склады". Войдите под владельцем или менеджером.';
+                (e.response?.data is Map<String, dynamic>
+                    ? (e.response?.data['message'] as String?)
+                    : null) ??
+                'У вас нет доступа к разделу "Склады". Войдите под владельцем или менеджером.';
           });
         }
       } else if (isNetworkError(e)) {
@@ -70,9 +72,9 @@ class _WarehousesScreenState extends State<WarehousesScreen> {
       } else {
         setState(() => _isLoading = false);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(userFacingApiMessage(e))),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(userFacingApiMessage(e))));
         }
       }
     } catch (e) {
@@ -84,9 +86,9 @@ class _WarehousesScreenState extends State<WarehousesScreen> {
       } else {
         setState(() => _isLoading = false);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(userFacingApiMessage(e))),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(userFacingApiMessage(e))));
         }
       }
     }
@@ -105,9 +107,7 @@ class _WarehousesScreenState extends State<WarehousesScreen> {
       },
     );
     if (isMobile) {
-      Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => formWidget),
-      );
+      Navigator.of(context).push(MaterialPageRoute(builder: (_) => formWidget));
     } else {
       showDialog(context: context, builder: (_) => formWidget);
     }
@@ -130,9 +130,9 @@ class _WarehousesScreenState extends State<WarehousesScreen> {
         _loadWarehouses();
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Ошибка удаления: $e')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка удаления'))));
         }
       }
     }
@@ -143,8 +143,10 @@ class _WarehousesScreenState extends State<WarehousesScreen> {
     if (_isForbidden) {
       return Scaffold(
         body: UnauthorizedPlaceholder(
-          message: _forbiddenMessage ??
+          message:
+              _forbiddenMessage ??
               'У вас нет доступа к разделу "Склады". Войдите под владельцем или менеджером.',
+          isForbidden: false,
         ),
       );
     }
@@ -162,130 +164,132 @@ class _WarehousesScreenState extends State<WarehousesScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _isOffline
-              ? OfflinePlaceholder(onRetry: _loadWarehouses)
-              : _warehouses.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.warehouse, size: 64, color: Colors.grey[400]),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Нет складов',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              color: Colors.grey[600],
-                            ),
-                      ),
-                      const SizedBox(height: 8),
-                      const Text('Нажмите + чтобы добавить первый склад'),
-                    ],
+          ? OfflinePlaceholder(onRetry: _loadWarehouses)
+          : _warehouses.isEmpty
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.warehouse, size: 64, color: Colors.grey[400]),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Нет складов',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.titleLarge?.copyWith(color: Colors.grey[600]),
                   ),
-                )
-              : LayoutBuilder(
-                  builder: (context, constraints) {
-                    final isMobile = constraints.maxWidth < 768;
+                  const SizedBox(height: 8),
+                  const Text('Нажмите + чтобы добавить первый склад'),
+                ],
+              ),
+            )
+          : LayoutBuilder(
+              builder: (context, constraints) {
+                final isMobile = constraints.maxWidth < 768;
 
-                    if (isMobile) {
-                      return ListView.builder(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: _warehouses.length,
-                        itemBuilder: (context, index) {
-                          final warehouse = _warehouses[index];
-                          final itemsCount = _itemsCounts[warehouse.id] ?? 0;
+                if (isMobile) {
+                  return ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: _warehouses.length,
+                    itemBuilder: (context, index) {
+                      final warehouse = _warehouses[index];
+                      final itemsCount = _itemsCounts[warehouse.id] ?? 0;
 
-                          return Card(
-                            child: ListTile(
-                              title: Text(warehouse.name),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  if (warehouse.address != null)
-                                    Text('Адрес: ${warehouse.address}'),
-                                  Text('Товаров: $itemsCount'),
-                                  if (!warehouse.isActive)
-                                    const Text(
-                                      'Неактивен',
-                                      style: TextStyle(color: Colors.red),
-                                    ),
-                                ],
-                              ),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.edit, size: 20),
-                                    onPressed: () => _showWarehouseDialog(warehouse),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.delete, size: 20),
-                                    color: Colors.red,
-                                    onPressed: () => _deleteWarehouse(warehouse),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                      );
-                    }
-
-                    // Desktop layout
-                    return SingleChildScrollView(
-                      padding: const EdgeInsets.all(24),
-                      child: DataTable(
-                        columns: const [
-                          DataColumn(label: Text('Название')),
-                          DataColumn(label: Text('Адрес')),
-                          DataColumn(label: Text('Телефон')),
-                          DataColumn(label: Text('Контакт')),
-                          DataColumn(label: Text('Товаров')),
-                          DataColumn(label: Text('Статус')),
-                          DataColumn(label: Text('Действия')),
-                        ],
-                        rows: _warehouses.map((warehouse) {
-                          final itemsCount = _itemsCounts[warehouse.id] ?? 0;
-
-                          return DataRow(
-                            cells: [
-                              DataCell(Text(warehouse.name)),
-                              DataCell(Text(warehouse.address ?? '-')),
-                              DataCell(Text(warehouse.phone ?? '-')),
-                              DataCell(Text(warehouse.contactPerson ?? '-')),
-                              DataCell(Text(itemsCount.toString())),
-                              DataCell(
-                                warehouse.isActive
-                                    ? const Chip(
-                                        label: Text('Активен'),
-                                        backgroundColor: Colors.green,
-                                      )
-                                    : const Chip(
-                                        label: Text('Неактивен'),
-                                        backgroundColor: Colors.red,
-                                      ),
-                              ),
-                              DataCell(
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    IconButton(
-                                      icon: const Icon(Icons.edit, size: 20),
-                                      onPressed: () => _showWarehouseDialog(warehouse),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.delete, size: 20),
-                                      color: Colors.red,
-                                      onPressed: () => _deleteWarehouse(warehouse),
-                                    ),
-                                  ],
+                      return Card(
+                        child: ListTile(
+                          title: Text(warehouse.name),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (warehouse.address != null)
+                                Text('Адрес: ${warehouse.address}'),
+                              Text('Товаров: $itemsCount'),
+                              if (!warehouse.isActive)
+                                const Text(
+                                  'Неактивен',
+                                  style: TextStyle(color: Colors.red),
                                 ),
+                            ],
+                          ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.edit, size: 20),
+                                onPressed: () =>
+                                    _showWarehouseDialog(warehouse),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete, size: 20),
+                                color: Colors.red,
+                                onPressed: () => _deleteWarehouse(warehouse),
                               ),
                             ],
-                          );
-                        }).toList(),
-                      ),
-                    );
-                  },
-                ),
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                }
+
+                // Desktop layout
+                return SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: DataTable(
+                    columns: const [
+                      DataColumn(label: Text('Название')),
+                      DataColumn(label: Text('Адрес')),
+                      DataColumn(label: Text('Телефон')),
+                      DataColumn(label: Text('Контакт')),
+                      DataColumn(label: Text('Товаров')),
+                      DataColumn(label: Text('Статус')),
+                      DataColumn(label: Text('Действия')),
+                    ],
+                    rows: _warehouses.map((warehouse) {
+                      final itemsCount = _itemsCounts[warehouse.id] ?? 0;
+
+                      return DataRow(
+                        cells: [
+                          DataCell(Text(warehouse.name)),
+                          DataCell(Text(warehouse.address ?? '-')),
+                          DataCell(Text(warehouse.phone ?? '-')),
+                          DataCell(Text(warehouse.contactPerson ?? '-')),
+                          DataCell(Text(itemsCount.toString())),
+                          DataCell(
+                            warehouse.isActive
+                                ? const Chip(
+                                    label: Text('Активен'),
+                                    backgroundColor: Colors.green,
+                                  )
+                                : const Chip(
+                                    label: Text('Неактивен'),
+                                    backgroundColor: Colors.red,
+                                  ),
+                          ),
+                          DataCell(
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.edit, size: 20),
+                                  onPressed: () =>
+                                      _showWarehouseDialog(warehouse),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete, size: 20),
+                                  color: Colors.red,
+                                  onPressed: () => _deleteWarehouse(warehouse),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      );
+                    }).toList(),
+                  ),
+                );
+              },
+            ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _showWarehouseDialog(),
         child: const Icon(Icons.add),
@@ -338,41 +342,53 @@ class _WarehouseFormDialogState extends State<_WarehouseFormDialog> {
 
   Future<void> _save() async {
     if (_nameController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Введите название склада')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Введите название склада')));
       return;
     }
     try {
       if (widget.warehouse == null) {
         await widget.warehouseService.createWarehouse(
           name: _nameController.text,
-          address: _addressController.text.isEmpty ? null : _addressController.text,
+          address: _addressController.text.isEmpty
+              ? null
+              : _addressController.text,
           phone: _phoneController.text.isEmpty ? null : _phoneController.text,
-          contactPerson: _contactController.text.isEmpty ? null : _contactController.text,
+          contactPerson: _contactController.text.isEmpty
+              ? null
+              : _contactController.text,
           isActive: _isActive,
         );
       } else {
         await widget.warehouseService.updateWarehouse(
           widget.warehouse!.id,
           name: _nameController.text,
-          address: _addressController.text.isEmpty ? null : _addressController.text,
+          address: _addressController.text.isEmpty
+              ? null
+              : _addressController.text,
           phone: _phoneController.text.isEmpty ? null : _phoneController.text,
-          contactPerson: _contactController.text.isEmpty ? null : _contactController.text,
+          contactPerson: _contactController.text.isEmpty
+              ? null
+              : _contactController.text,
           isActive: _isActive,
         );
       }
       if (mounted) {
         widget.onSuccess();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(widget.warehouse == null ? 'Склад создан' : 'Склад обновлен')),
+          SnackBar(
+            content: Text(
+              widget.warehouse == null ? 'Склад создан' : 'Склад обновлен',
+            ),
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка'))));
       }
     }
   }
@@ -384,23 +400,35 @@ class _WarehouseFormDialogState extends State<_WarehouseFormDialog> {
       children: [
         TextField(
           controller: _nameController,
-          decoration: const InputDecoration(labelText: 'Название склада *', border: OutlineInputBorder()),
+          decoration: const InputDecoration(
+            labelText: 'Название склада *',
+            border: OutlineInputBorder(),
+          ),
         ),
         const SizedBox(height: 16),
         TextField(
           controller: _addressController,
-          decoration: const InputDecoration(labelText: 'Адрес', border: OutlineInputBorder()),
+          decoration: const InputDecoration(
+            labelText: 'Адрес',
+            border: OutlineInputBorder(),
+          ),
           maxLines: 2,
         ),
         const SizedBox(height: 16),
         TextField(
           controller: _phoneController,
-          decoration: const InputDecoration(labelText: 'Телефон', border: OutlineInputBorder()),
+          decoration: const InputDecoration(
+            labelText: 'Телефон',
+            border: OutlineInputBorder(),
+          ),
         ),
         const SizedBox(height: 16),
         TextField(
           controller: _contactController,
-          decoration: const InputDecoration(labelText: 'Контактное лицо', border: OutlineInputBorder()),
+          decoration: const InputDecoration(
+            labelText: 'Контактное лицо',
+            border: OutlineInputBorder(),
+          ),
         ),
         const SizedBox(height: 16),
         SwitchListTile(
@@ -420,7 +448,10 @@ class _WarehouseFormDialogState extends State<_WarehouseFormDialog> {
       return Scaffold(
         appBar: AppBar(
           title: Text(isEdit ? 'Редактировать склад' : 'Добавить склад'),
-          leading: IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+          leading: IconButton(
+            icon: const Icon(Icons.close),
+            onPressed: () => Navigator.pop(context),
+          ),
           actions: [
             FilledButton(
               onPressed: _save,
@@ -441,10 +472,15 @@ class _WarehouseFormDialogState extends State<_WarehouseFormDialog> {
         child: SingleChildScrollView(child: _buildFormContent()),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
-        ElevatedButton(onPressed: _save, child: Text(isEdit ? 'Сохранить' : 'Создать')),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Отмена'),
+        ),
+        ElevatedButton(
+          onPressed: _save,
+          child: Text(isEdit ? 'Сохранить' : 'Создать'),
+        ),
       ],
     );
   }
 }
-

@@ -106,7 +106,7 @@ class ReceiptPdfService {
       return ReceiptPdfResult(bytes: bytes, pageFormat: pageFormat);
     } catch (e, st) {
       Error.throwWithStackTrace(
-        Exception('Ошибка генерации PDF: $e'),
+        Exception('Не удалось сформировать PDF. Попробуйте ещё раз.'),
         st,
       );
     }

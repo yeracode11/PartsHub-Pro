@@ -123,6 +123,13 @@ class Cart {
     );
   }
 
+  int quantityOf(int productId) {
+    for (final item in items) {
+      if (item.product.id == productId) return item.quantity;
+    }
+    return 0;
+  }
+
   factory Cart.fromJson(Map<String, dynamic> json) {
     return Cart(
       items: (json['items'] as List<dynamic>?)

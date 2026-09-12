@@ -9,6 +9,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/screens/warehouse/ble_printer_connected_screen.dart';
 import 'package:autohub_b2b/services/hardware/ble_thermal_print_coordinator.dart';
+import 'package:autohub_b2b/services/hardware/flutter_blue_adapter_resolve.dart';
+import 'package:autohub_b2b/services/api/api_user_message.dart';
 
 /// Поиск термопринтеров BLE и переход к подключению.
 class BlePrinterScanScreen extends StatefulWidget {
@@ -21,17 +23,24 @@ class BlePrinterScanScreen extends StatefulWidget {
 class _BlePrinterScanScreenState extends State<BlePrinterScanScreen> {
   final Map<DeviceIdentifier, ScanResult> _results = {};
   StreamSubscription<List<ScanResult>>? _scanSub;
+  StreamSubscription<OnConnectionStateChangedEvent>? _connSub;
   bool _scanning = false;
   String? _error;
+  /// Показывать только периферию с непустым именем (GAP / platform), без «голого» MAC/UUID.
+  bool _onlyNamedDevices = false;
 
   @override
   void initState() {
     super.initState();
+    _connSub = FlutterBluePlus.events.onConnectionStateChanged.listen((_) {
+      if (mounted) setState(() {});
+    });
     _start();
   }
 
   @override
   void dispose() {
+    _connSub?.cancel();
     _scanSub?.cancel();
     if (FlutterBluePlus.isScanningNow) {
       FlutterBluePlus.stopScan();
@@ -50,8 +59,17 @@ class _BlePrinterScanScreenState extends State<BlePrinterScanScreen> {
 
   Future<void> _start() async {
     await _ensurePermissions();
-    if (FlutterBluePlus.adapterStateNow != BluetoothAdapterState.on) {
-      setState(() => _error = 'Включите Bluetooth');
+    final adapter = await fbpAwaitAdapterStateResolved();
+
+    if (adapter == BluetoothAdapterState.turningOn) {
+      await Future<void>.delayed(const Duration(milliseconds: 800));
+    }
+
+    if (adapter == BluetoothAdapterState.off ||
+        adapter == BluetoothAdapterState.turningOff ||
+        adapter == BluetoothAdapterState.unauthorized ||
+        adapter == BluetoothAdapterState.unavailable) {
+      if (mounted) setState(() => _error = fbpAdapterStateHintRu(adapter));
       return;
     }
 
@@ -80,7 +98,7 @@ class _BlePrinterScanScreenState extends State<BlePrinterScanScreen> {
         androidUsesFineLocation: true,
       );
     } catch (e) {
-      if (mounted) setState(() => _error = '$e');
+      if (mounted) setState(() => _error = userFacingApiMessage(e));
     } finally {
       if (mounted) setState(() => _scanning = false);
     }
@@ -92,6 +110,26 @@ class _BlePrinterScanScreenState extends State<BlePrinterScanScreen> {
     if (pname.isNotEmpty) return pname;
     if (adv.isNotEmpty) return adv;
     return r.device.remoteId.str;
+  }
+
+  bool _hasName(ScanResult r) {
+    final adv = r.advertisementData.advName.trim();
+    final pname = r.device.platformName.trim();
+    return pname.isNotEmpty || adv.isNotEmpty;
+  }
+
+  String _connectedTileTitle(BluetoothDevice d) {
+    final sr = _results[d.remoteId];
+    if (sr != null) return _displayName(sr);
+    final pn = d.platformName.trim();
+    if (pn.isNotEmpty) return pn;
+    return d.remoteId.str;
+  }
+
+  String _connectedTileSubtitle(BluetoothDevice d) {
+    final sr = _results[d.remoteId];
+    final rssiPart = sr != null ? ' · RSSI ${sr.rssi}' : '';
+    return '${d.remoteId.str}$rssiPart · активное соединение';
   }
 
   Future<void> _openPrinter(BluetoothDevice dev) async {
@@ -110,8 +148,25 @@ class _BlePrinterScanScreenState extends State<BlePrinterScanScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final list = _results.values.toList()
+    final connected = [...FlutterBluePlus.connectedDevices];
+    connected.sort(
+      (a, b) =>
+          _connectedTileTitle(a).toLowerCase().compareTo(_connectedTileTitle(b).toLowerCase()),
+    );
+
+    final connectedIds = connected.map((d) => d.remoteId).toSet();
+
+    final all = _results.values.toList()
       ..sort((a, b) => _displayName(a).compareTo(_displayName(b)));
+
+    final nameFiltered =
+        _onlyNamedDevices ? all.where(_hasName).toList(growable: false) : all;
+
+    final scanOnly = nameFiltered
+        .where((r) => !connectedIds.contains(r.device.remoteId))
+        .toList(growable: false);
+
+    final nothingFound = scanOnly.isEmpty && connected.isEmpty;
 
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
@@ -138,6 +193,29 @@ class _BlePrinterScanScreenState extends State<BlePrinterScanScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
+            padding: const EdgeInsets.fromLTRB(8, 0, 8, 0),
+            child: SwitchListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+              title: const Text(
+                'Только с названием',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+              ),
+              subtitle: Text(
+                _onlyNamedDevices
+                    ? 'Скрыты устройства без имени в рекламе или у системы.'
+                    : 'Показаны все найденные BLE‑устройства.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey.shade700,
+                  height: 1.25,
+                ),
+              ),
+              value: _onlyNamedDevices,
+              onChanged: (v) => setState(() => _onlyNamedDevices = v),
+              activeThumbColor: AppTheme.primaryColor,
+            ),
+          ),
+          Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
             child: Text(
               _error ??
@@ -150,30 +228,136 @@ class _BlePrinterScanScreenState extends State<BlePrinterScanScreen> {
             ),
           ),
           Expanded(
-            child: list.isEmpty
+            child: nothingFound && !_scanning
                 ? Center(
-                    child: Text(
-                      _scanning ? 'Поиск устройств…' : 'Устройства не найдены. Нажмите обновить.',
-                      style: const TextStyle(color: AppTheme.textSecondary),
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text(
+                        _onlyNamedDevices && _results.isNotEmpty
+                            ? 'Нет устройств с именем. Выключите фильтр или обновите сканирование.'
+                            : 'Устройства не найдены. Нажмите обновить.',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: AppTheme.textSecondary),
+                      ),
                     ),
                   )
-                : ListView.separated(
-                    itemCount: list.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
-                    itemBuilder: (context, i) {
-                      final r = list[i];
-                      final name = _displayName(r);
-                      return ListTile(
-                        leading: const Icon(Icons.print_outlined, color: AppTheme.primaryColor),
-                        title: Text(name),
-                        subtitle: Text(
-                          '${r.device.remoteId.str} · RSSI ${r.rssi}',
-                          style: const TextStyle(fontSize: 12),
+                : nothingFound && _scanning
+                    ? const Center(
+                        child: Text(
+                          'Поиск устройств…',
+                          style: TextStyle(color: AppTheme.textSecondary),
                         ),
-                        onTap: () => _openPrinter(r.device),
-                      );
-                    },
-                  ),
+                      )
+                    : CustomScrollView(
+                        slivers: [
+                          if (scanOnly.isNotEmpty)
+                            const SliverToBoxAdapter(
+                              child: Padding(
+                                padding: EdgeInsets.fromLTRB(16, 4, 16, 4),
+                                child: Text(
+                                  'В эфире',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13,
+                                    color: AppTheme.textSecondary,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          if (scanOnly.isEmpty && !_scanning && connected.isNotEmpty)
+                            SliverToBoxAdapter(
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                                child: Text(
+                                  'В текущем сканировании принтер не виден, но уже есть активное подключение — см. ниже.',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    height: 1.35,
+                                    color: Colors.grey.shade800,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          SliverList(
+                            delegate: SliverChildBuilderDelegate(
+                              (context, i) {
+                                final r = scanOnly[i];
+                                final name = _displayName(r);
+                                return Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (i > 0) const Divider(height: 1),
+                                    ListTile(
+                                      leading: const Icon(
+                                        Icons.print_outlined,
+                                        color: AppTheme.primaryColor,
+                                      ),
+                                      title: Text(name),
+                                      subtitle: Text(
+                                        '${r.device.remoteId.str} · RSSI ${r.rssi}',
+                                        style: const TextStyle(fontSize: 12),
+                                      ),
+                                      onTap: () => _openPrinter(r.device),
+                                    ),
+                                  ],
+                                );
+                              },
+                              childCount: scanOnly.length,
+                            ),
+                          ),
+                          if (connected.isNotEmpty) ...[
+                            const SliverToBoxAdapter(
+                              child: Padding(
+                                padding: EdgeInsets.fromLTRB(16, 20, 16, 4),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.link, color: Colors.green, size: 22),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      'Подключены к приложению',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            SliverList(
+                              delegate: SliverChildBuilderDelegate(
+                                (context, i) {
+                                  final d = connected[i];
+                                  return Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      if (i > 0) const Divider(height: 1),
+                                      ListTile(
+                                        leading: const Icon(
+                                          Icons.bluetooth_connected,
+                                          color: Colors.green,
+                                        ),
+                                        title: Text(_connectedTileTitle(d)),
+                                        subtitle: Text(
+                                          _connectedTileSubtitle(d),
+                                          style: const TextStyle(fontSize: 12),
+                                        ),
+                                        trailing: const Icon(
+                                          Icons.check_circle,
+                                          color: Colors.green,
+                                          size: 22,
+                                        ),
+                                        onTap: () => _openPrinter(d),
+                                      ),
+                                    ],
+                                  );
+                                },
+                                childCount: connected.length,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
           ),
         ],
       ),

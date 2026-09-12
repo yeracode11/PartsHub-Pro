@@ -7,6 +7,7 @@ import 'package:autohub_b2b/models/user_model.dart';
 import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/services/api/api_client.dart';
 import 'package:autohub_b2b/services/api/user_api_service.dart';
+import 'package:autohub_b2b/services/api/api_user_message.dart';
 
 class EditProfileScreen extends StatefulWidget {
   final UserModel user;
@@ -75,7 +76,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Ошибка обновления профиля: $e'),
+            content: Text(userFacingApiMessage(e, prefix: 'Ошибка обновления профиля')),
             backgroundColor: Colors.red,
           ),
         );

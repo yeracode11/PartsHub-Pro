@@ -1,0 +1,14 @@
+import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
+
+/// Один общий профиль ESC/POS, чтобы не грузить capability JSON трижды подряд
+/// (`capabilities.length is already loaded` из пакета).
+class EscPosProfileCache {
+  EscPosProfileCache._();
+
+  static CapabilityProfile? _profile;
+
+  static Future<CapabilityProfile> profile() async {
+    _profile ??= await CapabilityProfile.load();
+    return _profile!;
+  }
+}

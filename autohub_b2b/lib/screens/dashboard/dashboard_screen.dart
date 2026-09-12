@@ -32,18 +32,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
       body: BlocBuilder<DashboardBloc, DashboardState>(
         builder: (context, state) {
           if (state is DashboardLoading || state is DashboardInitial) {
-            return const Center(
-              child: CircularProgressIndicator(),
-            );
+            return const Center(child: CircularProgressIndicator());
           }
 
           if (state is DashboardError) {
             if (state.isForbidden) {
-              return UnauthorizedPlaceholder(message: state.message);
+              return UnauthorizedPlaceholder(
+                message: state.message,
+                isForbidden: false,
+              );
             }
             if (state.isOffline) {
               return OfflinePlaceholder(
-                onRetry: () => context.read<DashboardBloc>().add(DashboardLoadRequested()),
+                onRetry: () =>
+                    context.read<DashboardBloc>().add(DashboardLoadRequested()),
               );
             }
             return Center(
@@ -60,15 +62,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   Text(
                     state.message,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AppTheme.textSecondary,
-                        ),
+                      color: AppTheme.textSecondary,
+                    ),
                   ),
                   const SizedBox(height: 24),
                   ElevatedButton.icon(
                     onPressed: () {
-                      context
-                          .read<DashboardBloc>()
-                          .add(DashboardLoadRequested());
+                      context.read<DashboardBloc>().add(
+                        DashboardLoadRequested(),
+                      );
                     },
                     icon: const Icon(Icons.refresh),
                     label: const Text('Повторить'),
@@ -108,28 +110,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   children: [
                     Text(
                       'Дашборд',
-                      style: Theme.of(context).textTheme.displayMedium?.copyWith(
-                        fontSize: isMobile ? 24 : 28,
-                      ),
+                      style: Theme.of(context).textTheme.displayMedium
+                          ?.copyWith(fontSize: isMobile ? 24 : 28),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       'Добро пожаловать в Auto+ Pro',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: AppTheme.textSecondary,
-                          ),
+                        color: AppTheme.textSecondary,
+                      ),
                     ),
                   ],
                 ),
               ),
               if (!isMobile)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
                     color: AppTheme.successGradient.colors[0].withOpacity(0.1),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
-                      color: AppTheme.successGradient.colors[0].withOpacity(0.3),
+                      color: AppTheme.successGradient.colors[0].withOpacity(
+                        0.3,
+                      ),
                     ),
                   ),
                   child: Row(
@@ -143,9 +149,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       Text(
                         'Онлайн',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: AppTheme.successGradient.colors[0],
-                              fontWeight: FontWeight.w600,
-                            ),
+                          color: AppTheme.successGradient.colors[0],
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ],
                   ),
@@ -161,7 +167,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               final crossAxisCount = isMobile ? 2 : 4;
               final spacing = isMobile ? 12.0 : 24.0;
               final aspectRatio = isMobile ? 1.3 : 1.5;
-              
+
               return GridView.count(
                 crossAxisCount: crossAxisCount,
                 shrinkWrap: true,
@@ -182,7 +188,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   _buildStatCard(
                     context,
                     title: 'Доход за месяц',
-                    value: '${numberFormat.format(state.stats.monthlyRevenue)} ₸',
+                    value:
+                        '${numberFormat.format(state.stats.monthlyRevenue)} ₸',
                     icon: Icons.trending_up,
                     gradient: AppTheme.successGradient,
                     trend: '+8.2%',
@@ -222,15 +229,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  flex: 2,
-                  child: _buildSalesChart(context, state),
-                ),
+                Expanded(flex: 2, child: _buildSalesChart(context, state)),
                 const SizedBox(width: 24),
-                Expanded(
-                  flex: 1,
-                  child: _buildRecentOrders(context, state),
-                ),
+                Expanded(flex: 1, child: _buildRecentOrders(context, state)),
               ],
             ),
           ],
@@ -246,15 +247,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Expanded(
-                  flex: 1,
-                  child: ServiceRemindersWidget(),
-                ),
+                const Expanded(flex: 1, child: ServiceRemindersWidget()),
                 const SizedBox(width: 24),
-                Expanded(
-                  flex: 1,
-                  child: _buildPopularItems(context, state),
-                ),
+                Expanded(flex: 1, child: _buildPopularItems(context, state)),
               ],
             ),
           ],
@@ -299,11 +294,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   gradient: gradient,
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(icon, color: Colors.white, size: isMobile ? 20 : 24),
+                child: Icon(
+                  icon,
+                  color: Colors.white,
+                  size: isMobile ? 20 : 24,
+                ),
               ),
               if (trend != null && !isMobile)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: AppTheme.successGradient.colors[0].withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12),
@@ -325,9 +327,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Text(
                 value,
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      fontSize: isMobile ? 18 : 20,
-                    ),
+                  fontWeight: FontWeight.bold,
+                  fontSize: isMobile ? 18 : 20,
+                ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -335,9 +337,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Text(
                 title,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppTheme.textSecondary,
-                      fontSize: isMobile ? 12 : 14,
-                    ),
+                  color: AppTheme.textSecondary,
+                  fontSize: isMobile ? 12 : 14,
+                ),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -348,7 +350,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildSalesChart(BuildContext context, DashboardLoaded state, {bool isMobile = false}) {
+  Widget _buildSalesChart(
+    BuildContext context,
+    DashboardLoaded state, {
+    bool isMobile = false,
+  }) {
     final spots = state.chartData.data
         .asMap()
         .entries
@@ -370,18 +376,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
             children: [
               Text(
                 'Продажи',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontSize: isMobile ? 18 : 20,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontSize: isMobile ? 18 : 20),
               ),
               if (!isMobile)
                 Row(
                   children: [
-                    _buildPeriodButton(context, '7д', '7d', state.currentPeriod == '7d'),
+                    _buildPeriodButton(
+                      context,
+                      '7д',
+                      '7d',
+                      state.currentPeriod == '7d',
+                    ),
                     const SizedBox(width: 8),
-                    _buildPeriodButton(context, '30д', '30d', state.currentPeriod == '30d'),
+                    _buildPeriodButton(
+                      context,
+                      '30д',
+                      '30d',
+                      state.currentPeriod == '30d',
+                    ),
                     const SizedBox(width: 8),
-                    _buildPeriodButton(context, '90д', '90d', state.currentPeriod == '90d'),
+                    _buildPeriodButton(
+                      context,
+                      '90д',
+                      '90d',
+                      state.currentPeriod == '90d',
+                    ),
                   ],
                 ),
             ],
@@ -391,15 +412,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Row(
               children: [
                 Expanded(
-                  child: _buildPeriodButton(context, '7д', '7d', state.currentPeriod == '7d'),
+                  child: _buildPeriodButton(
+                    context,
+                    '7д',
+                    '7d',
+                    state.currentPeriod == '7d',
+                  ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: _buildPeriodButton(context, '30д', '30d', state.currentPeriod == '30d'),
+                  child: _buildPeriodButton(
+                    context,
+                    '30д',
+                    '30d',
+                    state.currentPeriod == '30d',
+                  ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: _buildPeriodButton(context, '90д', '90d', state.currentPeriod == '90d'),
+                  child: _buildPeriodButton(
+                    context,
+                    '90д',
+                    '90d',
+                    state.currentPeriod == '90d',
+                  ),
                 ),
               ],
             ),
@@ -450,11 +486,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             showTitles: true,
                             interval: (spots.length / 6).ceilToDouble(),
                             getTitlesWidget: (value, meta) {
-                              if (value.toInt() >= state.chartData.data.length) {
+                              if (value.toInt() >=
+                                  state.chartData.data.length) {
                                 return const Text('');
                               }
                               final date = DateTime.parse(
-                                  state.chartData.data[value.toInt()].date);
+                                state.chartData.data[value.toInt()].date,
+                              );
                               return Padding(
                                 padding: const EdgeInsets.only(top: 8.0),
                                 child: Text(
@@ -507,7 +545,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       color: Colors.transparent,
       child: InkWell(
         onTap: () {
-          context.read<DashboardBloc>().add(DashboardChartPeriodChanged(period));
+          context.read<DashboardBloc>().add(
+            DashboardChartPeriodChanged(period),
+          );
         },
         borderRadius: BorderRadius.circular(8),
         child: Container(
@@ -532,7 +572,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildRecentOrders(BuildContext context, DashboardLoaded state, {bool isMobile = false}) {
+  Widget _buildRecentOrders(
+    BuildContext context,
+    DashboardLoaded state, {
+    bool isMobile = false,
+  }) {
     return Container(
       padding: EdgeInsets.all(isMobile ? 16 : 24),
       decoration: BoxDecoration(
@@ -639,7 +683,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildPopularItems(BuildContext context, DashboardLoaded state, {bool isMobile = false}) {
+  Widget _buildPopularItems(
+    BuildContext context,
+    DashboardLoaded state, {
+    bool isMobile = false,
+  }) {
     return Container(
       padding: EdgeInsets.all(isMobile ? 16 : 24),
       decoration: BoxDecoration(
@@ -652,9 +700,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         children: [
           Text(
             'Популярные товары',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              fontSize: isMobile ? 18 : 20,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontSize: isMobile ? 18 : 20),
           ),
           SizedBox(height: isMobile ? 16 : 24),
           if (isMobile)
@@ -717,8 +765,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       child: Text(
                         'Название',
                         style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                              color: AppTheme.textSecondary,
-                            ),
+                          color: AppTheme.textSecondary,
+                        ),
                       ),
                     ),
                     Padding(
@@ -726,8 +774,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       child: Text(
                         'Продано',
                         style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                              color: AppTheme.textSecondary,
-                            ),
+                          color: AppTheme.textSecondary,
+                        ),
                       ),
                     ),
                     Padding(
@@ -735,8 +783,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       child: Text(
                         'Цена',
                         style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                              color: AppTheme.textSecondary,
-                            ),
+                          color: AppTheme.textSecondary,
+                        ),
                       ),
                     ),
                   ],
@@ -748,9 +796,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         padding: const EdgeInsets.only(bottom: 12),
                         child: Text(
                           item.name,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w500,
-                          ),
+                          style: const TextStyle(fontWeight: FontWeight.w500),
                         ),
                       ),
                       Padding(

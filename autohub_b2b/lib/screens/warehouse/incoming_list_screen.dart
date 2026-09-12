@@ -9,6 +9,7 @@ import 'package:autohub_b2b/widgets/unauthorized_placeholder.dart';
 import 'package:autohub_b2b/widgets/offline_placeholder.dart';
 import 'package:dio/dio.dart';
 import 'package:autohub_b2b/utils/auth_guard.dart';
+import 'package:autohub_b2b/services/api/api_user_message.dart';
 
 class IncomingListScreen extends StatefulWidget {
   const IncomingListScreen({super.key});
@@ -35,7 +36,7 @@ class _IncomingListScreenState extends State<IncomingListScreen> {
 
   Future<void> _loadDocuments() async {
     if (!mounted) return;
-    
+
     setState(() {
       _isLoading = true;
       _error = null;
@@ -45,12 +46,10 @@ class _IncomingListScreenState extends State<IncomingListScreen> {
     });
 
     try {
-      final docs = await _apiService.getDocuments(
-        status: _filterStatus?.name,
-      );
-      
+      final docs = await _apiService.getDocuments(status: _filterStatus?.name);
+
       if (!mounted) return;
-      
+
       setState(() {
         _documents = docs;
         _isLoading = false;
@@ -58,13 +57,15 @@ class _IncomingListScreenState extends State<IncomingListScreen> {
     } on DioException catch (e) {
       if (!mounted) return;
 
-      if (e.response?.statusCode == 403) {
+      if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
         setState(() {
           _isForbidden = true;
           _isLoading = false;
           _forbiddenMessage =
-              (e.response?.data is Map<String, dynamic> ? (e.response?.data['message'] as String?) : null) ??
-                  'У вас нет доступа к разделу "Приходные накладные". Войдите под владельцем или менеджером.';
+              (e.response?.data is Map<String, dynamic>
+                  ? (e.response?.data['message'] as String?)
+                  : null) ??
+              'У вас нет доступа к разделу "Приходные накладные". Войдите под владельцем или менеджером.';
         });
       } else if (isNetworkError(e)) {
         setState(() {
@@ -73,7 +74,7 @@ class _IncomingListScreenState extends State<IncomingListScreen> {
         });
       } else {
         setState(() {
-          _error = e.toString();
+          _error = userFacingApiMessage(e);
           _isLoading = false;
         });
       }
@@ -87,7 +88,7 @@ class _IncomingListScreenState extends State<IncomingListScreen> {
         });
       } else {
         setState(() {
-          _error = e.toString();
+          _error = userFacingApiMessage(e);
           _isLoading = false;
         });
       }
@@ -97,11 +98,9 @@ class _IncomingListScreenState extends State<IncomingListScreen> {
   Future<void> _openNewIncomingDocument() async {
     if (!await ensureAuthenticated(context)) return;
     if (!context.mounted) return;
-    final result = await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => const IncomingDocScreen(),
-      ),
-    );
+    final result = await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (context) => const IncomingDocScreen()));
     if (result == true && mounted) {
       _loadDocuments();
     }
@@ -113,8 +112,10 @@ class _IncomingListScreenState extends State<IncomingListScreen> {
       return Scaffold(
         backgroundColor: AppTheme.backgroundColor,
         body: UnauthorizedPlaceholder(
-          message: _forbiddenMessage ??
+          message:
+              _forbiddenMessage ??
               'У вас нет доступа к разделу "Приходные накладные". Войдите под владельцем или менеджером.',
+          isForbidden: false,
         ),
       );
     }
@@ -135,10 +136,7 @@ class _IncomingListScreenState extends State<IncomingListScreen> {
               _loadDocuments();
             },
             itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: null,
-                child: Text('Все'),
-              ),
+              const PopupMenuItem(value: null, child: Text('Все')),
               const PopupMenuItem(
                 value: IncomingDocStatus.draft,
                 child: Text('Черновики'),
@@ -159,59 +157,52 @@ class _IncomingListScreenState extends State<IncomingListScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _isOffline
-              ? OfflinePlaceholder(onRetry: _loadDocuments)
-              : _error != null
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text('Ошибка: $_error'),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: _loadDocuments,
-                        child: const Text('Повторить'),
-                      ),
-                    ],
+          ? OfflinePlaceholder(onRetry: _loadDocuments)
+          : _error != null
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(_error!, textAlign: TextAlign.center),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: _loadDocuments,
+                    child: const Text('Повторить'),
                   ),
-                )
-              : _documents.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.receipt_long,
-                            size: 64,
-                            color: Colors.grey[400],
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            'Нет приходных накладных',
-                            style: TextStyle(
-                              fontSize: 18,
-                              color: Colors.grey[600],
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                          ElevatedButton.icon(
-                            onPressed: _openNewIncomingDocument,
-                            icon: const Icon(Icons.add),
-                            label: const Text('Создать накладную'),
-                          ),
-                        ],
-                      ),
-                    )
-                  : RefreshIndicator(
-                      onRefresh: _loadDocuments,
-                      child: ListView.builder(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: _documents.length,
-                        itemBuilder: (context, index) {
-                          final doc = _documents[index];
-                          return _buildDocumentCard(doc);
-                        },
-                      ),
-                    ),
+                ],
+              ),
+            )
+          : _documents.isEmpty
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.receipt_long, size: 64, color: Colors.grey[400]),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Нет приходных накладных',
+                    style: TextStyle(fontSize: 18, color: Colors.grey[600]),
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton.icon(
+                    onPressed: _openNewIncomingDocument,
+                    icon: const Icon(Icons.add),
+                    label: const Text('Создать накладную'),
+                  ),
+                ],
+              ),
+            )
+          : RefreshIndicator(
+              onRefresh: _loadDocuments,
+              child: ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: _documents.length,
+                itemBuilder: (context, index) {
+                  final doc = _documents[index];
+                  return _buildDocumentCard(doc);
+                },
+              ),
+            ),
     );
   }
 
@@ -274,10 +265,7 @@ class _IncomingListScreenState extends State<IncomingListScreen> {
                     Expanded(
                       child: Text(
                         doc.supplierName!,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey[700],
-                        ),
+                        style: TextStyle(fontSize: 14, color: Colors.grey[700]),
                       ),
                     ),
                   ],
@@ -297,10 +285,7 @@ class _IncomingListScreenState extends State<IncomingListScreen> {
                   if (doc.items != null && doc.items!.isNotEmpty)
                     Text(
                       '${doc.items!.length} позиций',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey[600],
-                      ),
+                      style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                     ),
                 ],
               ),
@@ -343,4 +328,3 @@ class _IncomingListScreenState extends State<IncomingListScreen> {
     );
   }
 }
-

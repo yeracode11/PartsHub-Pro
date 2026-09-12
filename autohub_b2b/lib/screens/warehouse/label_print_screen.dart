@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -8,9 +10,14 @@ import 'package:printing/printing.dart';
 import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/models/label_product_model.dart';
 import 'package:autohub_b2b/models/label_size_preset.dart';
+import 'package:autohub_b2b/services/hardware/ble_esc_pos_session.dart';
+import 'package:autohub_b2b/services/hardware/ble_thermal_print_coordinator.dart';
+import 'package:autohub_b2b/services/hardware/thermal_printer_service.dart';
 import 'package:autohub_b2b/services/pdf/label_pdf_service.dart';
-import 'package:autohub_b2b/services/pdf/pdf_file_export_service.dart';
 import 'package:autohub_b2b/services/print/label_print_service.dart';
+import 'package:autohub_b2b/services/print/pdf_label_ble_print_service.dart';
+import 'package:autohub_b2b/services/print/tspl_ble_label_service.dart';
+import 'package:autohub_b2b/services/api/api_user_message.dart';
 
 /// Печать этикетки фиксированного размера (PDF) из данных [LabelProductData] (обычно из карточки товара).
 class LabelPrintScreen extends StatefulWidget {
@@ -27,9 +34,11 @@ class LabelPrintScreen extends StatefulWidget {
 
 class _LabelPrintScreenState extends State<LabelPrintScreen> {
   final _pdf = LabelPdfService();
+  final _thermalWifi = ThermalPrinterService();
   final _copiesCtrl = TextEditingController(text: '1');
 
   LabelSizePreset _size = LabelSizePreset.mm60x40;
+  bool _transposePhysical = false;
   bool _showPrice = true;
   bool _showBarcode = true;
   bool _showQr = true;
@@ -37,6 +46,17 @@ class _LabelPrintScreenState extends State<LabelPrintScreen> {
 
   late Future<LabelPdfResult> _resultFuture;
 
+  /// Не отправлять два потока одновременно.
+  bool _bleSending = false;
+  bool _wifiSending = false;
+  bool _tsplSending = false;
+
+  bool get _anyEscPosSending => _bleSending || _wifiSending || _tsplSending;
+
+  bool get _mobileBle =>
+      !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+
+  bool get _canNetworkEscPos => !kIsWeb;
   @override
   void initState() {
     super.initState();
@@ -45,6 +65,12 @@ class _LabelPrintScreenState extends State<LabelPrintScreen> {
     _showQr = widget.product.showQr;
     _showCell = widget.product.showWarehouseCell;
     _resultFuture = _generate();
+    if (_canNetworkEscPos) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        await _thermalWifi.autoConnectToSavedPrinter();
+        if (mounted) setState(() {});
+      });
+    }
   }
 
   @override
@@ -80,6 +106,7 @@ class _LabelPrintScreenState extends State<LabelPrintScreen> {
       _effectiveProduct(),
       _size,
       copies: _parseCopies(),
+      transposePhysical: _transposePhysical,
     );
   }
 
@@ -91,10 +118,13 @@ class _LabelPrintScreenState extends State<LabelPrintScreen> {
 
   String get _suggestedPdfName {
     final raw = widget.product.sku.replaceAll(RegExp(r'[^\w\-]+'), '_');
-    return 'label_${raw}_${_size.widthMm}x${_size.heightMm}.pdf';
+    final w = _transposePhysical ? _size.heightMm : _size.widthMm;
+    final h = _transposePhysical ? _size.widthMm : _size.heightMm;
+    return 'label_${raw}_${w}x$h.pdf';
   }
 
   Future<void> _print() async {
+    if (_anyEscPosSending) return;
     try {
       final result = await _resultFuture;
       final ok = await LabelPrintService.printLabelResult(
@@ -110,31 +140,171 @@ class _LabelPrintScreenState extends State<LabelPrintScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка: $e')),
+        SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка'))),
       );
     }
   }
 
-  Future<void> _save() async {
-    if (kIsWeb) return;
+  Future<void> _printBle() async {
+    if (!_mobileBle || _anyEscPosSending) return;
+
+    setState(() => _bleSending = true);
+
     try {
-      final result = await _resultFuture;
+      final ready = await BleThermalPrintCoordinator.ensureReadyForPrinting();
       if (!mounted) return;
-      final path = await PdfFileExportService.savePdf(
-        bytes: result.bytes,
-        suggestedName: _suggestedPdfName,
-      );
-      if (!mounted) return;
-      if (path != null) {
+
+      if (!ready) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Сохранено: $path')),
+          const SnackBar(
+            content: Text(
+              'Подключите термопринтер по BLE: Настройки принтера → Bluetooth LE.',
+            ),
+            backgroundColor: Colors.orange,
+          ),
         );
+        return;
       }
+
+      final result = await _resultFuture;
+      final bytes = await PdfLabelBlePrintService.buildEscPosBytes(
+        result,
+        paperSize: PdfLabelBlePrintService.paperSizeForPageFormat(
+          result.pageFormat,
+        ),
+      );
+
+      await BleThermalPrintCoordinator.session.writeEscPosBytes(bytes);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Этикетка отправлена на BLE‑принтер'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } on BleEscPosException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+      );
+    } on UnsupportedError catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userFacingApiMessage(e))),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка сохранения: $e')),
+        SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка BLE')), backgroundColor: Colors.red),
       );
+    } finally {
+      if (mounted) setState(() => _bleSending = false);
+    }
+  }
+
+  /// Печать через TSPL напрямую по BLE — без PDF-растрирования.
+  /// Правильный протокол для AiYin IP-802BT.
+  Future<void> _printTsplBle() async {
+    if (!_mobileBle || _anyEscPosSending) return;
+
+    setState(() => _tsplSending = true);
+    try {
+      final ready = await BleThermalPrintCoordinator.ensureReadyForPrinting();
+      if (!mounted) return;
+
+      if (!ready) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Подключите принтер: Настройки принтера → Bluetooth LE.',
+            ),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      await TsplBleLabelService.printViaBle(
+        _effectiveProduct(),
+        copies: _parseCopies(),
+        transposePhysical: _transposePhysical,
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('TSPL-этикетка отправлена на принтер'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } on BleEscPosException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка TSPL')), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) setState(() => _tsplSending = false);
+    }
+  }
+
+  Future<void> _printWifiEscPos() async {
+    if (!_canNetworkEscPos || _anyEscPosSending) return;
+
+    setState(() => _wifiSending = true);
+    try {
+      await _thermalWifi.autoConnectToSavedPrinter();
+      if (!_thermalWifi.isWifi || _thermalWifi.wifiIp == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Укажите IP принтера в «Настройки принтера» → раздел Wi‑Fi и нажмите «Подключить».',
+            ),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      final result = await _resultFuture;
+      final bytes = await PdfLabelBlePrintService.buildEscPosBytes(
+        result,
+        paperSize: PdfLabelBlePrintService.paperSizeForPageFormat(
+          result.pageFormat,
+        ),
+      );
+
+      final ok = await _thermalWifi.sendEscPosWifi(bytes);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            ok
+                ? 'Этикетка отправлена на ${_thermalWifi.wifiIp}:${_thermalWifi.wifiPort}'
+                : 'Не удалось отправить данные по сети. Проверьте IP и порт 9100.',
+          ),
+          backgroundColor: ok ? Colors.green : Colors.red,
+        ),
+      );
+    } on UnsupportedError catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userFacingApiMessage(e))),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка сети')), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) setState(() => _wifiSending = false);
     }
   }
 
@@ -218,6 +388,17 @@ class _LabelPrintScreenState extends State<LabelPrintScreen> {
                     onChanged: (v) {
                       if (v == null) return;
                       setState(() => _size = v);
+                      _scheduleGenerate();
+                    },
+                  ),
+                  SwitchListTile(
+                    title: const Text('Печать поперёк'),
+                    subtitle: const Text(
+                      'Меняются ширина и высота листа; предпросмотр совпадает с печатью.',
+                    ),
+                    value: _transposePhysical,
+                    onChanged: (v) {
+                      setState(() => _transposePhysical = v);
                       _scheduleGenerate();
                     },
                   ),
@@ -318,22 +499,75 @@ class _LabelPrintScreenState extends State<LabelPrintScreen> {
             top: false,
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: Row(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: _print,
-                      icon: const Icon(Icons.print_outlined),
-                      label: const Text('Печать'),
+                  // Главная кнопка: TSPL BLE (AiYin IP-802BT)
+                  if (_mobileBle) ...[
+                    FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.green.shade700,
+                      ),
+                      onPressed: _anyEscPosSending ? null : _printTsplBle,
+                      icon: _tsplSending
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.bluetooth_connected),
+                      label: Text(_tsplSending ? 'Отправка TSPL…' : 'Печать BLE (TSPL)'),
                     ),
+                    const SizedBox(height: 10),
+                  ],
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _anyEscPosSending ? null : _print,
+                          icon: const Icon(Icons.print_outlined),
+                          label: const Text('PDF / AirPrint'),
+                        ),
+                      ),
+                      if (_mobileBle) ...[
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _anyEscPosSending ? null : _printBle,
+                            icon: _bleSending
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  )
+                                : const Icon(Icons.image_outlined),
+                            label: Text(_bleSending ? '…' : 'ESC/POS BLE'),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
-                  if (!kIsWeb) ...[
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: _save,
-                        icon: const Icon(Icons.save_alt_outlined),
-                        label: const Text('Сохранить'),
+                  if (_canNetworkEscPos) ...[
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: _anyEscPosSending ? null : _printWifiEscPos,
+                      icon: _wifiSending
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.wifi_outlined),
+                      label: Text(
+                        _wifiSending
+                            ? 'Отправка…'
+                            : (_thermalWifi.isWifi && _thermalWifi.wifiIp != null
+                                ? 'Печать по сети (${_thermalWifi.wifiIp})'
+                                : 'Печать по сети (ESC/POS)'),
                       ),
                     ),
                   ],

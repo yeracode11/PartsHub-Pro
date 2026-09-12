@@ -45,7 +45,7 @@ class UserApiService {
       
       return userModel;
     } catch (e) {
-      throw Exception('Ошибка обновления профиля: $e');
+      rethrow;
     }
   }
 

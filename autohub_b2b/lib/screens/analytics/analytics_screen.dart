@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:autohub_b2b/services/api/api_client.dart';
 import 'package:autohub_b2b/widgets/unauthorized_placeholder.dart';
 import 'package:autohub_b2b/widgets/offline_placeholder.dart';
+import 'package:autohub_b2b/services/api/api_user_message.dart';
 
 class AnalyticsScreen extends StatefulWidget {
   const AnalyticsScreen({super.key});
@@ -55,25 +56,33 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       advancedAnalytics = analyticsResponse.data;
 
       // Топ продаваемых товаров
-      final topItemsResponse = await dio.get('/api/dashboard/top-selling-items?limit=10');
+      final topItemsResponse = await dio.get(
+        '/api/dashboard/top-selling-items?limit=10',
+      );
       topSellingItems = List<Map<String, dynamic>>.from(
         topItemsResponse.data['items'] ?? [],
       );
 
       // Товары с низким остатком
-      final lowStockResponse = await dio.get('/api/dashboard/low-stock-items?threshold=5');
+      final lowStockResponse = await dio.get(
+        '/api/dashboard/low-stock-items?threshold=5',
+      );
       lowStockItems = List<Map<String, dynamic>>.from(
         lowStockResponse.data['items'] ?? [],
       );
 
       // Продажи по категориям
-      final categorySalesResponse = await dio.get('/api/dashboard/sales-by-category');
+      final categorySalesResponse = await dio.get(
+        '/api/dashboard/sales-by-category',
+      );
       salesByCategory = List<Map<String, dynamic>>.from(
         categorySalesResponse.data['categories'] ?? [],
       );
 
       // График продаж
-      final chartResponse = await dio.get('/api/dashboard/sales-chart?period=$selectedPeriod');
+      final chartResponse = await dio.get(
+        '/api/dashboard/sales-chart?period=$selectedPeriod',
+      );
       salesChart = chartResponse.data;
 
       // ABC/XYZ аналитика (опционально)
@@ -90,8 +99,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
 
       // Отчеты по персоналу (опционально)
       try {
-        final staffReportResponse =
-            await dio.get('/api/dashboard/staff-report?period=$selectedPeriod');
+        final staffReportResponse = await dio.get(
+          '/api/dashboard/staff-report?period=$selectedPeriod',
+        );
         staffReportItems = List<Map<String, dynamic>>.from(
           staffReportResponse.data['items'] ?? [],
         );
@@ -103,13 +113,16 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         isLoading = false;
       });
     } catch (e) {
-      if (e is DioException && e.response?.statusCode == 403) {
+      if (e is DioException &&
+          (e.response?.statusCode == 401 || e.response?.statusCode == 403)) {
         setState(() {
           isForbidden = true;
           isLoading = false;
           forbiddenMessage =
-              (e.response?.data is Map<String, dynamic> ? (e.response?.data['message'] as String?) : null) ??
-                  'У вас нет доступа к разделу "Аналитика". Войдите под владельцем или менеджером.';
+              (e.response?.data is Map<String, dynamic>
+                  ? (e.response?.data['message'] as String?)
+                  : null) ??
+              'У вас нет доступа к разделу "Аналитика". Войдите под владельцем или менеджером.';
         });
       } else if (isNetworkError(e)) {
         setState(() {
@@ -118,7 +131,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         });
       } else {
         setState(() {
-          error = e.toString();
+          error = userFacingApiMessage(e);
           isLoading = false;
         });
       }
@@ -139,9 +152,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             padding: EdgeInsets.all(padding),
             decoration: const BoxDecoration(
               color: AppTheme.surfaceColor,
-              border: Border(
-                bottom: BorderSide(color: AppTheme.borderColor),
-              ),
+              border: Border(bottom: BorderSide(color: AppTheme.borderColor)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -155,17 +166,15 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                         children: [
                           Text(
                             'Аналитика',
-                            style: Theme.of(context).textTheme.displayMedium?.copyWith(
-                              fontSize: isMobile ? 24 : 28,
-                            ),
+                            style: Theme.of(context).textTheme.displayMedium
+                                ?.copyWith(fontSize: isMobile ? 24 : 28),
                           ),
                           if (!isMobile) ...[
                             const SizedBox(height: 4),
                             Text(
                               'Детальная аналитика продаж и товаров',
-                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    color: AppTheme.textSecondary,
-                                  ),
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(color: AppTheme.textSecondary),
                             ),
                           ],
                         ],
@@ -220,9 +229,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           ),
 
           // Контент
-          Expanded(
-            child: _buildContent(),
-          ),
+          Expanded(child: _buildContent()),
         ],
       ),
     );
@@ -235,8 +242,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
 
     if (isForbidden) {
       return UnauthorizedPlaceholder(
-        message: forbiddenMessage ??
+        message:
+            forbiddenMessage ??
             'У вас нет доступа к разделу "Аналитика". Войдите под владельцем или менеджером.',
+        isForbidden: false,
       );
     }
 
@@ -251,7 +260,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           children: [
             const Icon(Icons.error_outline, size: 64, color: Colors.red),
             const SizedBox(height: 16),
-            Text('Ошибка: $error'),
+            Text(error!, textAlign: TextAlign.center),
             const SizedBox(height: 16),
             ElevatedButton(
               onPressed: _loadAnalytics,
@@ -301,7 +310,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           if (abcXyzSummary != null || abcXyzItems.isNotEmpty)
             SizedBox(height: spacing),
 
-          if (staffReportItems.isNotEmpty) _buildStaffReportCard(isMobile: isMobile),
+          if (staffReportItems.isNotEmpty)
+            _buildStaffReportCard(isMobile: isMobile),
           if (staffReportItems.isNotEmpty) SizedBox(height: spacing),
 
           // Продажи по категориям
@@ -331,46 +341,54 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         children: [
           Row(
             children: [
-              Expanded(child: _buildMetricCard(
-                'Выручка',
-                currencyFormatter.format(revenue['current']),
-                revenue['change']?.toDouble() ?? 0.0,
-                Icons.attach_money,
-                AppTheme.primaryColor,
-                isMobile: true,
-              )),
+              Expanded(
+                child: _buildMetricCard(
+                  'Выручка',
+                  currencyFormatter.format(revenue['current']),
+                  revenue['change']?.toDouble() ?? 0.0,
+                  Icons.attach_money,
+                  AppTheme.primaryColor,
+                  isMobile: true,
+                ),
+              ),
               SizedBox(width: spacing),
-              Expanded(child: _buildMetricCard(
-                'Заказы',
-                '${orders['current']}',
-                orders['change']?.toDouble() ?? 0.0,
-                Icons.shopping_bag,
-                Colors.orange,
-                isMobile: true,
-              )),
+              Expanded(
+                child: _buildMetricCard(
+                  'Заказы',
+                  '${orders['current']}',
+                  orders['change']?.toDouble() ?? 0.0,
+                  Icons.shopping_bag,
+                  Colors.orange,
+                  isMobile: true,
+                ),
+              ),
             ],
           ),
           SizedBox(height: spacing),
           Row(
             children: [
-              Expanded(child: _buildMetricCard(
-                'Средний чек',
-                currencyFormatter.format(avgOrder['current']),
-                avgOrder['change']?.toDouble() ?? 0.0,
-                Icons.receipt,
-                Colors.green,
-                isMobile: true,
-              )),
+              Expanded(
+                child: _buildMetricCard(
+                  'Средний чек',
+                  currencyFormatter.format(avgOrder['current']),
+                  avgOrder['change']?.toDouble() ?? 0.0,
+                  Icons.receipt,
+                  Colors.green,
+                  isMobile: true,
+                ),
+              ),
               SizedBox(width: spacing),
-              Expanded(child: _buildMetricCard(
-                'Прибыль',
-                currencyFormatter.format(profit['amount']),
-                profit['margin']?.toDouble() ?? 0.0,
-                Icons.trending_up,
-                Colors.purple,
-                isPercent: true,
-                isMobile: true,
-              )),
+              Expanded(
+                child: _buildMetricCard(
+                  'Прибыль',
+                  currencyFormatter.format(profit['amount']),
+                  profit['margin']?.toDouble() ?? 0.0,
+                  Icons.trending_up,
+                  Colors.purple,
+                  isPercent: true,
+                  isMobile: true,
+                ),
+              ),
             ],
           ),
         ],
@@ -379,38 +397,46 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
 
     return Row(
       children: [
-        Expanded(child: _buildMetricCard(
-          'Выручка',
-          currencyFormatter.format(revenue['current']),
-          revenue['change']?.toDouble() ?? 0.0,
-          Icons.attach_money,
-          AppTheme.primaryColor,
-        )),
+        Expanded(
+          child: _buildMetricCard(
+            'Выручка',
+            currencyFormatter.format(revenue['current']),
+            revenue['change']?.toDouble() ?? 0.0,
+            Icons.attach_money,
+            AppTheme.primaryColor,
+          ),
+        ),
         SizedBox(width: spacing),
-        Expanded(child: _buildMetricCard(
-          'Заказы',
-          '${orders['current']}',
-          orders['change']?.toDouble() ?? 0.0,
-          Icons.shopping_bag,
-          Colors.orange,
-        )),
+        Expanded(
+          child: _buildMetricCard(
+            'Заказы',
+            '${orders['current']}',
+            orders['change']?.toDouble() ?? 0.0,
+            Icons.shopping_bag,
+            Colors.orange,
+          ),
+        ),
         SizedBox(width: spacing),
-        Expanded(child: _buildMetricCard(
-          'Средний чек',
-          currencyFormatter.format(avgOrder['current']),
-          avgOrder['change']?.toDouble() ?? 0.0,
-          Icons.receipt,
-          Colors.green,
-        )),
+        Expanded(
+          child: _buildMetricCard(
+            'Средний чек',
+            currencyFormatter.format(avgOrder['current']),
+            avgOrder['change']?.toDouble() ?? 0.0,
+            Icons.receipt,
+            Colors.green,
+          ),
+        ),
         SizedBox(width: spacing),
-        Expanded(child: _buildMetricCard(
-          'Прибыль',
-          currencyFormatter.format(profit['amount']),
-          profit['margin']?.toDouble() ?? 0.0,
-          Icons.trending_up,
-          Colors.purple,
-          isPercent: true,
-        )),
+        Expanded(
+          child: _buildMetricCard(
+            'Прибыль',
+            currencyFormatter.format(profit['amount']),
+            profit['margin']?.toDouble() ?? 0.0,
+            Icons.trending_up,
+            Colors.purple,
+            isPercent: true,
+          ),
+        ),
       ],
     );
   }
@@ -449,9 +475,14 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   child: Icon(icon, color: color, size: 24),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
-                    color: (isPositive ? Colors.green : Colors.red).withOpacity(0.1),
+                    color: (isPositive ? Colors.green : Colors.red).withOpacity(
+                      0.1,
+                    ),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
@@ -479,10 +510,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             const SizedBox(height: 16),
             Text(
               title,
-              style: TextStyle(
-                fontSize: 14,
-                color: AppTheme.textSecondary,
-              ),
+              style: TextStyle(fontSize: 14, color: AppTheme.textSecondary),
             ),
             const SizedBox(height: 4),
             Text(
@@ -570,7 +598,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 if (!isMobile)
                   Flexible(
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: AppTheme.primaryColor.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(8),
@@ -578,7 +609,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.trending_up, size: 16, color: AppTheme.primaryColor),
+                          Icon(
+                            Icons.trending_up,
+                            size: 16,
+                            color: AppTheme.primaryColor,
+                          ),
                           const SizedBox(width: 4),
                           Flexible(
                             child: Text(
@@ -603,21 +638,51 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 spacing: 6,
                 runSpacing: 6,
                 children: [
-                  _buildStatItem('Среднее', currencyFormatter.format(avgAmount), Colors.blue, isMobile: true, inWrap: true),
-                  _buildStatItem('Макс', currencyFormatter.format(maxAmount), Colors.green, isMobile: true, inWrap: true),
-                  _buildStatItem('Мин', currencyFormatter.format(minAmount), Colors.orange, isMobile: true, inWrap: true),
+                  _buildStatItem(
+                    'Среднее',
+                    currencyFormatter.format(avgAmount),
+                    Colors.blue,
+                    isMobile: true,
+                    inWrap: true,
+                  ),
+                  _buildStatItem(
+                    'Макс',
+                    currencyFormatter.format(maxAmount),
+                    Colors.green,
+                    isMobile: true,
+                    inWrap: true,
+                  ),
+                  _buildStatItem(
+                    'Мин',
+                    currencyFormatter.format(minAmount),
+                    Colors.orange,
+                    isMobile: true,
+                    inWrap: true,
+                  ),
                 ],
               )
             else
               Row(
                 children: [
-                  _buildStatItem('Среднее', currencyFormatter.format(avgAmount), Colors.blue),
+                  _buildStatItem(
+                    'Среднее',
+                    currencyFormatter.format(avgAmount),
+                    Colors.blue,
+                  ),
                   const SizedBox(width: 16),
-                  _buildStatItem('Макс', currencyFormatter.format(maxAmount), Colors.green),
+                  _buildStatItem(
+                    'Макс',
+                    currencyFormatter.format(maxAmount),
+                    Colors.green,
+                  ),
                   const SizedBox(width: 16),
-                  _buildStatItem('Мин', currencyFormatter.format(minAmount), Colors.orange),
-              ],
-            ),
+                  _buildStatItem(
+                    'Мин',
+                    currencyFormatter.format(minAmount),
+                    Colors.orange,
+                  ),
+                ],
+              ),
             SizedBox(height: isMobile ? 16 : 24),
             SizedBox(
               height: isMobile ? 320 : 350,
@@ -679,7 +744,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                         interval: interval.toDouble(),
                         getTitlesWidget: (value, meta) {
                           final index = value.toInt();
-                          if (index >= 0 && index < data.length && index % interval == 0) {
+                          if (index >= 0 &&
+                              index < data.length &&
+                              index % interval == 0) {
                             final dateStr = data[index]['date'] as String;
                             final date = DateTime.parse(dateStr);
                             return Padding(
@@ -698,15 +765,16 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                         },
                       ),
                     ),
-                    topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                    rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    topTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
+                    rightTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
                   ),
                   borderData: FlBorderData(
                     show: true,
-                    border: Border.all(
-                      color: AppTheme.borderColor,
-                      width: 1,
-                    ),
+                    border: Border.all(color: AppTheme.borderColor, width: 1),
                   ),
                   minY: 0,
                   maxY: maxAmount * 1.15, // Немного больше для лучшей видимости
@@ -781,7 +849,13 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     );
   }
 
-  Widget _buildStatItem(String label, String value, Color color, {bool isMobile = false, bool inWrap = false}) {
+  Widget _buildStatItem(
+    String label,
+    String value,
+    Color color, {
+    bool isMobile = false,
+    bool inWrap = false,
+  }) {
     final container = Container(
       padding: EdgeInsets.all(isMobile ? 8 : 12),
       decoration: BoxDecoration(
@@ -820,7 +894,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     if (inWrap) {
       return container;
     }
-    
+
     if (isMobile) {
       return Flexible(child: container);
     }
@@ -860,7 +934,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           children: [
             Row(
               children: [
-                Icon(Icons.trending_up, color: AppTheme.primaryColor, size: isMobile ? 20 : 24),
+                Icon(
+                  Icons.trending_up,
+                  color: AppTheme.primaryColor,
+                  size: isMobile ? 20 : 24,
+                ),
                 SizedBox(width: isMobile ? 6 : 8),
                 Expanded(
                   child: Text(
@@ -894,7 +972,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   title: Text(item['name'] ?? 'Без названия'),
                   subtitle: Text(
                     'Продано: ${item['quantity']} шт.',
-                    style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppTheme.textSecondary,
+                    ),
                   ),
                   trailing: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -964,7 +1045,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           children: [
             Row(
               children: [
-                Icon(Icons.insights, color: Colors.teal, size: isMobile ? 20 : 24),
+                Icon(
+                  Icons.insights,
+                  color: Colors.teal,
+                  size: isMobile ? 20 : 24,
+                ),
                 SizedBox(width: isMobile ? 6 : 8),
                 Expanded(
                   child: Text(
@@ -981,12 +1066,36 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               spacing: 8,
               runSpacing: 8,
               children: [
-                buildTag('A', ((summary['A'] ?? 0) as num).toInt(), Colors.green),
-                buildTag('B', ((summary['B'] ?? 0) as num).toInt(), Colors.orange),
-                buildTag('C', ((summary['C'] ?? 0) as num).toInt(), Colors.redAccent),
-                buildTag('X', ((summary['X'] ?? 0) as num).toInt(), Colors.blue),
-                buildTag('Y', ((summary['Y'] ?? 0) as num).toInt(), Colors.deepPurple),
-                buildTag('Z', ((summary['Z'] ?? 0) as num).toInt(), Colors.grey),
+                buildTag(
+                  'A',
+                  ((summary['A'] ?? 0) as num).toInt(),
+                  Colors.green,
+                ),
+                buildTag(
+                  'B',
+                  ((summary['B'] ?? 0) as num).toInt(),
+                  Colors.orange,
+                ),
+                buildTag(
+                  'C',
+                  ((summary['C'] ?? 0) as num).toInt(),
+                  Colors.redAccent,
+                ),
+                buildTag(
+                  'X',
+                  ((summary['X'] ?? 0) as num).toInt(),
+                  Colors.blue,
+                ),
+                buildTag(
+                  'Y',
+                  ((summary['Y'] ?? 0) as num).toInt(),
+                  Colors.deepPurple,
+                ),
+                buildTag(
+                  'Z',
+                  ((summary['Z'] ?? 0) as num).toInt(),
+                  Colors.grey,
+                ),
               ],
             ),
             SizedBox(height: isMobile ? 12 : 16),
@@ -1021,7 +1130,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     title: Text(item['name'] ?? 'Без названия'),
                     subtitle: Text(
                       'Артикул: ${item['sku'] ?? '—'}',
-                      style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppTheme.textSecondary,
+                      ),
                     ),
                     trailing: Text(
                       currencyFormatter.format(revenue),
@@ -1068,7 +1180,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           children: [
             Row(
               children: [
-                Icon(Icons.people, color: Colors.indigo, size: isMobile ? 20 : 24),
+                Icon(
+                  Icons.people,
+                  color: Colors.indigo,
+                  size: isMobile ? 20 : 24,
+                ),
                 SizedBox(width: isMobile ? 6 : 8),
                 Expanded(
                   child: Text(
@@ -1091,12 +1207,16 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 final ordersCount = (item['ordersCount'] as num?)?.toInt() ?? 0;
                 final revenue = (item['revenue'] as num?)?.toDouble() ?? 0;
                 final avgCheck = (item['avgCheck'] as num?)?.toDouble() ?? 0;
-                final conversion = (item['conversion'] as num?)?.toDouble() ?? 0;
+                final conversion =
+                    (item['conversion'] as num?)?.toDouble() ?? 0;
                 return ListTile(
                   title: Text(item['name'] ?? 'Сотрудник'),
                   subtitle: Text(
                     roleLabel(item['role']?.toString()),
-                    style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppTheme.textSecondary,
+                    ),
                   ),
                   trailing: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -1108,7 +1228,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                       ),
                       Text(
                         'Заказов: $ordersCount • Ср. чек: ${currencyFormatter.format(avgCheck)} • Оплата: ${(conversion * 100).toStringAsFixed(0)}%',
-                        style: TextStyle(fontSize: 10, color: AppTheme.textSecondary),
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: AppTheme.textSecondary,
+                        ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -1133,7 +1256,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           child: Center(
             child: Column(
               children: [
-                Icon(Icons.check_circle, size: isMobile ? 40 : 48, color: Colors.green),
+                Icon(
+                  Icons.check_circle,
+                  size: isMobile ? 40 : 48,
+                  color: Colors.green,
+                ),
                 const SizedBox(height: 8),
                 Text(
                   'Все товары в наличии',
@@ -1166,7 +1293,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           children: [
             Row(
               children: [
-                Icon(Icons.warning, color: Colors.orange, size: isMobile ? 20 : 24),
+                Icon(
+                  Icons.warning,
+                  color: Colors.orange,
+                  size: isMobile ? 20 : 24,
+                ),
                 SizedBox(width: isMobile ? 6 : 8),
                 Expanded(
                   child: Text(
@@ -1193,7 +1324,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   leading: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: (isCritical ? Colors.red : Colors.orange).withOpacity(0.1),
+                      color: (isCritical ? Colors.red : Colors.orange)
+                          .withOpacity(0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Icon(
@@ -1205,7 +1337,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   title: Text(item['name'] ?? 'Без названия'),
                   subtitle: Text(
                     item['category'] ?? 'Без категории',
-                    style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppTheme.textSecondary,
+                    ),
                   ),
                   trailing: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -1260,9 +1395,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           children: [
             Text(
               'Продажи по категориям',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontSize: isMobile ? 18 : 20,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.headlineSmall?.copyWith(fontSize: isMobile ? 18 : 20),
             ),
             SizedBox(height: isMobile ? 16 : 24),
             if (isMobile) ...[
@@ -1284,7 +1419,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                       ];
 
                       final percentage = totalRevenue > 0
-                          ? ((category['revenue'] as num).toDouble() / totalRevenue) * 100
+                          ? ((category['revenue'] as num).toDouble() /
+                                    totalRevenue) *
+                                100
                           : 0.0;
 
                       return PieChartSectionData(
@@ -1366,7 +1503,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                       aspectRatio: 1.5,
                       child: PieChart(
                         PieChartData(
-                          sections: salesByCategory.asMap().entries.map((entry) {
+                          sections: salesByCategory.asMap().entries.map((
+                            entry,
+                          ) {
                             final index = entry.key;
                             final category = entry.value;
                             final colors = [
@@ -1379,7 +1518,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                             ];
 
                             final percentage = totalRevenue > 0
-                                ? ((category['revenue'] as num).toDouble() / totalRevenue) * 100
+                                ? ((category['revenue'] as num).toDouble() /
+                                          totalRevenue) *
+                                      100
                                 : 0.0;
 
                             return PieChartSectionData(

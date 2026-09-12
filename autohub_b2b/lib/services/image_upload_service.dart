@@ -33,7 +33,7 @@ class ImageUploadService {
         return images.take(maxImages).toList();
       }
     } catch (e) {
-      throw Exception('Ошибка выбора изображений: $e');
+      rethrow;
     }
   }
 
@@ -77,8 +77,10 @@ class ImageUploadService {
       } else {
         throw Exception('Ошибка загрузки изображений: ${response.statusMessage}');
       }
+    } on DioException {
+      rethrow;
     } catch (e) {
-      throw Exception('Ошибка загрузки изображений: $e');
+      rethrow;
     }
   }
 
@@ -93,8 +95,10 @@ class ImageUploadService {
       if (response.statusCode != 200 && response.statusCode != 204) {
         throw Exception('Ошибка удаления изображения: ${response.statusMessage}');
       }
+    } on DioException {
+      rethrow;
     } catch (e) {
-      throw Exception('Ошибка удаления изображения: $e');
+      rethrow;
     }
   }
 
@@ -109,8 +113,10 @@ class ImageUploadService {
       if (response.statusCode != 200 && response.statusCode != 204) {
         throw Exception('Ошибка установки основного изображения: ${response.statusMessage}');
       }
+    } on DioException {
+      rethrow;
     } catch (e) {
-      throw Exception('Ошибка установки основного изображения: $e');
+      rethrow;
     }
   }
 

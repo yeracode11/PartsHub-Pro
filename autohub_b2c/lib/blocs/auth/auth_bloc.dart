@@ -1,102 +1,118 @@
+import 'dart:convert';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/customer_model.dart';
+import '../../services/auth_service.dart';
 import 'auth_event.dart';
 import 'auth_state.dart';
 
-// BLoC
 class AuthBloc extends Bloc<AuthEvent, AuthState> {
-  AuthBloc() : super(AuthInitial()) {
+  final AuthService _authService;
+  static const _profileKey = 'b2c_customer_profile';
+
+  AuthBloc({required AuthService authService})
+      : _authService = authService,
+        super(AuthInitial()) {
     on<AuthCheckRequested>(_onAuthCheckRequested);
     on<AuthLoginRequested>(_onLoginRequested);
     on<AuthRegisterRequested>(_onRegisterRequested);
     on<AuthLogoutRequested>(_onLogoutRequested);
   }
 
-  void _onAuthCheckRequested(
+  Future<void> _onAuthCheckRequested(
     AuthCheckRequested event,
     Emitter<AuthState> emit,
   ) async {
-    if (!isClosed) emit(AuthLoading());
-    
+    emit(AuthLoading());
     try {
-      // Проверяем сохраненные токены авторизации
-      await Future.delayed(const Duration(seconds: 1));
-      
-      // Проверка токенов будет реализована позже
-      if (!isClosed) emit(AuthUnauthenticated());
-    } catch (e) {
-      if (!isClosed) emit(AuthError('Ошибка проверки авторизации: $e'));
+      final me = await _authService.getMe();
+      if (me != null) {
+        final customer = _customerFromUser(me);
+        await _saveProfile(customer);
+        emit(AuthAuthenticated(customer));
+        return;
+      }
+
+      final prefs = await SharedPreferences.getInstance();
+      final profileRaw = prefs.getString(_profileKey);
+      final token = await _authService.hasToken();
+      if (profileRaw != null && token) {
+        final customer = Customer.fromJson(
+          Map<String, dynamic>.from(json.decode(profileRaw)),
+        );
+        emit(AuthAuthenticated(customer));
+        return;
+      }
+
+      emit(AuthUnauthenticated());
+    } catch (_) {
+      emit(AuthUnauthenticated());
     }
   }
 
-  void _onLoginRequested(
+  Future<void> _onLoginRequested(
     AuthLoginRequested event,
     Emitter<AuthState> emit,
   ) async {
-    if (!isClosed) emit(AuthLoading());
-    
+    emit(AuthLoading());
     try {
-      // Авторизация через backend API
-      await Future.delayed(const Duration(seconds: 2));
-      
-      // Временная mock авторизация (будет заменена на реальный API)
-      if (event.email == 'demo@autohub.kz' && event.password == 'demo123') {
-        final customer = Customer(
-          id: 1,
-          name: 'Демо Пользователь',
-          email: 'demo@autohub.kz',
-          phone: '+7 (777) 123-45-67',
-          createdAt: DateTime.now().subtract(const Duration(days: 30)),
-          updatedAt: DateTime.now(),
-        );
-        if (!isClosed) emit(AuthAuthenticated(customer));
-      } else {
-        if (!isClosed) emit(AuthError('Неверный email или пароль'));
-      }
+      final result = await _authService.login(event.email, event.password);
+      await _authService.persistSession(result);
+      final user = result['user'] as Map<String, dynamic>? ?? {};
+      final customer = _customerFromUser(user);
+      await _saveProfile(customer);
+      emit(AuthAuthenticated(customer));
     } catch (e) {
-      if (!isClosed) emit(AuthError('Ошибка входа: $e'));
+      emit(AuthError('Неверный email или пароль. Войдите через аккаунт сервера.'));
     }
   }
 
-  void _onRegisterRequested(
+  Future<void> _onRegisterRequested(
     AuthRegisterRequested event,
     Emitter<AuthState> emit,
   ) async {
-    if (!isClosed) emit(AuthLoading());
-    
+    emit(AuthLoading());
     try {
-      // Регистрация через backend API
-      await Future.delayed(const Duration(seconds: 2));
-      
-      // Временная mock регистрация (будет заменена на реальный API)
-      final customer = Customer(
-        id: DateTime.now().millisecondsSinceEpoch,
+      final result = await _authService.register(
         name: event.name,
         email: event.email,
+        password: event.password,
         phone: event.phone,
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
       );
-      
-      if (!isClosed) emit(AuthAuthenticated(customer));
+      await _authService.persistSession(result);
+      final user = result['user'] as Map<String, dynamic>? ?? {};
+      final customer = _customerFromUser(user);
+      await _saveProfile(customer);
+      emit(AuthAuthenticated(customer));
     } catch (e) {
-      if (!isClosed) emit(AuthError('Ошибка регистрации: $e'));
+      emit(AuthError('Ошибка регистрации: $e'));
     }
   }
 
-  void _onLogoutRequested(
+  Future<void> _onLogoutRequested(
     AuthLogoutRequested event,
     Emitter<AuthState> emit,
   ) async {
-    if (!isClosed) emit(AuthLoading());
-    
-    try {
-      // Выход из системы
-      await Future.delayed(const Duration(milliseconds: 500));
-      
-      if (!isClosed) emit(AuthUnauthenticated());
-    } catch (e) {
-      if (!isClosed) emit(AuthError('Ошибка выхода: $e'));
-    }
+    emit(AuthLoading());
+    await _authService.logout();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_profileKey);
+    emit(AuthUnauthenticated());
+  }
+
+  Customer _customerFromUser(Map<String, dynamic> user) {
+    return Customer(
+      id: user['id'] is int ? user['id'] : int.tryParse('${user['id']}') ?? 0,
+      name: user['name']?.toString() ?? 'Пользователь',
+      email: user['email']?.toString() ?? '',
+      phone: user['phone']?.toString(),
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+  }
+
+  Future<void> _saveProfile(Customer customer) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_profileKey, json.encode(customer.toJson()));
   }
 }

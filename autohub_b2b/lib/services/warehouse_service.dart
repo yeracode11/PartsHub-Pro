@@ -15,7 +15,7 @@ class WarehouseService {
     } on DioException {
       rethrow;
     } catch (e) {
-      throw Exception('Failed to load warehouses: $e');
+      rethrow;
     }
   }
 
@@ -24,8 +24,10 @@ class WarehouseService {
     try {
       final response = await _apiClient.dio.get('/api/warehouses/$id');
       return Warehouse.fromJson(response.data);
+    } on DioException {
+      rethrow;
     } catch (e) {
-      throw Exception('Failed to load warehouse: $e');
+      rethrow;
     }
   }
 
@@ -46,8 +48,10 @@ class WarehouseService {
         'isActive': isActive,
       });
       return Warehouse.fromJson(response.data);
+    } on DioException {
+      rethrow;
     } catch (e) {
-      throw Exception('Failed to create warehouse: $e');
+      rethrow;
     }
   }
 
@@ -69,8 +73,10 @@ class WarehouseService {
         if (isActive != null) 'isActive': isActive,
       });
       return Warehouse.fromJson(response.data);
+    } on DioException {
+      rethrow;
     } catch (e) {
-      throw Exception('Failed to update warehouse: $e');
+      rethrow;
     }
   }
 
@@ -78,8 +84,10 @@ class WarehouseService {
   Future<void> deleteWarehouse(String id) async {
     try {
       await _apiClient.dio.delete('/api/warehouses/$id');
+    } on DioException {
+      rethrow;
     } catch (e) {
-      throw Exception('Failed to delete warehouse: $e');
+      rethrow;
     }
   }
 
@@ -101,10 +109,10 @@ class WarehouseService {
       final response = await _apiClient.dio.get('/api/warehouse-transfers');
       final List<dynamic> data = response.data;
       return data.map((json) => WarehouseTransfer.fromJson(json)).toList();
-    } on DioException catch (e) {
+    } on DioException {
       rethrow;
     } catch (e) {
-      throw Exception('Failed to load transfers: $e');
+      rethrow;
     }
   }
 
@@ -125,8 +133,10 @@ class WarehouseService {
         'notes': notes,
       });
       return WarehouseTransfer.fromJson(response.data);
+    } on DioException {
+      rethrow;
     } catch (e) {
-      throw Exception('Failed to create transfer: $e');
+      rethrow;
     }
   }
 
@@ -140,8 +150,10 @@ class WarehouseService {
         'status': status.toString(),
       });
       return WarehouseTransfer.fromJson(response.data);
+    } on DioException {
+      rethrow;
     } catch (e) {
-      throw Exception('Failed to update transfer status: $e');
+      rethrow;
     }
   }
 
@@ -149,8 +161,10 @@ class WarehouseService {
   Future<void> deleteTransfer(String id) async {
     try {
       await _apiClient.dio.delete('/api/warehouse-transfers/$id');
+    } on DioException {
+      rethrow;
     } catch (e) {
-      throw Exception('Failed to delete transfer: $e');
+      rethrow;
     }
   }
 }

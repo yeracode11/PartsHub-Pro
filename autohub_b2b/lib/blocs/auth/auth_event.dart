@@ -11,37 +11,29 @@ abstract class AuthEvent extends Equatable {
 class AuthCheckRequested extends AuthEvent {}
 
 class AuthSignInRequested extends AuthEvent {
-  final String email;
+  final String phone;
   final String password;
 
   const AuthSignInRequested({
-    required this.email,
+    required this.phone,
     required this.password,
   });
 
   @override
-  List<Object?> get props => [email, password];
+  List<Object?> get props => [phone, password];
 }
 
 class AuthSignUpRequested extends AuthEvent {
-  final String email;
-  final String password;
-  final String name;
   final String phone;
-  final String? organizationName;
-  final String? businessType; // 'service', 'parts', 'wash'
+  final String password;
 
   const AuthSignUpRequested({
-    required this.email,
-    required this.password,
-    required this.name,
     required this.phone,
-    this.organizationName,
-    this.businessType,
+    required this.password,
   });
 
   @override
-  List<Object?> get props => [email, password, name, phone, organizationName, businessType];
+  List<Object?> get props => [phone, password];
 }
 
 class AuthSignOutRequested extends AuthEvent {}
@@ -54,4 +46,3 @@ class AuthProfileUpdated extends AuthEvent {
   @override
   List<Object?> get props => [user];
 }
-

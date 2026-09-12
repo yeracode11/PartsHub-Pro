@@ -11,6 +11,7 @@ import 'package:autohub_b2b/blocs/warehouse/warehouse_bloc.dart';
 import 'package:autohub_b2b/blocs/dashboard/dashboard_bloc.dart';
 import 'package:autohub_b2b/services/database/database.dart';
 import 'package:autohub_b2b/utils/auth_navigation.dart';
+import 'package:autohub_b2b/utils/auth_guard.dart';
 import 'package:autohub_b2b/core/app_navigator_key.dart';
 import 'package:autohub_b2b/screens/dashboard/dashboard_screen.dart';
 import 'package:autohub_b2b/screens/warehouse/warehouse_screen.dart';
@@ -27,12 +28,12 @@ import 'package:autohub_b2b/screens/vehicles/vehicles_screen.dart';
 import 'package:autohub_b2b/screens/profile/profile_screen.dart';
 import 'package:autohub_b2b/screens/settings/settings_screen.dart';
 import 'package:autohub_b2b/core/theme.dart';
-import 'package:autohub_b2b/models/user_model.dart';
 import 'package:autohub_b2b/services/auth/secure_storage_service.dart';
 import 'package:autohub_b2b/screens/onboarding/onboarding_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:autohub_b2b/services/service_locator.dart';
 import 'package:autohub_b2b/widgets/offline_banner.dart';
+import 'package:autohub_b2b/widgets/unauthorized_placeholder.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -68,12 +69,8 @@ class AutoHubApp extends StatelessWidget {
         BlocProvider(
           create: (context) => AuthBloc()..add(AuthCheckRequested()),
         ),
-        BlocProvider(
-          create: (context) => WarehouseBloc(database: database),
-        ),
-        BlocProvider(
-          create: (context) => DashboardBloc(),
-        ),
+        BlocProvider(create: (context) => WarehouseBloc(database: database)),
+        BlocProvider(create: (context) => DashboardBloc()),
       ],
       child: MaterialApp(
         navigatorKey: rootNavigatorKey,
@@ -124,9 +121,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     if (_showOnboarding) {
@@ -159,7 +154,8 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
   bool _warehouseMenuExpanded = false;
-  int? _warehouseSubMenuIndex; // null = закрыто, 0 = Товары, 1 = Оприходование, 2 = Расположение, 3 = Склады, 4 = Перемещения
+  int?
+  _warehouseSubMenuIndex; // null = закрыто, 0 = Товары, 1 = Оприходование, 2 = Расположение, 3 = Склады, 4 = Перемещения
   String? _userRole; // Роль текущего пользователя
 
   final List<Widget> _screens = [
@@ -185,7 +181,7 @@ class _MainScreenState extends State<MainScreen> {
     if (mounted && userData != null) {
       setState(() {
         _userRole = userData['role'] as String?;
-        
+
         // Для кладовщика по умолчанию открываем Склад
         if (_userRole == 'UserRole.storekeeper' && _selectedIndex == 0) {
           _selectedIndex = 1; // Склад
@@ -254,7 +250,7 @@ class _MainScreenState extends State<MainScreen> {
           return 'Склад';
       }
     }
-    
+
     // Другие разделы
     switch (_selectedIndex) {
       case 0:
@@ -277,6 +273,20 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   Widget _buildShellBody(AuthState authState) {
+    if (_isGuest(authState) && _selectedIndex != 7) {
+      return const Column(
+        children: [
+          OfflineBanner(),
+          Expanded(
+            child: UnauthorizedPlaceholder(
+              message: 'Для доступа к разделам приложения войдите в систему.',
+              isForbidden: false,
+            ),
+          ),
+        ],
+      );
+    }
+
     final mainContent = _selectedIndex == 1
         ? _getWarehouseScreen()
         : _screens[_selectedIndex];
@@ -302,276 +312,297 @@ class _MainScreenState extends State<MainScreen> {
         builder: (context) {
           final isMobile = MediaQuery.of(context).size.width < 768;
 
-    if (isMobile) {
-      // Мобильная версия с Drawer и BottomNavigationBar
-      return Scaffold(
-        backgroundColor: AppTheme.backgroundColor,
-        drawer: _buildDrawer(context, authState),
-        appBar: AppBar(
-          title: Text(_getAppBarTitle()),
-          backgroundColor: AppTheme.surfaceColor,
-          foregroundColor: AppTheme.textPrimary,
-          elevation: 0,
-          actions: [
-            if (_isGuest(authState))
-              IconButton(
-                icon: const Icon(Icons.login),
-                tooltip: 'Войти',
-                onPressed: () => _openLogin(context),
-              ),
-          ],
-          bottom: PreferredSize(
-            preferredSize: const Size.fromHeight(1),
-            child: Container(
-              height: 1,
-              color: AppTheme.borderColor,
-            ),
-          ),
-        ),
-        body: _buildShellBody(authState),
-        bottomNavigationBar: _buildBottomNavigationBar(authState),
-      );
-    } else {
-      // Desktop версия с боковым меню
-      return Scaffold(
-        backgroundColor: AppTheme.backgroundColor,
-        body: Row(
-          children: [
-            // Боковое меню
-            Container(
-              width: 240,
-              decoration: const BoxDecoration(
-                color: AppTheme.surfaceColor,
-                border: Border(
-                  right: BorderSide(color: AppTheme.borderColor, width: 1),
+          if (isMobile) {
+            // Мобильная версия с Drawer и BottomNavigationBar
+            return Scaffold(
+              backgroundColor: AppTheme.backgroundColor,
+              drawer: _buildDrawer(context, authState),
+              appBar: AppBar(
+                title: Text(_getAppBarTitle()),
+                backgroundColor: AppTheme.surfaceColor,
+                foregroundColor: AppTheme.textPrimary,
+                elevation: 0,
+                actions: [
+                  if (_isGuest(authState))
+                    IconButton(
+                      icon: const Icon(Icons.login),
+                      tooltip: 'Войти',
+                      onPressed: () => _openLogin(context),
+                    ),
+                ],
+                bottom: PreferredSize(
+                  preferredSize: const Size.fromHeight(1),
+                  child: Container(height: 1, color: AppTheme.borderColor),
                 ),
               ),
-              child: Column(
+              body: _buildShellBody(authState),
+              bottomNavigationBar: _buildBottomNavigationBar(authState),
+            );
+          } else {
+            // Desktop версия с боковым меню
+            return Scaffold(
+              backgroundColor: AppTheme.backgroundColor,
+              body: Row(
                 children: [
-                  // Логотип
+                  // Боковое меню
                   Container(
-                    padding: const EdgeInsets.all(24),
-                    child: Row(
-                      children: [
-                        Image.asset(
-                          'assets/icons/auto-plus-logo.png',
-                          width: 66,
-                          height: 66,
-                          fit: BoxFit.contain,
+                    width: 240,
+                    decoration: const BoxDecoration(
+                      color: AppTheme.surfaceColor,
+                      border: Border(
+                        right: BorderSide(
+                          color: AppTheme.borderColor,
+                          width: 1,
                         ),
-                        const SizedBox(width: 12),
-                        const Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Auto+',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: AppTheme.textPrimary,
-                              ),
-                            ),
-                            Text(
-                              'B2B платформа',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: AppTheme.textSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
+                      ),
                     ),
-                  ),
-                  const Divider(height: 1),
-                  
-                  // Навигационные элементы
-                  Expanded(
-                    child: ListView(
-                      padding: const EdgeInsets.all(12),
+                    child: Column(
                       children: [
-                        if (_canAccessSection('dashboard', authState))
-                          _buildNavItem(
-                            icon: Icons.dashboard_outlined,
-                            selectedIcon: Icons.dashboard,
-                            label: 'Дашборд',
-                            index: 0,
-                          ),
-                        if (_canAccessSection('warehouse', authState))
-                          _buildWarehouseMenu(),
-                        if (_canAccessSection('sales', authState))
-                          _buildNavItem(
-                            icon: Icons.shopping_bag_outlined,
-                            selectedIcon: Icons.shopping_bag,
-                            label: 'Продажи',
-                            index: 2,
-                          ),
-                        if (_canAccessSection('crm', authState))
-                          _buildNavItem(
-                            icon: Icons.people_outline,
-                            selectedIcon: Icons.people,
-                            label: 'CRM',
-                            index: 3,
-                          ),
-                        if (_canAccessSection('vehicles', authState))
-                          _buildNavItem(
-                            icon: Icons.directions_car_outlined,
-                            selectedIcon: Icons.directions_car,
-                          label: 'Автомобили',
-                          index: 4,
-                        ),
-                        if (_canAccessSection('analytics', authState))
-                          _buildNavItem(
-                            icon: Icons.analytics_outlined,
-                            selectedIcon: Icons.analytics,
-                            label: 'Аналитика',
-                            index: 5,
-                          ),
-                        if (_canAccessSection('whatsapp', authState))
-                          _buildNavItem(
-                            icon: Icons.message_outlined,
-                            selectedIcon: Icons.message,
-                            label: 'WhatsApp',
-                            index: 6,
-                          ),
-                        const SizedBox(height: 12),
-                        const Divider(),
-                        const SizedBox(height: 12),
-                        if (_canAccessSection('settings', authState))
-                          _buildNavItem(
-                            icon: Icons.settings_outlined,
-                            selectedIcon: Icons.settings,
-                            label: 'Настройки',
-                            index: 7,
-                          ),
-                      ],
-                    ),
-                  ),
-                  
-                  // Нижняя часть - профиль пользователя
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    child: BlocBuilder<AuthBloc, AuthState>(
-                      builder: (context, state) {
-                        return FutureBuilder<Map<String, dynamic>?>(
-                          future: SecureStorageService().getUserData(),
-                          builder: (context, snapshot) {
-                            String userName = 'Пользователь';
-                            String userEmail = '';
-                            String? organizationName;
-                            
-                            if (state is AuthAuthenticated) {
-                              userName = state.user.name.isNotEmpty 
-                                  ? state.user.name 
-                                  : state.user.email.split('@')[0];
-                              userEmail = state.user.email;
-                            } else {
-                              userName = 'Гость';
-                              userEmail = 'Нажмите, чтобы войти';
-                            }
-                            
-                            if (snapshot.hasData && snapshot.data?['organization'] != null) {
-                              organizationName = snapshot.data!['organization']['name'] as String?;
-                            }
-                            
-                            return InkWell(
-                              onTap: () {
-                                if (state is AuthAuthenticated) {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (context) => const ProfileScreen(),
+                        // Логотип
+                        Container(
+                          padding: const EdgeInsets.all(24),
+                          child: Row(
+                            children: [
+                              Image.asset(
+                                'assets/icons/auto-plus-logo.png',
+                                width: 66,
+                                height: 66,
+                                fit: BoxFit.contain,
+                              ),
+                              const SizedBox(width: 12),
+                              const Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Auto+',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppTheme.textPrimary,
                                     ),
-                                  );
-                                } else {
-                                  AuthNavigation.pushLoginOverlay(context);
-                                }
-                              },
-                              borderRadius: BorderRadius.circular(12),
-                              child: Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: AppTheme.primaryColor.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: AppTheme.primaryColor.withOpacity(0.2),
                                   ),
+                                  Text(
+                                    'B2B платформа',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: AppTheme.textSecondary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Divider(height: 1),
+
+                        // Навигационные элементы
+                        Expanded(
+                          child: ListView(
+                            padding: const EdgeInsets.all(12),
+                            children: [
+                              if (_canAccessSection('dashboard', authState))
+                                _buildNavItem(
+                                  icon: Icons.dashboard_outlined,
+                                  selectedIcon: Icons.dashboard,
+                                  label: 'Дашборд',
+                                  index: 0,
                                 ),
-                                child: Row(
-                                  children: [
-                                    CircleAvatar(
-                                      radius: 20,
-                                      backgroundColor: AppTheme.primaryColor,
-                                      child: Text(
-                                        state is AuthAuthenticated
-                                            ? (userName.isNotEmpty ? userName[0].toUpperCase() : 'U')
-                                            : '?',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
+                              if (_canAccessSection('warehouse', authState))
+                                _buildWarehouseMenu(),
+                              if (_canAccessSection('sales', authState))
+                                _buildNavItem(
+                                  icon: Icons.shopping_bag_outlined,
+                                  selectedIcon: Icons.shopping_bag,
+                                  label: 'Продажи',
+                                  index: 2,
+                                ),
+                              if (_canAccessSection('crm', authState))
+                                _buildNavItem(
+                                  icon: Icons.people_outline,
+                                  selectedIcon: Icons.people,
+                                  label: 'CRM',
+                                  index: 3,
+                                ),
+                              if (_canAccessSection('vehicles', authState))
+                                _buildNavItem(
+                                  icon: Icons.directions_car_outlined,
+                                  selectedIcon: Icons.directions_car,
+                                  label: 'Автомобили',
+                                  index: 4,
+                                ),
+                              if (_canAccessSection('analytics', authState))
+                                _buildNavItem(
+                                  icon: Icons.analytics_outlined,
+                                  selectedIcon: Icons.analytics,
+                                  label: 'Аналитика',
+                                  index: 5,
+                                ),
+                              if (_canAccessSection('whatsapp', authState))
+                                _buildNavItem(
+                                  icon: Icons.message_outlined,
+                                  selectedIcon: Icons.message,
+                                  label: 'WhatsApp',
+                                  index: 6,
+                                ),
+                              const SizedBox(height: 12),
+                              const Divider(),
+                              const SizedBox(height: 12),
+                              if (_canAccessSection('settings', authState))
+                                _buildNavItem(
+                                  icon: Icons.settings_outlined,
+                                  selectedIcon: Icons.settings,
+                                  label: 'Настройки',
+                                  index: 7,
+                                ),
+                            ],
+                          ),
+                        ),
+
+                        // Нижняя часть - профиль пользователя
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          child: BlocBuilder<AuthBloc, AuthState>(
+                            builder: (context, state) {
+                              return FutureBuilder<Map<String, dynamic>?>(
+                                future: SecureStorageService().getUserData(),
+                                builder: (context, snapshot) {
+                                  String userName = 'Пользователь';
+                                  String userEmail = '';
+                                  String? organizationName;
+
+                                  if (state is AuthAuthenticated) {
+                                    userName = state.user.name.isNotEmpty
+                                        ? state.user.name
+                                        : state.user.email.split('@')[0];
+                                    userEmail = state.user.email;
+                                  } else {
+                                    userName = 'Гость';
+                                    userEmail = 'Нажмите, чтобы войти';
+                                  }
+
+                                  if (snapshot.hasData &&
+                                      snapshot.data?['organization'] != null) {
+                                    organizationName =
+                                        snapshot.data!['organization']['name']
+                                            as String?;
+                                  }
+
+                                  return InkWell(
+                                    onTap: () {
+                                      if (state is AuthAuthenticated) {
+                                        Navigator.of(context).push(
+                                          MaterialPageRoute(
+                                            builder: (context) =>
+                                                const ProfileScreen(),
+                                          ),
+                                        );
+                                      } else {
+                                        AuthNavigation.pushLoginOverlay(
+                                          context,
+                                        );
+                                      }
+                                    },
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: AppTheme.primaryColor
+                                            .withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: AppTheme.primaryColor
+                                              .withOpacity(0.2),
                                         ),
                                       ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        mainAxisSize: MainAxisSize.min,
+                                      child: Row(
                                         children: [
-                                          Text(
-                                            userName,
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.w600,
-                                              fontSize: 14,
+                                          CircleAvatar(
+                                            radius: 20,
+                                            backgroundColor:
+                                                AppTheme.primaryColor,
+                                            child: Text(
+                                              state is AuthAuthenticated
+                                                  ? (userName.isNotEmpty
+                                                        ? userName[0]
+                                                              .toUpperCase()
+                                                        : 'U')
+                                                  : '?',
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.bold,
+                                              ),
                                             ),
-                                            overflow: TextOverflow.ellipsis,
                                           ),
-                                          if (state is AuthAuthenticated &&
-                                              organizationName != null) ...[
-                                            Text(
-                                              organizationName,
-                                              style: const TextStyle(
-                                                fontSize: 10,
-                                                color: AppTheme.textSecondary,
-                                                fontWeight: FontWeight.w500,
-                                              ),
-                                              overflow: TextOverflow.ellipsis,
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Text(
+                                                  userName,
+                                                  style: const TextStyle(
+                                                    fontWeight: FontWeight.w600,
+                                                    fontSize: 14,
+                                                  ),
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
+                                                if (state
+                                                        is AuthAuthenticated &&
+                                                    organizationName !=
+                                                        null) ...[
+                                                  Text(
+                                                    organizationName,
+                                                    style: const TextStyle(
+                                                      fontSize: 10,
+                                                      color: AppTheme
+                                                          .textSecondary,
+                                                      fontWeight:
+                                                          FontWeight.w500,
+                                                    ),
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                  ),
+                                                ] else ...[
+                                                  Text(
+                                                    userEmail,
+                                                    style: const TextStyle(
+                                                      fontSize: 11,
+                                                      color: AppTheme
+                                                          .textSecondary,
+                                                    ),
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                  ),
+                                                ],
+                                              ],
                                             ),
-                                          ] else ...[
-                                            Text(
-                                              userEmail,
-                                              style: const TextStyle(
-                                                fontSize: 11,
-                                                color: AppTheme.textSecondary,
-                                              ),
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ],
+                                          ),
+                                          const Icon(
+                                            Icons.chevron_right,
+                                            color: AppTheme.textSecondary,
+                                          ),
                                         ],
                                       ),
                                     ),
-                                    const Icon(
-                                      Icons.chevron_right,
-                                      color: AppTheme.textSecondary,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        );
-                      },
+                                  );
+                                },
+                              );
+                            },
+                          ),
+                        ),
+                      ],
                     ),
                   ),
+
+                  // Основной контент
+                  Expanded(child: _buildShellBody(authState)),
                 ],
               ),
-            ),
-            
-            // Основной контент
-            Expanded(child: _buildShellBody(authState)),
-          ],
-        ),
-      );
-    }
+            );
+          }
         },
       ),
     );
@@ -655,7 +686,7 @@ class _MainScreenState extends State<MainScreen> {
             ),
           ),
           const Divider(height: 1),
-          
+
           // Навигационные элементы
           Expanded(
             child: ListView(
@@ -679,12 +710,11 @@ class _MainScreenState extends State<MainScreen> {
                   ),
                   title: const Text(
                     'Найти запчасть',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
                   ),
-                  onTap: () {
+                  onTap: () async {
+                    if (!await ensureAuthenticated(context)) return;
+                    if (!context.mounted) return;
                     Navigator.pop(context);
                     Navigator.push(
                       context,
@@ -748,7 +778,7 @@ class _MainScreenState extends State<MainScreen> {
               ],
             ),
           ),
-          
+
           // Профиль пользователя
           Container(
             padding: const EdgeInsets.all(16),
@@ -772,7 +802,7 @@ class _MainScreenState extends State<MainScreen> {
                     }
 
                     if (snapshot.hasData &&
-                        snapshot.data?['organization'] != null ) {
+                        snapshot.data?['organization'] != null) {
                       organizationName =
                           snapshot.data!['organization']['name'] as String?;
                     }
@@ -875,16 +905,43 @@ class _MainScreenState extends State<MainScreen> {
   Widget _buildBottomNavigationBar(AuthState authState) {
     // Только основные разделы (остальные — в drawer), иначе не помещается на узких экранах
     final allSections = [
-      {'index': 0, 'icon': Icons.dashboard, 'label': 'Дашборд', 'section': 'dashboard'},
-      {'index': 1, 'icon': Icons.inventory_2, 'label': 'Склад', 'section': 'warehouse'},
-      {'index': 2, 'icon': Icons.shopping_bag, 'label': 'Продажи', 'section': 'sales'},
-      {'index': 4, 'icon': Icons.directions_car, 'label': 'Авто', 'section': 'vehicles'},
-      {'index': 5, 'icon': Icons.analytics, 'label': 'Аналитика', 'section': 'analytics'},
+      {
+        'index': 0,
+        'icon': Icons.dashboard,
+        'label': 'Дашборд',
+        'section': 'dashboard',
+      },
+      {
+        'index': 1,
+        'icon': Icons.inventory_2,
+        'label': 'Склад',
+        'section': 'warehouse',
+      },
+      {
+        'index': 2,
+        'icon': Icons.shopping_bag,
+        'label': 'Продажи',
+        'section': 'sales',
+      },
+      {
+        'index': 4,
+        'icon': Icons.directions_car,
+        'label': 'Авто',
+        'section': 'vehicles',
+      },
+      {
+        'index': 5,
+        'icon': Icons.analytics,
+        'label': 'Аналитика',
+        'section': 'analytics',
+      },
     ];
 
     final mainSections = allSections
-        .where((section) =>
-            _canAccessSection(section['section'] as String, authState))
+        .where(
+          (section) =>
+              _canAccessSection(section['section'] as String, authState),
+        )
         .toList();
 
     // Если нет доступных разделов, возвращаем пустой виджет
@@ -893,7 +950,9 @@ class _MainScreenState extends State<MainScreen> {
     }
 
     return BottomNavigationBar(
-      currentIndex: mainSections.indexWhere((s) => s['index'] == _selectedIndex).clamp(0, mainSections.length - 1),
+      currentIndex: mainSections
+          .indexWhere((s) => s['index'] == _selectedIndex)
+          .clamp(0, mainSections.length - 1),
       type: BottomNavigationBarType.fixed,
       selectedItemColor: AppTheme.primaryColor,
       unselectedItemColor: AppTheme.textSecondary,
@@ -924,7 +983,7 @@ class _MainScreenState extends State<MainScreen> {
     required BuildContext context,
   }) {
     final isSelected = _selectedIndex == index;
-    
+
     return ListTile(
       leading: Icon(
         isSelected ? selectedIcon : icon,
@@ -954,7 +1013,7 @@ class _MainScreenState extends State<MainScreen> {
 
   Widget _buildDrawerWarehouseMenu(BuildContext context) {
     final isSelected = _selectedIndex == 1;
-    
+
     return ExpansionTile(
       leading: Icon(
         isSelected ? Icons.inventory_2 : Icons.inventory_2_outlined,
@@ -1020,8 +1079,9 @@ class _MainScreenState extends State<MainScreen> {
     required int subIndex,
     required BuildContext context,
   }) {
-    final isSelected = _selectedIndex == 1 && _warehouseSubMenuIndex == subIndex;
-    
+    final isSelected =
+        _selectedIndex == 1 && _warehouseSubMenuIndex == subIndex;
+
     return ListTile(
       leading: Icon(
         icon,
@@ -1050,7 +1110,7 @@ class _MainScreenState extends State<MainScreen> {
 
   Widget _buildWarehouseMenu() {
     final isSelected = _selectedIndex == 1;
-    
+
     return Column(
       children: [
         Padding(
@@ -1078,7 +1138,10 @@ class _MainScreenState extends State<MainScreen> {
               },
               borderRadius: BorderRadius.circular(12),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 decoration: BoxDecoration(
                   color: isSelected
                       ? AppTheme.primaryColor.withOpacity(0.1)
@@ -1088,7 +1151,9 @@ class _MainScreenState extends State<MainScreen> {
                 child: Row(
                   children: [
                     Icon(
-                      isSelected ? Icons.inventory_2 : Icons.inventory_2_outlined,
+                      isSelected
+                          ? Icons.inventory_2
+                          : Icons.inventory_2_outlined,
                       color: isSelected
                           ? AppTheme.primaryColor
                           : AppTheme.textSecondary,
@@ -1102,7 +1167,9 @@ class _MainScreenState extends State<MainScreen> {
                           color: isSelected
                               ? AppTheme.primaryColor
                               : AppTheme.textPrimary,
-                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                          fontWeight: isSelected
+                              ? FontWeight.w600
+                              : FontWeight.normal,
                           fontSize: 14,
                         ),
                       ),
@@ -1165,8 +1232,9 @@ class _MainScreenState extends State<MainScreen> {
     required String label,
     required int subIndex,
   }) {
-    final isSelected = _selectedIndex == 1 && _warehouseSubMenuIndex == subIndex;
-    
+    final isSelected =
+        _selectedIndex == 1 && _warehouseSubMenuIndex == subIndex;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: Material(
@@ -1210,7 +1278,9 @@ class _MainScreenState extends State<MainScreen> {
                     color: isSelected
                         ? AppTheme.primaryColor
                         : AppTheme.textPrimary,
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                    fontWeight: isSelected
+                        ? FontWeight.w600
+                        : FontWeight.normal,
                     fontSize: 13,
                   ),
                 ),
@@ -1229,7 +1299,7 @@ class _MainScreenState extends State<MainScreen> {
     required int index,
   }) {
     final isSelected = _selectedIndex == index;
-    
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: Material(
@@ -1269,7 +1339,9 @@ class _MainScreenState extends State<MainScreen> {
                     color: isSelected
                         ? AppTheme.primaryColor
                         : AppTheme.textPrimary,
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                    fontWeight: isSelected
+                        ? FontWeight.w600
+                        : FontWeight.normal,
                     fontSize: 14,
                   ),
                 ),
@@ -1281,4 +1353,3 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 }
-

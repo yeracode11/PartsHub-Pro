@@ -9,6 +9,8 @@ import 'package:autohub_b2b/config/environment.dart';
 import 'package:autohub_b2b/services/api/api_client.dart';
 import 'package:autohub_b2b/services/service_locator.dart';
 import 'package:dio/dio.dart';
+import 'package:autohub_b2b/services/api/api_user_message.dart';
+import 'package:autohub_b2b/core/phone/phone_utils.dart';
 
 class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final SecureStorageService _storage = SecureStorageService();
@@ -38,9 +40,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     }
     final code = response?.statusCode;
     if (code == 401 || code == 403) {
-      return 'Неверный email или пароль';
+      return 'Неверный телефон или пароль';
     }
-    return 'Неверный email или пароль';
+    return 'Неверный телефон или пароль';
   }
 
   AuthBloc() : super(AuthInitial()) {
@@ -99,7 +101,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         emit(AuthUnauthenticated());
       }
     } catch (e) {
-      emit(AuthError(e.toString()));
+      emit(AuthError(userFacingApiMessage(e)));
     }
   }
 
@@ -110,8 +112,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       await _storage.clearAll();
 
       final dio = _authDio();
+      final phone = PhoneUtils.normalizeToE164(event.phone);
+      if (phone == null) {
+        emit(const AuthError('Введите корректный номер телефона'));
+        return;
+      }
+
       final jwtResponse = await dio.post('/api/auth/login', data: {
-        'email': event.email,
+        'phone': phone,
         'password': event.password,
       });
 
@@ -165,7 +173,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         emit(AuthError('Ошибка подключения к серверу'));
       }
     } catch (e) {
-      emit(AuthError('Произошла ошибка: $e'));
+      emit(AuthError(userFacingApiMessage(e)));
     }
   }
 
@@ -205,13 +213,15 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       await _storage.clearAll();
 
       final dio = _authDio();
+      final phone = PhoneUtils.normalizeToE164(event.phone);
+      if (phone == null) {
+        emit(const AuthError('Введите корректный номер телефона'));
+        return;
+      }
+
       final registerResponse = await dio.post('/api/auth/register', data: {
-        'email': event.email,
+        'phone': phone,
         'password': event.password,
-        'name': event.name,
-        'phone': event.phone,
-        if (event.organizationName != null) 'organizationName': event.organizationName,
-        if (event.businessType != null) 'businessType': event.businessType,
       });
 
       final registerData = registerResponse.data;
@@ -259,18 +269,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         return;
       }
       if (e.response != null) {
-        final data = e.response?.data;
-        String msg = 'Ошибка регистрации';
-        if (data is Map) {
-          final m = data['message'] ?? data['error'];
-          if (m != null) msg = m.toString();
-        }
-        emit(AuthError(msg));
+        emit(AuthError(userFacingApiMessage(e)));
       } else {
         emit(AuthError('Ошибка подключения к серверу'));
       }
     } catch (e) {
-      emit(AuthError('Произошла ошибка: $e'));
+      emit(AuthError(userFacingApiMessage(e)));
     }
   }
 
@@ -280,7 +284,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       await _storage.clearAll();
       emit(AuthUnauthenticated());
     } catch (e) {
-      emit(AuthError(e.toString()));
+      emit(AuthError(userFacingApiMessage(e)));
     }
   }
 
@@ -300,7 +304,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       // Обновляем состояние
       emit(AuthAuthenticated(event.user));
     } catch (e) {
-      emit(AuthError(e.toString()));
+      emit(AuthError(userFacingApiMessage(e)));
     }
   }
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/design/app_colors.dart';
 
 enum FuelType {
   petrol,
@@ -32,6 +33,7 @@ class Vehicle {
   final int? nextServiceMileage;
   final DateTime? nextServiceDate;
   final String? notes;
+  final String? photoUrl;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -53,6 +55,7 @@ class Vehicle {
     this.nextServiceMileage,
     this.nextServiceDate,
     this.notes,
+    this.photoUrl,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -78,17 +81,21 @@ class Vehicle {
       enginePower: json['enginePower'],
       currentMileage: json['currentMileage'] ?? 0,
       lastServiceMileage: json['lastServiceMileage'],
-      lastServiceDate: json['lastServiceDate'] != null
-          ? DateTime.parse(json['lastServiceDate'])
-          : null,
+      lastServiceDate: _parseDate(json['lastServiceDate']),
       nextServiceMileage: json['nextServiceMileage'],
-      nextServiceDate: json['nextServiceDate'] != null
-          ? DateTime.parse(json['nextServiceDate'])
-          : null,
+      nextServiceDate: _parseDate(json['nextServiceDate']),
       notes: json['notes'],
-      createdAt: DateTime.parse(json['createdAt']),
-      updatedAt: DateTime.parse(json['updatedAt']),
+      photoUrl: json['photoUrl'] as String?,
+      createdAt: DateTime.parse(json['createdAt'].toString()),
+      updatedAt: DateTime.parse(json['updatedAt'].toString()),
     );
+  }
+
+  static DateTime? _parseDate(dynamic value) {
+    if (value == null) return null;
+    final raw = value.toString();
+    if (raw.isEmpty) return null;
+    return DateTime.parse(raw.contains('T') ? raw : '${raw}T00:00:00');
   }
 
   Map<String, dynamic> toJson() {
@@ -110,6 +117,7 @@ class Vehicle {
       'nextServiceMileage': nextServiceMileage,
       'nextServiceDate': nextServiceDate?.toIso8601String(),
       'notes': notes,
+      'photoUrl': photoUrl,
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
     };
@@ -148,5 +156,29 @@ class Vehicle {
     if (nextServiceMileage == null) return Colors.grey;
     if (needsService) return Colors.red;
     return Colors.green;
+  }
+
+  int get healthScore {
+    var score = 100;
+    if (needsService) score -= 28;
+    if (nextServiceDate != null &&
+        nextServiceDate!.isBefore(DateTime.now())) {
+      score -= 22;
+    }
+    if (mileageToService > 0 && mileageToService < 3000) score -= 10;
+    if (currentMileage > 200000) score -= 8;
+    return score.clamp(0, 100);
+  }
+
+  Color get healthColor {
+    if (healthScore >= 75) return AppColors.healthGood;
+    if (healthScore >= 50) return AppColors.healthMid;
+    return AppColors.healthBad;
+  }
+
+  String get healthLabel {
+    if (healthScore >= 75) return 'Отличное состояние';
+    if (healthScore >= 50) return 'Требует внимания';
+    return 'Нужно обслуживание';
   }
 }

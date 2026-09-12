@@ -45,33 +45,38 @@ class _AdminShellState extends State<AdminShell> {
       ),
       body: Row(
         children: [
-          NavigationRail(
-            extended: MediaQuery.sizeOf(context).width >= 1100,
-            selectedIndex: _index,
-            onDestinationSelected: (i) => setState(() => _index = i),
-            labelType: NavigationRailLabelType.all,
-            destinations: const [
-              NavigationRailDestination(
-                icon: Icon(Icons.dashboard_outlined),
-                selectedIcon: Icon(Icons.dashboard),
-                label: Text('Dashboard'),
-              ),
-              NavigationRailDestination(
-                icon: Icon(Icons.group_outlined),
-                selectedIcon: Icon(Icons.group),
-                label: Text('Users'),
-              ),
-              NavigationRailDestination(
-                icon: Icon(Icons.subscriptions_outlined),
-                selectedIcon: Icon(Icons.subscriptions),
-                label: Text('Subscriptions'),
-              ),
-              NavigationRailDestination(
-                icon: Icon(Icons.receipt_long_outlined),
-                selectedIcon: Icon(Icons.receipt_long),
-                label: Text('Transactions'),
-              ),
-            ],
+          Builder(
+            builder: (context) {
+              final wide = MediaQuery.sizeOf(context).width >= 1100;
+              return NavigationRail(
+                extended: wide,
+                selectedIndex: _index,
+                onDestinationSelected: (i) => setState(() => _index = i),
+                labelType: wide ? NavigationRailLabelType.none : NavigationRailLabelType.all,
+                destinations: const [
+                  NavigationRailDestination(
+                    icon: Icon(Icons.dashboard_outlined),
+                    selectedIcon: Icon(Icons.dashboard),
+                    label: Text('Dashboard'),
+                  ),
+                  NavigationRailDestination(
+                    icon: Icon(Icons.group_outlined),
+                    selectedIcon: Icon(Icons.group),
+                    label: Text('Users'),
+                  ),
+                  NavigationRailDestination(
+                    icon: Icon(Icons.subscriptions_outlined),
+                    selectedIcon: Icon(Icons.subscriptions),
+                    label: Text('Subscriptions'),
+                  ),
+                  NavigationRailDestination(
+                    icon: Icon(Icons.receipt_long_outlined),
+                    selectedIcon: Icon(Icons.receipt_long),
+                    label: Text('Transactions'),
+                  ),
+                ],
+              );
+            },
           ),
           const VerticalDivider(width: 1),
           Expanded(

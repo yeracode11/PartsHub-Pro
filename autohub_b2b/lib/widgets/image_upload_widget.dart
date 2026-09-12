@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:image_picker/image_picker.dart';
 import '../models/item_model.dart';
+import '../services/api/api_user_message.dart';
 import '../services/image_upload_service.dart';
 
 class ImageUploadWidget extends StatefulWidget {
@@ -316,7 +317,7 @@ class _ImageUploadWidgetState extends State<ImageUploadWidget> {
       setState(() {
         _isUploading = false;
       });
-      _showErrorSnackBar('Ошибка загрузки: $e');
+      _showErrorSnackBar(userFacingApiMessage(e, prefix: 'Ошибка загрузки'));
     }
   }
 
@@ -331,7 +332,7 @@ class _ImageUploadWidgetState extends State<ImageUploadWidget> {
       widget.onImagesUpdated(_currentImages);
       _showSuccessSnackBar('Изображение удалено');
     } catch (e) {
-      _showErrorSnackBar('Ошибка удаления: $e');
+      _showErrorSnackBar(userFacingApiMessage(e, prefix: 'Ошибка удаления'));
     }
   }
 
@@ -340,7 +341,9 @@ class _ImageUploadWidgetState extends State<ImageUploadWidget> {
       await widget.imageUploadService.setMainImage(widget.item.id!, imageUrl);
       _showSuccessSnackBar('Основное изображение установлено');
     } catch (e) {
-      _showErrorSnackBar('Ошибка установки основного изображения: $e');
+      _showErrorSnackBar(
+        userFacingApiMessage(e, prefix: 'Ошибка установки основного изображения'),
+      );
     }
   }
 

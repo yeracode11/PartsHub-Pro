@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:autohub_b2b/config/environment.dart';
 import 'package:autohub_b2b/services/api/api_interceptors.dart';
 import 'package:autohub_b2b/services/api/api_exception.dart';
+import 'package:autohub_b2b/services/api/api_user_message.dart';
 
 /// Базовый класс для всех API сервисов
 class BaseApiService {
@@ -39,7 +40,7 @@ class BaseApiService {
     } on DioException catch (e) {
       throw _handleDioError(e);
     } catch (e) {
-      throw ApiException(message: 'Неизвестная ошибка: $e');
+      throw ApiException(message: 'Не удалось выполнить операцию. Попробуйте позже.');
     }
   }
 
@@ -61,7 +62,7 @@ class BaseApiService {
     } on DioException catch (e) {
       throw _handleDioError(e);
     } catch (e) {
-      throw ApiException(message: 'Неизвестная ошибка: $e');
+      throw ApiException(message: 'Не удалось выполнить операцию. Попробуйте позже.');
     }
   }
 
@@ -83,7 +84,7 @@ class BaseApiService {
     } on DioException catch (e) {
       throw _handleDioError(e);
     } catch (e) {
-      throw ApiException(message: 'Неизвестная ошибка: $e');
+      throw ApiException(message: 'Не удалось выполнить операцию. Попробуйте позже.');
     }
   }
 
@@ -105,7 +106,7 @@ class BaseApiService {
     } on DioException catch (e) {
       throw _handleDioError(e);
     } catch (e) {
-      throw ApiException(message: 'Неизвестная ошибка: $e');
+      throw ApiException(message: 'Не удалось выполнить операцию. Попробуйте позже.');
     }
   }
 
@@ -127,7 +128,7 @@ class BaseApiService {
     } on DioException catch (e) {
       throw _handleDioError(e);
     } catch (e) {
-      throw ApiException(message: 'Неизвестная ошибка: $e');
+      throw ApiException(message: 'Не удалось выполнить операцию. Попробуйте позже.');
     }
   }
 
@@ -200,21 +201,6 @@ class BaseApiService {
   }
 
   /// Извлечение сообщения об ошибке из ответа
-  String? _extractErrorMessage(dynamic data) {
-    if (data == null) return null;
-    
-    if (data is Map<String, dynamic>) {
-      // Пробуем разные варианты полей с сообщением
-      return data['message'] as String? ??
-          data['error'] as String? ??
-          data['detail'] as String?;
-    }
-    
-    if (data is String) {
-      return data;
-    }
-    
-    return null;
-  }
+  String? _extractErrorMessage(dynamic data) => extractApiErrorMessage(data);
 }
 

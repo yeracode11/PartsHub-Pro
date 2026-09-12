@@ -8,6 +8,7 @@ import 'package:autohub_b2b/services/hardware/thermal_printer_service.dart';
 import 'package:autohub_b2b/services/warehouse_service.dart';
 import 'package:autohub_b2b/widgets/image_upload_widget.dart';
 import 'package:flutter/services.dart';
+import 'package:autohub_b2b/services/api/api_user_message.dart';
 
 class ItemEditScreen extends StatefulWidget {
   final ItemModel item;
@@ -565,7 +566,7 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Ошибка сохранения: $e'),
+            content: Text(userFacingApiMessage(e, prefix: 'Ошибка сохранения')),
             backgroundColor: Colors.red,
           ),
         );

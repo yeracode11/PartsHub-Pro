@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../../core/theme.dart';
+import '../../core/design/app_colors.dart';
+import '../../core/design/app_spacing.dart';
 import '../../models/product_model.dart';
-import '../../services/orders_api_service.dart';
+import '../../models/service_model.dart';
 import '../../services/api_client.dart';
+import '../../services/orders_api_service.dart';
+import '../../services/services_api_service.dart';
+import '../../utils/formatters.dart';
+import '../../widgets/app_ui.dart';
 
 class OrdersScreen extends StatefulWidget {
   const OrdersScreen({super.key});
@@ -12,400 +17,253 @@ class OrdersScreen extends StatefulWidget {
   State<OrdersScreen> createState() => _OrdersScreenState();
 }
 
-class _OrdersScreenState extends State<OrdersScreen> {
-  late final OrdersApiService _apiService;
+class _OrdersScreenState extends State<OrdersScreen>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabs;
   List<Order> _orders = [];
-  bool _isLoading = true;
+  List<ServiceAppointment> _appointments = [];
+  bool _loading = true;
   String? _error;
 
   @override
   void initState() {
     super.initState();
-    _apiService = OrdersApiService(ApiClient());
-    _loadOrders();
+    _tabs = TabController(length: 2, vsync: this);
+    _load();
   }
 
-  Future<void> _loadOrders() async {
-    try {
-      setState(() {
-        _isLoading = true;
-        _error = null;
-      });
+  @override
+  void dispose() {
+    _tabs.dispose();
+    super.dispose();
+  }
 
-      final orders = await _apiService.getUserOrders();
-      setState(() {
-        _orders = orders;
-        _isLoading = false;
-      });
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final ordersApi = OrdersApiService(ApiClient());
+      final servicesApi = ServicesApiService(ApiClient());
+
+      final ordersFuture = ordersApi.getUserOrders();
+      final appointmentsFuture = servicesApi.getAppointments();
+
+      _orders = await ordersFuture;
+      try {
+        _appointments = await appointmentsFuture;
+      } catch (e) {
+        _appointments = [];
+      }
     } catch (e) {
-      setState(() {
-        _error = e.toString();
-        _isLoading = false;
-      });
+      _error = e.toString();
     }
+    if (mounted) setState(() => _loading = false);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Мои заказы'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => GoRouter.of(context).go('/'),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadOrders,
-          ),
-        ],
-      ),
-      body: _buildBody(),
-    );
-  }
-
-  Widget _buildBody() {
-    if (_isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(),
-      );
-    }
-
-    if (_error != null) {
-      return Center(
+      body: SafeArea(
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(
-              Icons.error_outline,
-              size: 64,
-              color: Colors.red,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Ошибка загрузки',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              _error!,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppTheme.textSecondary,
-                  ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _loadOrders,
-              child: const Text('Повторить'),
-            ),
-          ],
-        ),
-      );
-    }
-
-    if (_orders.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(
-              Icons.shopping_bag_outlined,
-              size: 64,
-              color: Colors.grey,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Нет заказов',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Ваши заказы появятся здесь',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppTheme.textSecondary,
-                  ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return RefreshIndicator(
-      onRefresh: _loadOrders,
-      child: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: _orders.length,
-        itemBuilder: (context, index) {
-          final order = _orders[index];
-          return _buildOrderCard(order);
-        },
-      ),
-    );
-  }
-
-  Widget _buildOrderCard(Order order) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      child: InkWell(
-        onTap: () {
-          context.go('/order/${order.id}');
-        },
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Заголовок заказа
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: _getStatusColor(order.status).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(
-                      _getStatusIcon(order.status),
-                      color: _getStatusColor(order.status),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          order.orderNumber,
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
-                        ),
-                        Text(
-                          _formatDate(order.createdAt),
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: AppTheme.textSecondary,
-                              ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Text(
-                    order.totalFormatted,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: AppTheme.primaryColor,
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
-                ],
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.xxl,
+                AppSpacing.lg,
+                AppSpacing.xxl,
+                AppSpacing.md,
               ),
-
-              const SizedBox(height: 16),
-
-              // Статус и платеж
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildStatusChip('Заказ', order.status, _getStatusColor(order.status)),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _buildStatusChip('Оплата', order.paymentStatus, _getPaymentStatusColor(order.paymentStatus)),
-                  ),
-                ],
+              child: const PageHeader(
+                title: 'Заказы',
+                subtitle: 'Запчасти и записи на сервис',
               ),
-
-              const SizedBox(height: 16),
-
-              // Товары в заказе
-              if (order.items.isNotEmpty) ...[
-                Text(
-                  'Товары (${order.items.length})',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        fontWeight: FontWeight.w500,
-                        color: AppTheme.textSecondary,
-                      ),
-                ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  height: 60,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: order.items.length,
-                    itemBuilder: (context, index) {
-                      final item = order.items[index];
-                      final imageUrl = item.productImage.isNotEmpty 
-                          ? ApiClient.getImageUrl(item.productImage)
-                          : '';
-                      return Container(
-                        width: 50,
-                        margin: const EdgeInsets.only(right: 8),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(8),
-                          color: Colors.grey[100],
-                        ),
-                        child: imageUrl.isNotEmpty
-                            ? ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: Image.network(
-                                  imageUrl,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) =>
-                                      const Icon(Icons.image, size: 24),
-                                ),
-                              )
-                            : const Icon(Icons.inventory_2, size: 24),
-                      );
-                    },
-                  ),
-                ),
+            ),
+            TabBar(
+              controller: _tabs,
+              labelColor: AppColors.primary,
+              unselectedLabelColor: AppColors.textSecondary,
+              indicatorColor: AppColors.primary,
+              tabs: const [
+                Tab(text: 'Запчасти'),
+                Tab(text: 'Сервис'),
               ],
-
-              // Адрес доставки
-              if (order.shippingAddress != null) ...[
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.location_on,
-                      size: 16,
-                      color: AppTheme.textSecondary,
-                    ),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        order.shippingAddress!,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: AppTheme.textSecondary,
+            ),
+            Expanded(
+              child: _loading
+                  ? const LoadingView()
+                  : _error != null
+                      ? ErrorView(message: _error!, onRetry: _load)
+                      : TabBarView(
+                          controller: _tabs,
+                          children: [
+                            _OrdersList(
+                              orders: _orders,
+                              onRefresh: _load,
                             ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ],
-          ),
+                            _AppointmentsList(
+                              appointments: _appointments,
+                              onRefresh: _load,
+                            ),
+                          ],
+                        ),
+            ),
+          ],
         ),
       ),
     );
   }
+}
 
-  Widget _buildStatusChip(String label, String status, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Column(
-        children: [
-          Text(
-            label,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppTheme.textSecondary,
-                ),
-          ),
-          Text(
-            _getStatusDisplayText(status),
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: color,
-                  fontWeight: FontWeight.w500,
-                ),
-          ),
-        ],
-      ),
-    );
-  }
+class _OrdersList extends StatelessWidget {
+  final List<Order> orders;
+  final Future<void> Function() onRefresh;
 
-  Color _getStatusColor(String status) {
-    switch (status.toLowerCase()) {
-      case 'pending':
-        return Colors.orange;
-      case 'processing':
-        return Colors.blue;
-      case 'shipped':
-        return Colors.purple;
+  const _OrdersList({required this.orders, required this.onRefresh});
+
+  Color _statusColor(String status) {
+    switch (status) {
       case 'delivered':
-        return Colors.green;
+        return AppColors.success;
       case 'cancelled':
-        return Colors.red;
-      default:
-        return Colors.grey;
-    }
-  }
-
-  Color _getPaymentStatusColor(String status) {
-    switch (status.toLowerCase()) {
-      case 'pending':
-        return Colors.orange;
-      case 'paid':
-        return Colors.green;
-      case 'failed':
-        return Colors.red;
-      case 'partially_paid':
-        return Colors.amber;
-      default:
-        return Colors.grey;
-    }
-  }
-
-  IconData _getStatusIcon(String status) {
-    switch (status.toLowerCase()) {
-      case 'pending':
-        return Icons.schedule;
+        return AppColors.error;
       case 'processing':
-        return Icons.build;
       case 'shipped':
-        return Icons.local_shipping;
-      case 'delivered':
-        return Icons.check_circle;
-      case 'cancelled':
-        return Icons.cancel;
+        return AppColors.accent;
       default:
-        return Icons.help;
+        return AppColors.warning;
     }
   }
 
-  String _getStatusDisplayText(String status) {
-    switch (status.toLowerCase()) {
+  String _statusLabel(String status) {
+    switch (status) {
       case 'pending':
         return 'Ожидает';
       case 'processing':
-        return 'В работе';
+        return 'В обработке';
       case 'shipped':
         return 'Отправлен';
       case 'delivered':
         return 'Доставлен';
       case 'cancelled':
-        return 'Отменен';
-      case 'paid':
-        return 'Оплачен';
-      case 'failed':
-        return 'Ошибка';
-      case 'partially_paid':
-        return 'Частично';
+        return 'Отменён';
       default:
         return status;
     }
   }
 
-  String _formatDate(DateTime date) {
-    final now = DateTime.now();
-    final difference = now.difference(date);
-
-    if (difference.inDays == 0) {
-      return 'Сегодня ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
-    } else if (difference.inDays == 1) {
-      return 'Вчера ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
-    } else if (difference.inDays < 7) {
-      return '${difference.inDays} дней назад';
-    } else {
-      return '${date.day.toString().padLeft(2, '0')}.${date.month.toString().padLeft(2, '0')}.${date.year}';
+  @override
+  Widget build(BuildContext context) {
+    if (orders.isEmpty) {
+      return EmptyStateView(
+        icon: Icons.receipt_long_outlined,
+        title: 'Заказов пока нет',
+        subtitle: 'Купите запчасти в каталоге',
+        actionLabel: 'В каталог',
+        onAction: () => context.go('/parts'),
+      );
     }
+
+    return RefreshIndicator(
+      onRefresh: onRefresh,
+      child: ListView.separated(
+        padding: const EdgeInsets.all(AppSpacing.xxl),
+        itemCount: orders.length,
+        separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.md),
+        itemBuilder: (context, index) {
+          final order = orders[index];
+          return AppCard(
+            onTap: () => context.push('/order/${order.id}'),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        order.orderNumber,
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                    ),
+                    StatusBadge(
+                      label: _statusLabel(order.status),
+                      color: _statusColor(order.status),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  '${order.items.length} поз. · ${Formatters.price(order.totalAmount)}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  Formatters.date(order.createdAt),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _AppointmentsList extends StatelessWidget {
+  final List<ServiceAppointment> appointments;
+  final Future<void> Function() onRefresh;
+
+  const _AppointmentsList({
+    required this.appointments,
+    required this.onRefresh,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (appointments.isEmpty) {
+      return EmptyStateView(
+        icon: Icons.event_outlined,
+        title: 'Записей нет',
+        subtitle: 'Запишитесь на обслуживание в разделе Сервисы',
+        actionLabel: 'К сервисам',
+        onAction: () => context.go('/services'),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: onRefresh,
+      child: ListView.separated(
+        padding: const EdgeInsets.all(AppSpacing.xxl),
+        itemCount: appointments.length,
+        separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.md),
+        itemBuilder: (context, index) {
+          final a = appointments[index];
+          return AppCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  a.serviceName,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  '${Formatters.date(a.appointmentDate)} · ${a.timeSlot}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                StatusBadge(
+                  label: a.status,
+                  color: AppColors.primary,
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
   }
 }

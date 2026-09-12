@@ -4,6 +4,7 @@ import 'package:autohub_b2b/blocs/dashboard/dashboard_state.dart';
 import 'package:autohub_b2b/services/api/dashboard_api_service.dart';
 import 'package:autohub_b2b/services/api/api_exception.dart';
 import 'package:autohub_b2b/models/dashboard_stats_model.dart';
+import 'package:autohub_b2b/services/api/api_user_message.dart';
 import 'package:autohub_b2b/widgets/offline_placeholder.dart';
 
 class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
@@ -36,26 +37,29 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       final recentOrders = results[2] as List;
       final popularItems = results[3] as List;
 
-      emit(DashboardLoaded(
-        stats: stats,
-        chartData: chartData,
-        recentOrders: recentOrders.cast(),
-        popularItems: popularItems.cast(),
-        currentPeriod: period,
-      ));
+      emit(
+        DashboardLoaded(
+          stats: stats,
+          chartData: chartData,
+          recentOrders: recentOrders.cast(),
+          popularItems: popularItems.cast(),
+          currentPeriod: period,
+        ),
+      );
     } catch (e) {
-      if (e is ForbiddenException) {
-        emit(const DashboardError(
-          'У вас нет доступа к этому разделу.\nВойдите под владельцем или менеджером.',
-          isForbidden: true,
-        ));
+      if (e is UnauthorizedException || e is ForbiddenException) {
+        emit(
+          const DashboardError(
+            'У вас нет доступа к этому разделу.\nВойдите под владельцем или менеджером.',
+            isForbidden: true,
+          ),
+        );
       } else if (isNetworkError(e)) {
-        emit(const DashboardError(
-          'Нет подключения к интернету',
-          isOffline: true,
-        ));
+        emit(
+          const DashboardError('Нет подключения к интернету', isOffline: true),
+        );
       } else {
-        emit(DashboardError('Ошибка загрузки данных: $e'));
+        emit(DashboardError(userFacingApiMessage(e, prefix: 'Ошибка загрузки данных')));
       }
     }
   }
@@ -88,28 +92,31 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       final recentOrders = results[2] as List;
       final popularItems = results[3] as List;
 
-      emit(DashboardLoaded(
-        stats: stats,
-        chartData: chartData,
-        recentOrders: recentOrders.cast(),
-        popularItems: popularItems.cast(),
-        currentPeriod: currentState is DashboardLoaded
-            ? currentState.currentPeriod
-            : '7d',
-      ));
+      emit(
+        DashboardLoaded(
+          stats: stats,
+          chartData: chartData,
+          recentOrders: recentOrders.cast(),
+          popularItems: popularItems.cast(),
+          currentPeriod: currentState is DashboardLoaded
+              ? currentState.currentPeriod
+              : '7d',
+        ),
+      );
     } catch (e) {
-      if (e is ForbiddenException) {
-        emit(const DashboardError(
-          'У вас нет доступа к этому разделу.\nВойдите под владельцем или менеджером.',
-          isForbidden: true,
-        ));
+      if (e is UnauthorizedException || e is ForbiddenException) {
+        emit(
+          const DashboardError(
+            'У вас нет доступа к этому разделу.\nВойдите под владельцем или менеджером.',
+            isForbidden: true,
+          ),
+        );
       } else if (isNetworkError(e)) {
-        emit(const DashboardError(
-          'Нет подключения к интернету',
-          isOffline: true,
-        ));
+        emit(
+          const DashboardError('Нет подключения к интернету', isOffline: true),
+        );
       } else {
-        emit(DashboardError('Ошибка обновления данных: $e'));
+        emit(DashboardError(userFacingApiMessage(e, prefix: 'Ошибка обновления данных')));
       }
     }
   }
@@ -126,13 +133,14 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       // Загружаем данные графика для нового периода
       final chartData = await _apiService.getSalesChart(period: event.period);
 
-      emit(currentState.copyWith(
-        chartData: chartData,
-        currentPeriod: event.period,
-      ));
+      emit(
+        currentState.copyWith(
+          chartData: chartData,
+          currentPeriod: event.period,
+        ),
+      );
     } catch (e) {
       // Не показываем ошибку, просто оставляем текущие данные
     }
   }
 }
-

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/services/hardware/esc_pos_network_receipt_service.dart';
 import 'package:autohub_b2b/services/hardware/printer_discovery_service.dart';
+import 'package:autohub_b2b/services/api/api_user_message.dart';
 import 'package:autohub_b2b/services/hardware/thermal_printer_service.dart';
 
 /// Wi‑Fi subnet scan for port 9100 + one-tap connect + ESC/POS test receipt.
@@ -67,7 +68,7 @@ class _PrinterDiscoveryScreenState extends State<PrinterDiscoveryScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _warning = 'Ошибка сканирования: $e';
+        _warning = userFacingApiMessage(e, prefix: 'Ошибка сканирования');
       });
     } finally {
       if (mounted) setState(() => _scanning = false);

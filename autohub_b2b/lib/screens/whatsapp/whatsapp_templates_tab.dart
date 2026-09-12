@@ -1,3 +1,4 @@
+import 'package:autohub_b2b/services/api/api_user_message.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -84,14 +85,11 @@ class WhatsAppTemplatesTab extends StatelessWidget {
             );
             await onReload();
           }
-        } on DioException catch (e) {
+        } catch (e) {
           if (!context.mounted) return;
-          final msg = e.response?.data is Map
-              ? e.response?.data['message']?.toString()
-              : null;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(msg ?? e.message ?? 'Ошибка удаления'),
+              content: Text(userFacingApiMessage(e, prefix: 'Ошибка удаления')),
               backgroundColor: Colors.red,
             ),
           );

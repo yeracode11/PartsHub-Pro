@@ -1,9 +1,16 @@
-import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  ConflictException,
+  BadRequestException,
+} from '@nestjs/common';
+import { normalizeKzPhone, phoneDigitsKey } from '../common/utils/phone.util';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { User } from '../users/entities/user.entity';
+import { Organization } from '../organizations/entities/organization.entity';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { OrganizationsService } from '../organizations/organizations.service';
@@ -15,22 +22,27 @@ export class AuthService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @InjectRepository(Organization)
+    private readonly organizationRepository: Repository<Organization>,
     private readonly jwtService: JwtService,
     private readonly organizationsService: OrganizationsService,
   ) {}
 
   /**
-   * Логин пользователя через email (для Firebase auth)
+   * Логин по номеру телефона организации и паролю.
    */
   async login(loginDto: LoginDto) {
-    // Ищем пользователя по email
-    const user = await this.userRepository.findOne({
-      where: { email: loginDto.email },
-      relations: ['organization'],
-    });
+    let phoneE164: string;
+    try {
+      phoneE164 = normalizeKzPhone(loginDto.phone);
+    } catch {
+      throw new UnauthorizedException('Неверный телефон или пароль');
+    }
+
+    const user = await this.findUserByOrganizationPhone(phoneE164);
 
     if (!user) {
-      throw new UnauthorizedException('Неверный email или пароль');
+      throw new UnauthorizedException('Неверный телефон или пароль');
     }
 
     if (!user.isActive) {
@@ -44,7 +56,7 @@ export class AuthService {
 
     const isPasswordValid = await bcrypt.compare(loginDto.password, user.password);
     if (!isPasswordValid) {
-      throw new UnauthorizedException('Неверный email или пароль');
+      throw new UnauthorizedException('Неверный телефон или пароль');
     }
 
     // Генерируем JWT токены
@@ -117,34 +129,41 @@ export class AuthService {
    * Регистрация нового пользователя с созданием организации
    */
   async register(registerDto: RegisterDto) {
-    // Проверяем, не существует ли уже пользователь с таким email
-    const existingUser = await this.userRepository.findOne({
-      where: { email: registerDto.email },
-    });
-
-    if (existingUser) {
-      throw new ConflictException('Пользователь с таким email уже существует');
+    let phoneE164: string;
+    try {
+      phoneE164 = normalizeKzPhone(registerDto.phone);
+    } catch (e) {
+      if (e instanceof BadRequestException) throw e;
+      throw new BadRequestException('Введите корректный номер телефона');
     }
 
-    // Создаем новую организацию
-    const organizationName = registerDto.organizationName || `${registerDto.name} - Организация`;
-    const businessType = (registerDto.businessType as BusinessType) || BusinessType.SERVICE;
+    const existingUser = await this.findUserByOrganizationPhone(phoneE164);
+    if (existingUser) {
+      throw new ConflictException('Пользователь с таким телефоном уже зарегистрирован');
+    }
+
+    const displayName =
+      registerDto.name?.trim() ||
+      `Пользователь ${phoneE164.slice(-4)}`;
+    const organizationName =
+      registerDto.organizationName?.trim() || `${displayName} — организация`;
+    const businessType =
+      (registerDto.businessType as BusinessType) || BusinessType.SERVICE;
 
     const organization = await this.organizationsService.create({
       name: organizationName,
       businessType: businessType,
-      phone: registerDto.phone,
+      phone: phoneE164,
       isActive: true,
     } as any);
 
-    // Хешируем пароль
     const hashedPassword = await bcrypt.hash(registerDto.password, 10);
+    const syntheticEmail = `${phoneDigitsKey(phoneE164)}@phone.autohub.local`;
 
-    // Создаем пользователя с ролью owner
     const user = this.userRepository.create({
-      email: registerDto.email,
+      email: syntheticEmail,
       password: hashedPassword,
-      name: registerDto.name,
+      name: displayName,
       role: UserRole.OWNER,
       organizationId: organization.id,
       isActive: true,
@@ -201,6 +220,42 @@ export class AuthService {
     }
 
     return user;
+  }
+
+  /** Пользователь-владелец (или первый активный) по телефону организации. */
+  private async findUserByOrganizationPhone(phoneE164: string): Promise<User | null> {
+    const targetKey = phoneDigitsKey(phoneE164);
+
+    const organizations = await this.organizationRepository.find({
+      where: { isActive: true },
+    });
+
+    const organization = organizations.find(
+      (org) => org.phone && phoneDigitsKey(org.phone) === targetKey,
+    );
+
+    if (!organization) {
+      return null;
+    }
+
+    const owner = await this.userRepository.findOne({
+      where: {
+        organizationId: organization.id,
+        role: UserRole.OWNER,
+        isActive: true,
+      },
+      relations: ['organization'],
+    });
+
+    if (owner) {
+      return owner;
+    }
+
+    return this.userRepository.findOne({
+      where: { organizationId: organization.id, isActive: true },
+      relations: ['organization'],
+      order: { createdAt: 'ASC' },
+    });
   }
 }
 

@@ -29,14 +29,29 @@ class LabelPdfService {
 
   static final _money = NumberFormat('#,##0.##', 'ru_RU');
 
+  /// Печать «поперёк»: меняет местами ширину и высоту страницы (Margins без изменений).
+  static PdfPageFormat transposePhysicalPage(PdfPageFormat base) {
+    return PdfPageFormat(
+      base.height,
+      base.width,
+      marginTop: base.marginTop,
+      marginBottom: base.marginBottom,
+      marginLeft: base.marginLeft,
+      marginRight: base.marginRight,
+    );
+  }
+
   /// PDF этикетки фиксированного размера. [copies] — число одинаковых страниц (для пачки этикеток).
   Future<LabelPdfResult> generateLabel(
     LabelProductData product,
     LabelSizePreset size, {
     int copies = 1,
+    bool transposePhysical = false,
   }) async {
     final n = copies.clamp(1, 99);
-    final pageFormat = size.toPdfPageFormat();
+    final baseFmt = size.toPdfPageFormat();
+    final pageFormat =
+        transposePhysical ? transposePhysicalPage(baseFmt) : baseFmt;
     final regular = pw.Font.ttf(
       await rootBundle.load('assets/fonts/Roboto-Regular.ttf'),
     );
@@ -68,6 +83,7 @@ class LabelPdfService {
             product: product,
             size: size,
             logo: logo,
+            layoutPageFormat: pageFormat,
           ),
         ),
       );
@@ -117,6 +133,7 @@ class LabelPdfService {
             product: product,
             size: size,
             logo: logo,
+            layoutPageFormat: pageFormat,
           ),
         ),
       );
@@ -131,10 +148,10 @@ class LabelPdfService {
     required LabelProductData product,
     required LabelSizePreset size,
     required pw.ImageProvider? logo,
+    required PdfPageFormat layoutPageFormat,
   }) {
-    final fmt = size.toPdfPageFormat();
-    final aw = fmt.availableWidth;
-    final ah = fmt.availableHeight;
+    final aw = layoutPageFormat.availableWidth;
+    final ah = layoutPageFormat.availableHeight;
 
     final nameSize = _nameFontPt(size);
     final metaSize = (nameSize - 1).clamp(5.0, 9.0);
