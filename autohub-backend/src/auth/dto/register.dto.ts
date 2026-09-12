@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsIn, IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class RegisterDto {
   @IsString()
@@ -11,12 +11,16 @@ export class RegisterDto {
   password: string;
 
   @IsString()
-  @IsOptional()
-  name?: string;
+  @IsNotEmpty({ message: 'Укажите имя' })
+  name: string;
 
   @IsString()
-  @IsOptional()
-  organizationName?: string;
+  @IsNotEmpty({ message: 'Укажите название организации' })
+  organizationName: string;
+
+  @IsString()
+  @IsIn(['owner', 'worker'], { message: 'Роль должна быть owner или worker' })
+  role: 'owner' | 'worker';
 
   @IsString()
   @IsOptional()

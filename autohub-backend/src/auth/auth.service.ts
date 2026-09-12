@@ -3,6 +3,7 @@ import {
   UnauthorizedException,
   ConflictException,
   BadRequestException,
+  NotFoundException,
 } from '@nestjs/common';
 import { normalizeKzPhone, phoneDigitsKey } from '../common/utils/phone.util';
 import { JwtService } from '@nestjs/jwt';
@@ -39,7 +40,7 @@ export class AuthService {
       throw new UnauthorizedException('Неверный телефон или пароль');
     }
 
-    const user = await this.findUserByOrganizationPhone(phoneE164);
+    const user = await this.findUserByPhone(phoneE164);
 
     if (!user) {
       throw new UnauthorizedException('Неверный телефон или пароль');
@@ -77,6 +78,7 @@ export class AuthService {
         id: user.id,
         email: user.email,
         name: user.name,
+        phone: user.phone,
         role: user.role,
         organizationId: user.organizationId,
         organization: user.organization,
@@ -126,7 +128,7 @@ export class AuthService {
   }
 
   /**
-   * Регистрация нового пользователя с созданием организации
+   * Регистрация: владелец создаёт организацию, мастер присоединяется к существующей.
    */
   async register(registerDto: RegisterDto) {
     let phoneE164: string;
@@ -137,25 +139,43 @@ export class AuthService {
       throw new BadRequestException('Введите корректный номер телефона');
     }
 
-    const existingUser = await this.findUserByOrganizationPhone(phoneE164);
+    const existingUser = await this.findUserByPhone(phoneE164);
     if (existingUser) {
       throw new ConflictException('Пользователь с таким телефоном уже зарегистрирован');
     }
 
-    const displayName =
-      registerDto.name?.trim() ||
-      `Пользователь ${phoneE164.slice(-4)}`;
-    const organizationName =
-      registerDto.organizationName?.trim() || `${displayName} — организация`;
-    const businessType =
-      (registerDto.businessType as BusinessType) || BusinessType.SERVICE;
+    const displayName = registerDto.name.trim();
+    const organizationName = registerDto.organizationName.trim();
+    const role =
+      registerDto.role === 'worker' ? UserRole.WORKER : UserRole.OWNER;
 
-    const organization = await this.organizationsService.create({
-      name: organizationName,
-      businessType: businessType,
-      phone: phoneE164,
-      isActive: true,
-    } as any);
+    let organization: Organization;
+
+    if (role === UserRole.OWNER) {
+      const businessType =
+        (registerDto.businessType as BusinessType) || BusinessType.SERVICE;
+
+      organization = await this.organizationsService.create({
+        name: organizationName,
+        businessType,
+        phone: phoneE164,
+        isActive: true,
+      } as any);
+    } else {
+      const found = await this.organizationRepository
+        .createQueryBuilder('org')
+        .where('LOWER(TRIM(org.name)) = LOWER(:name)', { name: organizationName })
+        .andWhere('org.isActive = :active', { active: true })
+        .getOne();
+
+      if (!found) {
+        throw new NotFoundException(
+          'Организация не найдена. Уточните название у владельца.',
+        );
+      }
+
+      organization = found;
+    }
 
     const hashedPassword = await bcrypt.hash(registerDto.password, 10);
     const syntheticEmail = `${phoneDigitsKey(phoneE164)}@phone.autohub.local`;
@@ -164,7 +184,8 @@ export class AuthService {
       email: syntheticEmail,
       password: hashedPassword,
       name: displayName,
-      role: UserRole.OWNER,
+      phone: phoneE164,
+      role,
       organizationId: organization.id,
       isActive: true,
     });
@@ -199,6 +220,7 @@ export class AuthService {
         id: userWithOrg.id,
         email: userWithOrg.email,
         name: userWithOrg.name,
+        phone: userWithOrg.phone,
         role: userWithOrg.role,
         organizationId: userWithOrg.organizationId,
         organization: userWithOrg.organization,
@@ -220,6 +242,20 @@ export class AuthService {
     }
 
     return user;
+  }
+
+  /** Пользователь по личному телефону или телефону организации (владелец). */
+  private async findUserByPhone(phoneE164: string): Promise<User | null> {
+    const byUserPhone = await this.userRepository.findOne({
+      where: { phone: phoneE164, isActive: true },
+      relations: ['organization'],
+    });
+
+    if (byUserPhone) {
+      return byUserPhone;
+    }
+
+    return this.findUserByOrganizationPhone(phoneE164);
   }
 
   /** Пользователь-владелец (или первый активный) по телефону организации. */

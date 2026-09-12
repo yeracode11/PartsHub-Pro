@@ -45,18 +45,6 @@ class AuthScreenShell extends StatelessWidget {
               mainAxisAlignment:
                   centerVertically ? MainAxisAlignment.center : MainAxisAlignment.start,
               children: [
-                if (leading != null) SizedBox(height: isDesktop ? 0 : 8),
-                if (!isDesktop && leading != null) leading!,
-                SizedBox(height: isDesktop ? 8 : 16),
-                Center(
-                  child: Image.asset(
-                    'assets/icons/auto-plus-logo.png',
-                    width: isDesktop ? 64 : 56,
-                    height: isDesktop ? 64 : 56,
-                    fit: BoxFit.contain,
-                  ),
-                ),
-                SizedBox(height: isDesktop ? 24 : 20),
                 Text(
                   title,
                   textAlign: TextAlign.center,
@@ -139,17 +127,17 @@ class AuthScreenShell extends StatelessWidget {
                   child: SingleChildScrollView(
                     padding: EdgeInsets.fromLTRB(
                       hPad,
-                      wideForm ? 16 : (isDesktop ? 24 : 8),
+                      leading != null ? 48 : (wideForm ? 16 : (isDesktop ? 24 : 16)),
                       hPad,
                       24,
                     ),
                     child: panel,
                   ),
                 ),
-                if (isDesktop && leading != null)
+                if (leading != null)
                   Positioned(
-                    top: 4,
-                    left: 4,
+                    top: 0,
+                    left: 0,
                     child: leading!,
                   ),
               ],

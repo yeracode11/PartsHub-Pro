@@ -10,6 +10,7 @@ import 'package:autohub_b2b/widgets/auth/auth_design.dart';
 import 'package:autohub_b2b/widgets/auth/auth_form_field.dart';
 import 'package:autohub_b2b/widgets/auth/auth_phone_field.dart';
 import 'package:autohub_b2b/widgets/auth/auth_primary_button.dart';
+import 'package:autohub_b2b/widgets/auth/auth_role_selector.dart';
 import 'package:autohub_b2b/widgets/auth/auth_screen_shell.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -21,12 +22,15 @@ class RegisterScreen extends StatefulWidget {
 
 class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  final _organizationController = TextEditingController();
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   bool _agreedToTerms = false;
+  String _role = AuthRoleSelector.owner;
   String? _errorMessage;
 
   @override
@@ -43,8 +47,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
         }
       },
       builder: (context, state) {
+        final isWorker = _role == AuthRoleSelector.worker;
+
         return AuthScreenShell(
-          subtitle: 'Регистрация по номеру телефона',
+          wideForm: true,
+          subtitle: 'Создайте аккаунт Auto+ Pro',
           errorMessage: _errorMessage,
           leading: AuthIconButton(
             icon: Icons.arrow_back,
@@ -56,6 +63,51 @@ class _RegisterScreenState extends State<RegisterScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                AuthRoleSelector(
+                  value: _role,
+                  onChanged: (role) => setState(() => _role = role),
+                ),
+                const SizedBox(height: 16),
+                AuthFormField(
+                  controller: _nameController,
+                  label: 'Имя',
+                  icon: Icons.person_outline,
+                  textInputAction: TextInputAction.next,
+                  textCapitalization: TextCapitalization.words,
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Введите имя';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                AuthFormField(
+                  controller: _organizationController,
+                  label: isWorker ? 'Название организации' : 'Название вашей организации',
+                  icon: Icons.business_outlined,
+                  textInputAction: TextInputAction.next,
+                  textCapitalization: TextCapitalization.words,
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Введите название организации';
+                    }
+                    return null;
+                  },
+                ),
+                if (isWorker)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 6),
+                    child: Text(
+                      'Укажите название, которое дал владелец',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AuthDesign.textMuted,
+                        height: 1.35,
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: 16),
                 AuthPhoneField(
                   controller: _phoneController,
                   textInputAction: TextInputAction.next,
@@ -156,12 +208,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
           AuthSignUpRequested(
             phone: _phoneController.text.trim(),
             password: _passwordController.text,
+            name: _nameController.text.trim(),
+            organizationName: _organizationController.text.trim(),
+            role: _role,
           ),
         );
   }
 
   @override
   void dispose() {
+    _nameController.dispose();
+    _organizationController.dispose();
     _phoneController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();

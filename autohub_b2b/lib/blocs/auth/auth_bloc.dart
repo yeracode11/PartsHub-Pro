@@ -222,9 +222,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       final registerResponse = await dio.post('/api/auth/register', data: {
         'phone': phone,
         'password': event.password,
+        'name': event.name.trim(),
+        'organizationName': event.organizationName.trim(),
+        'role': event.role,
       });
 
       final registerData = registerResponse.data;
+      final userPhone = registerData['user']?['phone'];
       final organizationPhone = registerData['user']?['organization']?['phone'];
 
       // Создаем UserModel из данных бэкенда
@@ -247,7 +251,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         'createdAt': userModel.createdAt.toIso8601String(),
         'organizationId': registerData['user']['organizationId'],
         'organization': registerData['user']['organization'],
-        if (organizationPhone != null) 'phone': organizationPhone,
+        if (userPhone != null)
+          'phone': userPhone
+        else if (organizationPhone != null)
+          'phone': organizationPhone,
       });
       
       await _storage.saveAuthTokens(

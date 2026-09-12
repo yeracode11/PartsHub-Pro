@@ -15,6 +15,7 @@ class AuthFormField extends StatelessWidget {
     this.textInputAction,
     this.onFieldSubmitted,
     this.inputFormatters,
+    this.textCapitalization = TextCapitalization.none,
   });
 
   final TextEditingController controller;
@@ -27,12 +28,14 @@ class AuthFormField extends StatelessWidget {
   final TextInputAction? textInputAction;
   final void Function(String)? onFieldSubmitted;
   final List<TextInputFormatter>? inputFormatters;
+  final TextCapitalization textCapitalization;
 
   @override
   Widget build(BuildContext context) {
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
+      textCapitalization: textCapitalization,
       obscureText: obscureText,
       validator: validator,
       textInputAction: textInputAction,
