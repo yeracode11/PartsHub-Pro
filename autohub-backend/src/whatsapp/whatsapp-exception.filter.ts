@@ -22,7 +22,12 @@ export class WhatsAppExceptionFilter implements ExceptionFilter {
     const request = ctx.getRequest();
     const url = (request?.originalUrl || request?.url || request?.path || '').toString();
 
-    // Только для WhatsApp API
+    // Meta Cloud API — ответы без обёртки Green API
+    if (url.includes('/webhooks/whatsapp')) {
+      throw exception;
+    }
+
+    // Только для WhatsApp API (Green API / JWT)
     if (!url.includes('whatsapp')) {
       throw exception;
     }

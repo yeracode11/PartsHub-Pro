@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import {
   MessageHistory,
+  MessageDirection,
   MessageStatus,
 } from './entities/message-history.entity';
 
@@ -19,6 +20,56 @@ export class MessageHistoryService {
   async create(data: Partial<MessageHistory>) {
     const history = this.historyRepository.create(data);
     return await this.historyRepository.save(history);
+  }
+
+  async findByExternalMessageId(
+    externalMessageId: string,
+  ): Promise<MessageHistory | null> {
+    if (!externalMessageId) return null;
+    return this.historyRepository.findOne({
+      where: { externalMessageId },
+    });
+  }
+
+  async createInbound(data: {
+    organizationId: string;
+    whatsappConnectionId: string;
+    phone: string;
+    externalMessageId: string;
+    messageType: string;
+    message: string;
+    metadata?: Record<string, unknown>;
+  }): Promise<MessageHistory | null> {
+    const existing = await this.findByExternalMessageId(data.externalMessageId);
+    if (existing) {
+      return existing;
+    }
+
+    try {
+      return await this.create({
+        organizationId: data.organizationId,
+        whatsappConnectionId: data.whatsappConnectionId,
+        phone: data.phone,
+        externalMessageId: data.externalMessageId,
+        messageType: data.messageType,
+        message: data.message,
+        metadata: data.metadata ?? null,
+        direction: MessageDirection.INBOUND,
+        status: MessageStatus.SENT,
+        sentBy: null,
+        isBulk: false,
+      });
+    } catch (error: unknown) {
+      const code =
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        (error as { code?: string }).code;
+      if (code === '23505') {
+        return this.findByExternalMessageId(data.externalMessageId);
+      }
+      throw error;
+    }
   }
 
   /**
