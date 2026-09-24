@@ -35,7 +35,10 @@ export interface ParsedMetaInboundEvent {
   phoneNumberId: string;
   wabaId?: string;
   messageId: string;
+  /** messages[].from — WhatsApp ID отправителя. */
   from: string;
+  /** Тот же wa_id для исходящего Graph API `to` (из from / contacts[].wa_id). */
+  recipientWaId: string;
   type: string;
   textBody?: string;
 }

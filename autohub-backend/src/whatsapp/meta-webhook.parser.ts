@@ -24,11 +24,14 @@ export function parseMetaInboundEvents(
       for (const msg of value?.messages ?? []) {
         if (!msg.id || !msg.from) continue;
 
+        const from = msg.from.trim();
+
         events.push({
           phoneNumberId,
           wabaId,
           messageId: msg.id,
-          from: msg.from,
+          from,
+          recipientWaId: from,
           type: msg.type,
           textBody: msg.type === 'text' ? msg.text?.body : undefined,
         });

@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { MetaWhatsAppService } from './meta-whatsapp.service';
 import { MetaWhatsAppConfig } from './meta-whatsapp.config';
+import { WhatsAppMetaRecipientCacheService } from './whatsapp-meta-recipient-cache.service';
 
 jest.mock('axios');
 const mockedAxios = axios as jest.Mocked<typeof axios>;
@@ -11,16 +12,25 @@ describe('MetaWhatsAppService', () => {
       `https://graph.facebook.com/v26.0/${phoneNumberId}/messages`,
   } as MetaWhatsAppConfig;
 
+  const recipientCache = {
+    resolveGraphApiTo: jest.fn(),
+    rememberFromMetaResponse: jest.fn(),
+  } as unknown as WhatsAppMetaRecipientCacheService;
+
   let service: MetaWhatsAppService;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new MetaWhatsAppService(config);
+    (recipientCache.resolveGraphApiTo as jest.Mock).mockResolvedValue(null);
+    service = new MetaWhatsAppService(config, recipientCache);
   });
 
-  it('sendTextMessage posts to Graph API with bearer token', async () => {
+  it('sendTextMessage posts wa_id digits when cache miss', async () => {
     mockedAxios.post.mockResolvedValue({
-      data: { messages: [{ id: 'wamid.out' }] },
+      data: {
+        messages: [{ id: 'wamid.out' }],
+        contacts: [{ input: '787776442004', wa_id: '77776442004' }],
+      },
     });
 
     await service.sendTextMessage(
@@ -45,6 +55,33 @@ describe('MetaWhatsAppService', () => {
         }),
         timeout: 30_000,
       }),
+    );
+
+    expect(recipientCache.rememberFromMetaResponse).toHaveBeenCalledWith(
+      '77776442004',
+      '787776442004',
+    );
+  });
+
+  it('uses cached Graph API input from Meta when present', async () => {
+    (recipientCache.resolveGraphApiTo as jest.Mock).mockResolvedValue(
+      '787776442004',
+    );
+    mockedAxios.post.mockResolvedValue({
+      data: { messages: [{ id: 'wamid.out' }] },
+    });
+
+    await service.sendTextMessage(
+      '1398564366663975',
+      '77776442004',
+      'echo',
+      'token',
+    );
+
+    expect(mockedAxios.post).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ to: '787776442004' }),
+      expect.any(Object),
     );
   });
 });

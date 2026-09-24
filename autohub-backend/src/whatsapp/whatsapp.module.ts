@@ -12,6 +12,8 @@ import { MessageHistoryService } from './message-history.service';
 import { MessageTemplate } from './entities/message-template.entity';
 import { MessageHistory } from './entities/message-history.entity';
 import { WhatsAppConnection } from './entities/whatsapp-connection.entity';
+import { WhatsAppMetaRecipientCache } from './entities/whatsapp-meta-recipient-cache.entity';
+import { WhatsAppMetaRecipientCacheService } from './whatsapp-meta-recipient-cache.service';
 import { VehiclesModule } from '../vehicles/vehicles.module';
 import { MetaWhatsAppConfig } from './meta-whatsapp.config';
 import { MetaWhatsAppService } from './meta-whatsapp.service';
@@ -25,6 +27,7 @@ import { WhatsAppInboundService } from './whatsapp-inbound.service';
       MessageTemplate,
       MessageHistory,
       WhatsAppConnection,
+      WhatsAppMetaRecipientCache,
     ]),
     VehiclesModule,
   ],
@@ -45,6 +48,7 @@ import { WhatsAppInboundService } from './whatsapp-inbound.service';
     WhatsAppConnectionService,
     WhatsAppTenantResolver,
     WhatsAppInboundService,
+    WhatsAppMetaRecipientCacheService,
   ],
   exports: [
     WhatsAppService,

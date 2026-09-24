@@ -31,6 +31,7 @@ describe('parseMetaInboundEvents', () => {
     expect(events[0].phoneNumberId).toBe('1398564366663975');
     expect(events[0].messageId).toBe('wamid.test123');
     expect(events[0].textBody).toBe('камри 70 колодки');
+    expect(events[0].recipientWaId).toBe('77776442004');
   });
 
   it('returns empty for empty payload', () => {

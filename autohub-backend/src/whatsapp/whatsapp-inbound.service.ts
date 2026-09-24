@@ -52,6 +52,7 @@ export class WhatsAppInboundService {
     wabaId?: string;
     messageId: string;
     from: string;
+    recipientWaId: string;
     type: string;
     textBody?: string;
   }): Promise<void> {
@@ -122,16 +123,24 @@ export class WhatsAppInboundService {
 
     this.logger.log(`META MESSAGE SAVED messageId=${event.messageId}`);
 
-    await this.sendEcho(event.phoneNumberId, event.from, text, event.messageId);
+    await this.sendEcho(
+      tenant.connection,
+      event.phoneNumberId,
+      event.recipientWaId,
+      text,
+      event.messageId,
+    );
   }
 
   private async sendEcho(
+    connection: { accessToken: string },
     phoneNumberId: string,
-    recipientPhone: string,
+    recipientWaId: string,
     inboundText: string,
     inboundMessageId: string,
   ): Promise<void> {
-    const accessToken = this.metaConfig.fallbackAccessToken;
+    const accessToken =
+      connection.accessToken?.trim() || this.metaConfig.fallbackAccessToken;
     if (!accessToken) {
       this.logger.error(
         `META ECHO skipped: access token not configured inboundMessageId=${inboundMessageId}`,
@@ -144,7 +153,7 @@ export class WhatsAppInboundService {
     try {
       const result = await this.metaWhatsAppService.sendTextMessage(
         phoneNumberId,
-        recipientPhone,
+        recipientWaId,
         echoBody,
         accessToken,
       );

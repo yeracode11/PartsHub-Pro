@@ -107,7 +107,7 @@ describe('WhatsAppInboundService', () => {
     historyService.findByExternalMessageId.mockResolvedValue(null);
     tenantResolver.resolveByPhoneNumberId.mockResolvedValue({
       organizationId: 'org-1',
-      connection: { id: 'conn-1' },
+      connection: { id: 'conn-1', accessToken: 'conn-token' },
     });
     historyService.createInbound.mockResolvedValue({
       record: { id: 10 },
@@ -136,6 +136,28 @@ describe('WhatsAppInboundService', () => {
       '1398564366663975',
       '77776442004',
       'Получил: камри 70 передние колодки есть?',
+      'conn-token',
+    );
+  });
+
+  it('falls back to env access token when connection token empty', async () => {
+    historyService.findByExternalMessageId.mockResolvedValue(null);
+    tenantResolver.resolveByPhoneNumberId.mockResolvedValue({
+      organizationId: 'org-1',
+      connection: { id: 'conn-1', accessToken: '  ' },
+    });
+    historyService.createInbound.mockResolvedValue({
+      record: { id: 10 },
+      created: true,
+    });
+    metaWhatsAppService.sendTextMessage.mockResolvedValue({ messageId: 'x' });
+
+    await service.handleWebhookPayload(textPayload);
+
+    expect(metaWhatsAppService.sendTextMessage).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(String),
+      expect.any(String),
       'server-token',
     );
   });
@@ -144,7 +166,7 @@ describe('WhatsAppInboundService', () => {
     historyService.findByExternalMessageId.mockResolvedValue(null);
     tenantResolver.resolveByPhoneNumberId.mockResolvedValue({
       organizationId: 'org-1',
-      connection: { id: 'conn-1' },
+      connection: { id: 'conn-1', accessToken: 'conn-token' },
     });
     historyService.createInbound.mockResolvedValue({
       record: { id: 10 },
@@ -160,7 +182,7 @@ describe('WhatsAppInboundService', () => {
     historyService.findByExternalMessageId.mockResolvedValue(null);
     tenantResolver.resolveByPhoneNumberId.mockResolvedValue({
       organizationId: 'org-1',
-      connection: { id: 'conn-1' },
+      connection: { id: 'conn-1', accessToken: 'conn-token' },
     });
     historyService.createInbound.mockResolvedValue({
       record: { id: 11 },
