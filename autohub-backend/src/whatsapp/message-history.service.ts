@@ -39,14 +39,14 @@ export class MessageHistoryService {
     messageType: string;
     message: string;
     metadata?: Record<string, unknown>;
-  }): Promise<MessageHistory | null> {
+  }): Promise<{ record: MessageHistory; created: boolean } | null> {
     const existing = await this.findByExternalMessageId(data.externalMessageId);
     if (existing) {
-      return existing;
+      return { record: existing, created: false };
     }
 
     try {
-      return await this.create({
+      const record = await this.create({
         organizationId: data.organizationId,
         whatsappConnectionId: data.whatsappConnectionId,
         phone: data.phone,
@@ -59,6 +59,7 @@ export class MessageHistoryService {
         sentBy: null,
         isBulk: false,
       });
+      return { record, created: true };
     } catch (error: unknown) {
       const code =
         typeof error === 'object' &&
@@ -66,7 +67,12 @@ export class MessageHistoryService {
         'code' in error &&
         (error as { code?: string }).code;
       if (code === '23505') {
-        return this.findByExternalMessageId(data.externalMessageId);
+        const duplicate = await this.findByExternalMessageId(
+          data.externalMessageId,
+        );
+        if (duplicate) {
+          return { record: duplicate, created: false };
+        }
       }
       throw error;
     }

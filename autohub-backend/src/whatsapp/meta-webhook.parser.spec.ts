@@ -32,4 +32,30 @@ describe('parseMetaInboundEvents', () => {
     expect(events[0].messageId).toBe('wamid.test123');
     expect(events[0].textBody).toBe('камри 70 колодки');
   });
+
+  it('returns empty for empty payload', () => {
+    expect(parseMetaInboundEvents({})).toEqual([]);
+    expect(parseMetaInboundEvents({ object: 'other' })).toEqual([]);
+  });
+
+  it('returns empty for status-only webhook', () => {
+    const events = parseMetaInboundEvents({
+      object: 'whatsapp_business_account',
+      entry: [
+        {
+          changes: [
+            {
+              field: 'messages',
+              value: {
+                metadata: { phone_number_id: '1398564366663975' },
+                statuses: [{ id: 'wamid.status', status: 'read' }],
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(events).toEqual([]);
+  });
 });

@@ -1,9 +1,6 @@
-/** Legacy helper для /api/whatsapp/webhook (prefer MetaWhatsAppConfig). */
+import { META_WEBHOOK_VERIFY_ENV_KEY } from './meta-whatsapp.config';
+
+/** Legacy helper для /api/whatsapp/webhook — тот же канонический env. */
 export function getWhatsAppVerifyToken(): string {
-  return (
-    process.env.META_WHATSAPP_VERIFY_TOKEN?.trim() ||
-    process.env.WHATSAPP_VERIFY_TOKEN?.trim() ||
-    process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN?.trim() ||
-    ''
-  );
+  return process.env[META_WEBHOOK_VERIFY_ENV_KEY]?.trim() || '';
 }

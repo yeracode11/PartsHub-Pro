@@ -31,7 +31,7 @@ export class WhatsAppWebhookController {
 
     if (!expected) {
       this.logger.error(
-        'WHATSAPP_VERIFY_TOKEN / WHATSAPP_WEBHOOK_VERIFY_TOKEN не задан в .env',
+        'WHATSAPP_WEBHOOK_VERIFY_TOKEN не задан в .env',
       );
       throw new ForbiddenException('Verify token not configured');
     }

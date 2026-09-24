@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
+export const META_WEBHOOK_VERIFY_ENV_KEY = 'WHATSAPP_WEBHOOK_VERIFY_TOKEN';
+
 @Injectable()
 export class MetaWhatsAppConfig {
   constructor(private readonly configService: ConfigService) {}
@@ -19,15 +21,25 @@ export class MetaWhatsAppConfig {
     ).replace(/\/$/, '');
   }
 
-  /** Verify token для Meta webhook (GET hub.verify_token). */
+  /**
+   * Канонический verify token — только WHATSAPP_WEBHOOK_VERIFY_TOKEN.
+   * (META_WHATSAPP_VERIFY_TOKEN / WHATSAPP_VERIFY_TOKEN не используются для verify.)
+   */
   get verifyToken(): string {
-    const meta = this.configService.get<string>('META_WHATSAPP_VERIFY_TOKEN');
-    if (meta?.trim()) return meta.trim();
+    return this.resolveVerifyToken().value;
+  }
 
-    const legacy =
-      this.configService.get<string>('WHATSAPP_VERIFY_TOKEN') ||
-      this.configService.get<string>('WHATSAPP_WEBHOOK_VERIFY_TOKEN');
-    return legacy?.trim() || '';
+  resolveVerifyToken(): {
+    value: string;
+    envKey: typeof META_WEBHOOK_VERIFY_ENV_KEY | null;
+  } {
+    const webhook = this.configService
+      .get<string>(META_WEBHOOK_VERIFY_ENV_KEY)
+      ?.trim();
+    if (webhook) {
+      return { value: webhook, envKey: META_WEBHOOK_VERIFY_ENV_KEY };
+    }
+    return { value: '', envKey: null };
   }
 
   /** Fallback для dev/single-tenant, пока нет строки в whatsapp_connections. */

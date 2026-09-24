@@ -7,7 +7,11 @@ describe('WhatsAppMetaWebhookController', () => {
   let controller: WhatsAppMetaWebhookController;
   const inboundService = { handleWebhookPayload: jest.fn() };
   const metaConfig = {
-    verifyToken: 'valid-token',
+    verifyToken: 'VALID',
+    resolveVerifyToken: () => ({
+      value: 'VALID',
+      envKey: 'WHATSAPP_WEBHOOK_VERIFY_TOKEN' as const,
+    }),
   };
 
   beforeEach(async () => {
@@ -23,42 +27,78 @@ describe('WhatsAppMetaWebhookController', () => {
     controller = module.get(WhatsAppMetaWebhookController);
   });
 
-  it('GET verify returns challenge when token matches', () => {
+  function mockRes() {
     const send = jest.fn();
-    const status = jest.fn().mockReturnValue({ type: jest.fn().mockReturnValue({ send }) });
-    const res = { status, sendStatus: jest.fn() };
+    const status = jest.fn().mockReturnValue({
+      type: jest.fn().mockReturnValue({ send }),
+    });
+    return {
+      res: { status, sendStatus: jest.fn() } as never,
+      send,
+      status,
+    };
+  }
+
+  it('GET /webhooks/whatsapp returns 200 and challenge when token valid', () => {
+    const { res, send, status } = mockRes();
 
     controller.verifyWebhook(
-      'subscribe',
-      'valid-token',
-      'challenge-xyz',
-      res as never,
+      {
+        query: {
+          'hub.mode': 'subscribe',
+          'hub.verify_token': 'VALID',
+          'hub.challenge': '123456',
+        },
+        originalUrl:
+          '/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=VALID&hub.challenge=123456',
+      } as never,
+      res,
     );
 
     expect(status).toHaveBeenCalledWith(200);
-    expect(send).toHaveBeenCalledWith('challenge-xyz');
+    expect(send).toHaveBeenCalledWith('123456');
   });
 
-  it('GET verify returns 403 when token invalid', () => {
-    const res = {
-      status: jest.fn(),
-      sendStatus: jest.fn().mockReturnValue(undefined),
-    };
+  it('GET returns 403 when no hub params (browser visit)', () => {
+    const sendStatus = jest.fn();
+    const res = { status: jest.fn(), sendStatus } as never;
 
-    controller.verifyWebhook('subscribe', 'bad', 'c', res as never);
+    controller.verifyWebhook(
+      { query: {}, originalUrl: '/webhooks/whatsapp' } as never,
+      res,
+    );
 
-    expect(res.sendStatus).toHaveBeenCalledWith(403);
+    expect(sendStatus).toHaveBeenCalledWith(403);
+  });
+
+  it('GET returns 403 when verify token invalid', () => {
+    const sendStatus = jest.fn();
+    const res = { status: jest.fn(), sendStatus } as never;
+
+    controller.verifyWebhook(
+      {
+        query: {
+          'hub.mode': 'subscribe',
+          'hub.verify_token': 'WRONG',
+          'hub.challenge': '123456',
+        },
+      } as never,
+      res,
+    );
+
+    expect(sendStatus).toHaveBeenCalledWith(403);
   });
 
   it('POST delegates to inbound service and returns ok', async () => {
     inboundService.handleWebhookPayload.mockResolvedValue(undefined);
 
-    const result = await controller.receiveWebhook({
+    const payload = {
       object: 'whatsapp_business_account',
       entry: [],
-    });
+    };
+    const result = await controller.receiveWebhook(payload);
 
-    expect(inboundService.handleWebhookPayload).toHaveBeenCalled();
+    expect(inboundService.handleWebhookPayload).toHaveBeenCalledWith(payload);
     expect(result).toEqual({ status: 'ok' });
   });
 });
