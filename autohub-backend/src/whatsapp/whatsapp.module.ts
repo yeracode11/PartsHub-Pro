@@ -20,6 +20,8 @@ import { MetaWhatsAppService } from './meta-whatsapp.service';
 import { WhatsAppConnectionService } from './whatsapp-connection.service';
 import { WhatsAppTenantResolver } from './whatsapp-tenant-resolver.service';
 import { WhatsAppInboundService } from './whatsapp-inbound.service';
+import { QwenModule } from '../ai/qwen.module';
+import { InventoryModule } from '../inventory/inventory.module';
 
 @Module({
   imports: [
@@ -30,6 +32,8 @@ import { WhatsAppInboundService } from './whatsapp-inbound.service';
       WhatsAppMetaRecipientCache,
     ]),
     VehiclesModule,
+    QwenModule,
+    InventoryModule,
   ],
   controllers: [
     WhatsAppController,
