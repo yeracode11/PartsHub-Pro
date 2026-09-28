@@ -11,9 +11,14 @@ abstract final class PhoneUtils {
   static String? normalizeToE164(
     String input, {
     AuthPhoneRegion region = AuthPhoneRegion.kz,
+    bool nationalDigitsOnly = false,
   }) {
     final digits = input.replaceAll(RegExp(r'[^0-9]'), '');
     if (digits.isEmpty) return null;
+
+    if (nationalDigitsOnly) {
+      return normalizeNationalToE164(input, region: region);
+    }
 
     if (region == AuthPhoneRegion.us ||
         (digits.startsWith('1') && digits.length == 11)) {
@@ -21,6 +26,31 @@ abstract final class PhoneUtils {
     }
 
     return _normalizeKz(digits);
+  }
+
+  /// Код страны в селекторе, в поле — только национальные 10 цифр.
+  static String? normalizeNationalToE164(
+    String input, {
+    required AuthPhoneRegion region,
+  }) {
+    var digits = input.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.isEmpty) return null;
+
+    if (region == AuthPhoneRegion.us) {
+      if (digits.length == 11 && digits.startsWith('1')) {
+        digits = digits.substring(1);
+      }
+      if (digits.length != 10) return null;
+      return '+1$digits';
+    }
+
+    if (digits.length == 11 && digits.startsWith('8')) {
+      digits = digits.substring(1);
+    } else if (digits.length == 11 && digits.startsWith('7')) {
+      digits = digits.substring(1);
+    }
+    if (digits.length != 10) return null;
+    return '+7$digits';
   }
 
   static String? _normalizeUs(String digits, AuthPhoneRegion region) {
@@ -60,8 +90,17 @@ abstract final class PhoneUtils {
     return '+$normalized';
   }
 
-  static bool isValidPhone(String input, {AuthPhoneRegion region = AuthPhoneRegion.kz}) {
-    return normalizeToE164(input, region: region) != null;
+  static bool isValidPhone(
+    String input, {
+    AuthPhoneRegion region = AuthPhoneRegion.kz,
+    bool nationalDigitsOnly = false,
+  }) {
+    return normalizeToE164(
+          input,
+          region: region,
+          nationalDigitsOnly: nationalDigitsOnly,
+        ) !=
+        null;
   }
 
   static AuthPhoneRegion regionFromE164(String? e164) {
@@ -69,6 +108,22 @@ abstract final class PhoneUtils {
       return AuthPhoneRegion.us;
     }
     return AuthPhoneRegion.kz;
+  }
+
+  /// Национальная маска для профиля: код страны отдельно в селекторе.
+  static String formatNationalForInput(String e164) {
+    var digits = e164.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.isEmpty) return e164;
+
+    if (e164.startsWith('+1') || (digits.startsWith('1') && digits.length == 11)) {
+      final national = digits.length == 11 ? digits.substring(1) : digits;
+      return NationalUsPhoneInputFormatter.maskDigits(national);
+    }
+
+    if (digits.length == 11 && (digits.startsWith('7') || digits.startsWith('8'))) {
+      digits = digits.substring(1);
+    }
+    return NationalKzPhoneInputFormatter.maskDigits(digits);
   }
 
   /// Маска для поля ввода из E.164 (+77771234567 / +15551234567).
@@ -96,16 +151,108 @@ abstract final class PhoneUtils {
   static String? validationMessage(
     String? value, {
     AuthPhoneRegion region = AuthPhoneRegion.kz,
+    bool nationalDigitsOnly = false,
   }) {
     if (value == null || value.trim().isEmpty) {
       return 'Введите номер телефона';
     }
-    if (!isValidPhone(value, region: region)) {
+    if (!isValidPhone(
+      value,
+      region: region,
+      nationalDigitsOnly: nationalDigitsOnly,
+    )) {
+      if (nationalDigitsOnly) {
+        return region == AuthPhoneRegion.us
+            ? '10 цифр, например (555) 123-4567'
+            : '10 цифр, например (777) 123-45-67';
+      }
       return region == AuthPhoneRegion.us
           ? 'Формат: +1 (555) 123-4567'
           : 'Формат: +7 (777) 123-45-67';
     }
     return null;
+  }
+}
+
+/// Национальная часть KZ: (777) 123-45-67
+class NationalKzPhoneInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final digits = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.isEmpty) {
+      return const TextEditingValue();
+    }
+
+    final limited =
+        digits.length > 10 ? digits.substring(0, 10) : digits;
+    final masked = maskDigits(limited);
+    return TextEditingValue(
+      text: masked,
+      selection: TextSelection.collapsed(offset: masked.length),
+    );
+  }
+
+  static String maskDigits(String digits) {
+    final buffer = StringBuffer();
+    if (digits.isNotEmpty) {
+      final areaEnd = digits.length > 3 ? 3 : digits.length;
+      buffer.write('(${digits.substring(0, areaEnd)}');
+      if (digits.length >= 3) buffer.write(')');
+    }
+    if (digits.length > 3) {
+      final firstEnd = digits.length > 6 ? 6 : digits.length;
+      buffer.write(' ${digits.substring(3, firstEnd)}');
+    }
+    if (digits.length > 6) {
+      final secondEnd = digits.length > 8 ? 8 : digits.length;
+      buffer.write('-${digits.substring(6, secondEnd)}');
+    }
+    if (digits.length > 8) {
+      buffer.write('-${digits.substring(8, digits.length > 10 ? 10 : digits.length)}');
+    }
+    return buffer.toString();
+  }
+}
+
+/// Национальная часть US: (555) 123-4567
+class NationalUsPhoneInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final digits = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.isEmpty) {
+      return const TextEditingValue();
+    }
+
+    final limited =
+        digits.length > 10 ? digits.substring(0, 10) : digits;
+    final masked = maskDigits(limited);
+    return TextEditingValue(
+      text: masked,
+      selection: TextSelection.collapsed(offset: masked.length),
+    );
+  }
+
+  static String maskDigits(String digits) {
+    final buffer = StringBuffer();
+    if (digits.isNotEmpty) {
+      final areaEnd = digits.length > 3 ? 3 : digits.length;
+      buffer.write('(${digits.substring(0, areaEnd)}');
+      if (digits.length >= 3) buffer.write(')');
+    }
+    if (digits.length > 3) {
+      final firstEnd = digits.length > 6 ? 6 : digits.length;
+      buffer.write(' ${digits.substring(3, firstEnd)}');
+    }
+    if (digits.length > 6) {
+      buffer.write('-${digits.substring(6, digits.length > 10 ? 10 : digits.length)}');
+    }
+    return buffer.toString();
   }
 }
 

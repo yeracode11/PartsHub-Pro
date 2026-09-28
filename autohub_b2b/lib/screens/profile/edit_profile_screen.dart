@@ -51,7 +51,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     setState(() {
       if (phone != null && phone.isNotEmpty) {
         _phoneRegion = PhoneUtils.regionFromE164(phone);
-        _phoneController.text = PhoneUtils.formatForInput(phone);
+        _phoneController.text = PhoneUtils.formatNationalForInput(phone);
       }
       _phoneReady = true;
     });
@@ -79,6 +79,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       final phoneE164 = PhoneUtils.normalizeToE164(
         _phoneController.text.trim(),
         region: region,
+        nationalDigitsOnly: true,
       );
       if (phoneE164 == null) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -135,30 +136,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
       appBar: AppBar(
-        title: const Text('Редактировать профиль'),
-        elevation: 0,
-        actions: [
-          if (_isLoading)
-            const Padding(
-              padding: EdgeInsets.all(16.0),
-              child: SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            )
-          else
-            TextButton(
-              onPressed: _saveProfile,
-              child: const Text(
-                'Сохранить',
-                style: TextStyle(color: Colors.white),
-              ),
+        title: const Text('Редактирование'),
+        titleTextStyle: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: AppTheme.textPrimary,
             ),
-        ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 96),
         child: Form(
           key: _formKey,
           child: Column(
@@ -211,6 +196,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   key: _phoneFieldKey,
                   controller: _phoneController,
                   initialRegion: _phoneRegion,
+                  variant: PhoneFieldVariant.profile,
                   onRegionChanged: (r) => _phoneRegion = r,
                 ),
                 const SizedBox(height: 16),
@@ -272,6 +258,36 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               ),
             ],
           ),
+        ),
+      ),
+      bottomNavigationBar: SafeArea(
+        minimum: const EdgeInsets.fromLTRB(24, 8, 24, 16),
+        child: FilledButton(
+          onPressed: _isLoading ? null : _saveProfile,
+          style: FilledButton.styleFrom(
+            backgroundColor: AppTheme.primaryColor,
+            foregroundColor: Colors.white,
+            minimumSize: const Size.fromHeight(52),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          child: _isLoading
+              ? const SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : const Text(
+                  'Сохранить',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
         ),
       ),
     );
