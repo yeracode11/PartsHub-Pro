@@ -298,8 +298,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   Future<void> _onProfileUpdated(
       AuthProfileUpdated event, Emitter<AuthState> emit) async {
     try {
-      // Обновляем сохраненные данные пользователя
+      final previous = await _storage.getUserData();
       await _storage.saveUserData({
+        if (previous != null) ...previous,
         'uid': event.user.uid,
         'name': event.user.name,
         'email': event.user.email,
@@ -307,8 +308,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         'businessType': event.user.businessType.toString(),
         'createdAt': event.user.createdAt.toIso8601String(),
       });
-      
-      // Обновляем состояние
+
       emit(AuthAuthenticated(event.user));
     } catch (e) {
       emit(AuthError(userFacingApiMessage(e)));

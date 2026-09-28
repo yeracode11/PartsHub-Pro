@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:autohub_b2b/blocs/auth/auth_bloc.dart';
 import 'package:autohub_b2b/blocs/auth/auth_event.dart';
-import 'package:autohub_b2b/blocs/auth/auth_state.dart';
 import 'package:autohub_b2b/models/user_model.dart';
 import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/services/api/api_client.dart';
 import 'package:autohub_b2b/services/api/user_api_service.dart';
 import 'package:autohub_b2b/services/api/api_user_message.dart';
+import 'package:autohub_b2b/core/phone/phone_utils.dart';
+import 'package:autohub_b2b/widgets/auth/auth_phone_field.dart';
+import 'package:autohub_b2b/services/auth/secure_storage_service.dart';
 
 class EditProfileScreen extends StatefulWidget {
   final UserModel user;
@@ -25,8 +27,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _phoneFieldKey = GlobalKey<AuthPhoneFieldState>();
   late final UserApiService _userApiService;
   bool _isLoading = false;
+  bool _phoneReady = false;
+  AuthPhoneRegion _phoneRegion = AuthPhoneRegion.kz;
 
   @override
   void initState() {
@@ -34,12 +40,28 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _nameController.text = widget.user.name;
     _emailController.text = widget.user.email;
     _userApiService = UserApiService(ApiClient());
+    _loadPhone();
+  }
+
+  Future<void> _loadPhone() async {
+    final data = await SecureStorageService().getUserData();
+    final phone = data?['phone'] as String? ??
+        (data?['organization'] as Map?)?['phone'] as String?;
+    if (!mounted) return;
+    setState(() {
+      if (phone != null && phone.isNotEmpty) {
+        _phoneRegion = PhoneUtils.regionFromE164(phone);
+        _phoneController.text = PhoneUtils.formatForInput(phone);
+      }
+      _phoneReady = true;
+    });
   }
 
   @override
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();
+    _phoneController.dispose();
     super.dispose();
   }
 
@@ -53,12 +75,30 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     });
 
     try {
+      final region = _phoneFieldKey.currentState?.region ?? _phoneRegion;
+      final phoneE164 = PhoneUtils.normalizeToE164(
+        _phoneController.text.trim(),
+        region: region,
+      );
+      if (phoneE164 == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Введите корректный номер телефона'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        setState(() => _isLoading = false);
+        return;
+      }
+
       final updatedUser = await _userApiService.updateProfile(
         name: _nameController.text.trim(),
         email: _emailController.text.trim(),
+        phone: phoneE164,
       );
 
-      // Обновляем состояние авторизации с новыми данными
+      if (!mounted) return;
+
       context.read<AuthBloc>().add(
         AuthProfileUpdated(updatedUser),
       );
@@ -165,6 +205,20 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 },
               ),
               const SizedBox(height: 16),
+
+              if (_phoneReady) ...[
+                AuthPhoneField(
+                  key: _phoneFieldKey,
+                  controller: _phoneController,
+                  initialRegion: _phoneRegion,
+                  onRegionChanged: (r) => _phoneRegion = r,
+                ),
+                const SizedBox(height: 16),
+              ] else
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24),
+                  child: Center(child: CircularProgressIndicator()),
+                ),
 
               // Email
               TextFormField(

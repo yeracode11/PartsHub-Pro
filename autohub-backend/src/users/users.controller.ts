@@ -47,7 +47,13 @@ export class UsersController {
   // Обновление профиля пользователя (только для владельца)
   @Put('profile')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.OWNER, UserRole.SUPERADMIN)
+  @Roles(
+    UserRole.OWNER,
+    UserRole.SUPERADMIN,
+    UserRole.WORKER,
+    UserRole.MANAGER,
+    UserRole.STOREKEEPER,
+  )
   async updateProfile(
     @CurrentUser() user: any,
     @Body() updateDto: UpdateUserDto,

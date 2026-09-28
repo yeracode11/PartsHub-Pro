@@ -11,6 +11,7 @@ class UserApiService {
   Future<UserModel> updateProfile({
     required String name,
     String? email,
+    String? phone,
   }) async {
     try {
       final response = await _apiClient.dio.put(
@@ -18,6 +19,7 @@ class UserApiService {
         data: {
           'name': name,
           if (email != null) 'email': email,
+          if (phone != null) 'phone': phone,
         },
       );
 
@@ -34,12 +36,14 @@ class UserApiService {
       // Сохраняем обновленные данные организации в storage
       final storage = SecureStorageService();
       final currentUserData = await storage.getUserData();
-      if (currentUserData != null && userData['organization'] != null) {
+      if (currentUserData != null) {
+        final org = userData['organization'];
         await storage.saveUserData({
           ...currentUserData,
           'name': userModel.name,
           'email': userModel.email,
-          'organization': userData['organization'],
+          if (userData['phone'] != null) 'phone': userData['phone'],
+          if (org != null) 'organization': org,
         });
       }
       

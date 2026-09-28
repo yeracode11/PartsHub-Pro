@@ -207,19 +207,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Card(
             child: Column(
               children: [
-                if (user.role == UserRole.owner)
-                  ListTile(
-                    leading: const Icon(Icons.edit),
-                    title: const Text('Редактировать профиль'),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) => EditProfileScreen(user: user),
-                        ),
-                      );
-                    },
-                  ),
+                ListTile(
+                  leading: const Icon(Icons.edit),
+                  title: const Text('Редактировать профиль'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () async {
+                    await Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => EditProfileScreen(user: user),
+                      ),
+                    );
+                    if (context.mounted) {
+                      await _loadOrganizationName();
+                    }
+                  },
+                ),
                 const Divider(height: 1),
                 ListTile(
                   leading: const Icon(Icons.lock),

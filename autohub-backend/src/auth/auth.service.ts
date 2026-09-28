@@ -5,7 +5,7 @@ import {
   BadRequestException,
   NotFoundException,
 } from '@nestjs/common';
-import { normalizeKzPhone, phoneDigitsKey } from '../common/utils/phone.util';
+import { normalizePhoneE164, phoneDigitsKey } from '../common/utils/phone.util';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -35,7 +35,7 @@ export class AuthService {
   async login(loginDto: LoginDto) {
     let phoneE164: string;
     try {
-      phoneE164 = normalizeKzPhone(loginDto.phone);
+      phoneE164 = normalizePhoneE164(loginDto.phone);
     } catch {
       throw new UnauthorizedException('Неверный телефон или пароль');
     }
@@ -133,7 +133,7 @@ export class AuthService {
   async register(registerDto: RegisterDto) {
     let phoneE164: string;
     try {
-      phoneE164 = normalizeKzPhone(registerDto.phone);
+      phoneE164 = normalizePhoneE164(registerDto.phone);
     } catch (e) {
       if (e instanceof BadRequestException) throw e;
       throw new BadRequestException('Введите корректный номер телефона');
