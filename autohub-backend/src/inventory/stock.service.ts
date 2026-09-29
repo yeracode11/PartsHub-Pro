@@ -22,7 +22,16 @@ export class StockService {
     organizationId: string,
     intent: QwenIntentResult,
   ): Promise<Item[]> {
-    this.logger.log(`[STOCK] search started organizationId=${organizationId}`);
+    this.logger.log(`[STOCK] search started`);
+    this.logger.log(`[STOCK] organizationId=${organizationId}`);
+    this.logger.log(`[STOCK] brand=${intent.vehicle.brand ?? 'null'}`);
+    this.logger.log(`[STOCK] model=${intent.vehicle.model ?? 'null'}`);
+    this.logger.log(
+      `[STOCK] generation=${intent.vehicle.generation ?? 'null'}`,
+    );
+    this.logger.log(`[STOCK] engine=${intent.vehicle.engine ?? 'null'}`);
+    this.logger.log(`[STOCK] part=${intent.part.name ?? 'null'}`);
+    this.logger.log(`[STOCK] position=${intent.part.position ?? 'null'}`);
 
     const items = await this.itemRepository.find({
       where: { organizationId },

@@ -34,6 +34,8 @@ function partLabelRu(intent: QwenIntentResult): string {
     starter: 'стартер',
     automatic_transmission: 'АКПП',
     manual_transmission: 'МКПП',
+    steering_rack: 'рулевая рейка',
+    engine: 'двигатель',
   };
 
   const partRu = ruMap[name] ?? name.replace(/_/g, ' ');

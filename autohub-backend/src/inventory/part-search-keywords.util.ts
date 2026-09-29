@@ -14,6 +14,15 @@ export const QWEN_PART_SEARCH_KEYWORDS: Record<string, string[]> = {
   starter: ['стартер', 'starter'],
   automatic_transmission: ['акпп', 'automatic', 'automatic_transmission'],
   manual_transmission: ['мкпп', 'manual', 'manual_transmission'],
+  steering_rack: [
+    'рулевая рейка',
+    'рулевую рейку',
+    'рулевой рейка',
+    'рулеваярейка',
+    'steering rack',
+    'steering_rack',
+  ],
+  engine: ['двигател', 'мотор', 'engine', 'двс'],
 };
 
 export const FRONT_POSITION_TERMS = ['передн', 'front', 'перед'];
@@ -25,6 +34,10 @@ export function partKeywords(partName: string | null): string[] {
   return QWEN_PART_SEARCH_KEYWORDS[key] ?? [key.replace(/_/g, ' '), key];
 }
 
+/**
+ * Terms for logging / soft hints. Matching uses matchesVehicle() —
+ * model is not AND-required when generation is present (BMW "5 Series" + E60).
+ */
 export function vehicleSearchTerms(vehicle: QwenIntentVehicle): string[] {
   const terms: string[] = [];
   if (vehicle.brand?.trim()) {
@@ -83,6 +96,79 @@ export function matchesPosition(
   return true;
 }
 
+/** Engine / chassis codes as whole tokens: M113 ≠ M112, M113 ≠ M272. */
+export function matchesEngineCode(haystack: string, engine: string): boolean {
+  const code = engine.trim().toLowerCase();
+  if (!code) return true;
+  const escaped = code.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`(^|[^a-z0-9а-яё])${escaped}([^a-z0-9а-яё]|$)`, 'i');
+  return re.test(haystack);
+}
+
+function matchesGeneration(haystack: string, generation: string): boolean {
+  const gen = generation.trim().toLowerCase();
+  if (!gen) return true;
+  if (haystack.includes(gen)) return true;
+  // Chassis like E60 / W211: also accept digit core only when full code absent
+  // but prefer not to match bare short digits alone for 2-char codes in isolation —
+  // keep digits as OR only when gen itself is alphanumeric (E60 → 60 weak), skip.
+  return false;
+}
+
+/**
+ * Vehicle match against item name/description.
+ * - null fields are ignored
+ * - brand required if set
+ * - generation required if set (stronger than model for chassis codes)
+ * - model required only when generation is absent
+ * - engine matched as token (not naive substring across codes)
+ */
+export function matchesVehicle(
+  haystack: string,
+  vehicle: QwenIntentVehicle,
+): boolean {
+  if (vehicle.brand?.trim()) {
+    if (!haystack.includes(vehicle.brand.trim().toLowerCase())) {
+      return false;
+    }
+  }
+
+  const generation = vehicle.generation?.trim() ?? '';
+  const model = vehicle.model?.trim() ?? '';
+
+  if (generation) {
+    if (!matchesGeneration(haystack, generation)) {
+      return false;
+    }
+    // model is optional when generation already matched (e.g. BMW "5 Series" + E60
+    // vs product "рулевая рейка BMW E60")
+  } else if (model) {
+    if (!haystack.includes(model.toLowerCase())) {
+      return false;
+    }
+  }
+
+  if (vehicle.year != null) {
+    if (!haystack.includes(String(vehicle.year))) {
+      return false;
+    }
+  }
+
+  if (vehicle.engine?.trim()) {
+    if (!matchesEngineCode(haystack, vehicle.engine)) {
+      return false;
+    }
+  }
+
+  if (vehicle.body?.trim()) {
+    if (!haystack.includes(vehicle.body.trim().toLowerCase())) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 export function itemMatchesStockIntent(
   name: string,
   description: string | null,
@@ -96,15 +182,12 @@ export function itemMatchesStockIntent(
   }
 
   const text = itemSearchText(name, description);
-  const vehicleTerms = vehicleSearchTerms(vehicle);
-  const partTerms = partKeywords(part.name);
 
-  for (const term of vehicleTerms) {
-    if (!text.includes(term)) {
-      return false;
-    }
+  if (!matchesVehicle(text, vehicle)) {
+    return false;
   }
 
+  const partTerms = partKeywords(part.name);
   if (partTerms.length > 0) {
     if (!containsAny(text, partTerms)) {
       return false;
