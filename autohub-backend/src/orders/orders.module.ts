@@ -9,6 +9,7 @@ import { OrderItemsModule } from '../order-items/order-items.module';
 import { OrganizationsModule } from '../organizations/organizations.module';
 import { CustomersModule } from '../customers/customers.module';
 import { WhatsAppModule } from '../whatsapp/whatsapp.module';
+import { WorksModule } from '../works/works.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { WhatsAppModule } from '../whatsapp/whatsapp.module';
     OrganizationsModule,
     CustomersModule,
     WhatsAppModule,
+    WorksModule,
   ],
   controllers: [OrdersController],
   providers: [OrdersService],

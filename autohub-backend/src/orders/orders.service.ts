@@ -10,6 +10,7 @@ import { WhatsAppService } from '../whatsapp/whatsapp.service';
 import { TemplatesService } from '../whatsapp/templates.service';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { BusinessType } from '../common/enums/business-type.enum';
+import { WorksService, OrderWorkInput } from '../works/works.service';
 
 @Injectable()
 export class OrdersService {
@@ -27,7 +28,17 @@ export class OrdersService {
     private readonly whatsAppService: WhatsAppService,
     private readonly templatesService: TemplatesService,
     private readonly organizationsService: OrganizationsService,
+    private readonly worksService: WorksService,
   ) {}
+
+  private readonly orderRelations = [
+    'customer',
+    'vehicle',
+    'items',
+    'items.item',
+    'works',
+    'works.performer',
+  ];
 
   async getRecentOrders(organizationId: string, limit: number) {
     const orders = await this.orderRepository.find({
@@ -44,7 +55,7 @@ export class OrdersService {
   async findB2COrders(organizationId: string) {
     return await this.orderRepository.find({
       where: { organizationId, isB2C: true },
-      relations: ['customer', 'items', 'items.item'],
+      relations: this.orderRelations,
       order: { createdAt: 'DESC' },
     });
   }
@@ -53,7 +64,7 @@ export class OrdersService {
   async findAll(organizationId: string) {
     const orders = await this.orderRepository.find({
       where: { organizationId },
-      relations: ['customer', 'vehicle', 'items', 'items.item'],
+      relations: this.orderRelations,
       order: { createdAt: 'DESC' },
     });
     return orders;
@@ -62,7 +73,7 @@ export class OrdersService {
   async findOne(id: number, organizationId: string) {
     const order = await this.orderRepository.findOne({
       where: { id, organizationId },
-      relations: ['customer', 'vehicle', 'items', 'items.item'], // Загружаем товары с полной информацией
+      relations: this.orderRelations, // Загружаем товары и работы с полной информацией
     });
     if (!order) {
       throw new Error(`Order with ID ${id} not found`);
@@ -74,6 +85,7 @@ export class OrdersService {
     organizationId: string,
     data: Partial<Order> & {
       items?: Array<{ itemId: number; quantity: number }>;
+      works?: OrderWorkInput[];
       workStages?: OrderWorkStage[];
     },
     options?: { skipQuantityCheck?: boolean },
@@ -138,16 +150,21 @@ export class OrdersService {
     // Если есть товары - добавляем их
     if (data.items && data.items.length > 0) {
       await this.orderItemsService.createOrderItems(savedOrder.id, data.items, options);
-      
-      // Пересчитываем totalAmount
-      const total = await this.orderItemsService.calculateOrderTotal(savedOrder.id);
-      savedOrder.totalAmount = total;
-      await this.orderRepository.save(savedOrder);
     }
+
+    if (data.works && data.works.length > 0) {
+      await this.worksService.replaceOrderWorks(
+        savedOrder.id,
+        organizationId,
+        data.works,
+      );
+    }
+
+    await this.recalculateTotal(savedOrder.id, organizationId);
 
     const createdOrder = await this.orderRepository.findOne({
       where: { id: savedOrder.id },
-      relations: ['customer', 'vehicle', 'items', 'items.item'],
+      relations: this.orderRelations,
     });
 
     if (
@@ -169,6 +186,7 @@ export class OrdersService {
     organizationId: string,
     data: Partial<Order> & {
       items?: Array<{ itemId: number; quantity: number }>;
+      works?: OrderWorkInput[];
       workStages?: OrderWorkStage[];
     },
     actor?: { userId?: string; id?: string },
@@ -178,6 +196,7 @@ export class OrdersService {
     // Извлекаем items из data, чтобы не пытаться обновить relation
     const {
       items,
+      works,
       workStages,
       id: _id,
       organizationId: _organizationId,
@@ -238,10 +257,14 @@ export class OrdersService {
 
       // Добавляем новые
       await this.orderItemsService.createOrderItems(id, items);
+    }
 
-      // Пересчитываем totalAmount
-      const total = await this.orderItemsService.calculateOrderTotal(id);
-      await this.orderRepository.update({ id, organizationId }, { totalAmount: total });
+    if (Array.isArray(works)) {
+      await this.worksService.replaceOrderWorks(id, organizationId, works);
+    }
+
+    if ((items && items.length > 0) || Array.isArray(works)) {
+      await this.recalculateTotal(id, organizationId);
     }
 
     const updatedOrder = await this.findOne(id, organizationId);
@@ -287,6 +310,17 @@ export class OrdersService {
     await this.findOne(id, organizationId); // Проверка существования
     await this.orderRepository.delete({ id, organizationId });
     return { success: true };
+  }
+
+  /** Сумма заказа = запчасти + работы. */
+  private async recalculateTotal(
+    orderId: number,
+    organizationId: string,
+  ): Promise<void> {
+    const partsTotal = await this.orderItemsService.calculateOrderTotal(orderId);
+    const worksTotal = await this.worksService.calculateWorksTotal(orderId);
+    const totalAmount = Math.round((partsTotal + worksTotal) * 100) / 100;
+    await this.orderRepository.update({ id: orderId, organizationId }, { totalAmount });
   }
 
   private getDefaultWorkStages(): OrderWorkStage[] {

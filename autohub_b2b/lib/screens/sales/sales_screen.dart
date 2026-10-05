@@ -19,6 +19,7 @@ import 'package:autohub_b2b/utils/dialog_helper.dart';
 import 'package:autohub_b2b/utils/auth_guard.dart';
 import 'package:autohub_b2b/models/label_product_model.dart';
 import 'package:autohub_b2b/services/api/api_user_message.dart';
+import 'package:autohub_b2b/services/auth/secure_storage_service.dart';
 
 class SalesScreen extends StatefulWidget {
   const SalesScreen({super.key});
@@ -765,6 +766,10 @@ class _OrderDialogState extends State<_OrderDialog> {
   String selectedStatus = 'pending';
   String selectedPaymentStatus = 'pending';
   List<Map<String, dynamic>> selectedItems = [];
+  List<Map<String, dynamic>> selectedWorks = [];
+  List<WorkCatalogModel> _workCatalog = [];
+  List<Map<String, dynamic>> _employees = [];
+  bool _isServiceBusiness = false;
   bool reserveEnabled = false;
   int reserveDays = 3;
   DateTime? reserveUntil;
@@ -783,6 +788,31 @@ class _OrderDialogState extends State<_OrderDialog> {
       if (c.id == _customerId) return c;
     }
     return null;
+  }
+
+  Future<void> _loadBusinessContext() async {
+    final userData = await SecureStorageService().getUserData();
+    final rawType = userData?['businessType']?.toString() ?? '';
+    final isService = rawType.split('.').last.toLowerCase() == 'service';
+    if (!mounted) return;
+    setState(() => _isServiceBusiness = isService);
+    if (!isService) return;
+
+    try {
+      final results = await Future.wait([
+        widget.dio.get('/api/works'),
+        widget.dio.get('/api/users/organization/${userData?['organizationId']}'),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _workCatalog = (results[0].data as List)
+            .map((item) => WorkCatalogModel.fromJson(item as Map<String, dynamic>))
+            .toList();
+        _employees = (results[1].data as List).cast<Map<String, dynamic>>();
+      });
+    } catch (_) {
+      // Справочник необязателен: работу можно ввести вручную.
+    }
   }
 
   Future<void> _loadCustomers() async {
@@ -811,6 +841,7 @@ class _OrderDialogState extends State<_OrderDialog> {
     _customerId = widget.order?.customerId;
     _vehicleId = widget.order?.vehicleId;
     _loadCustomers();
+    _loadBusinessContext();
     if (widget.order != null) {
       notesController.text = widget.order!.notes ?? '';
       selectedStatus = widget.order!.status;
@@ -839,6 +870,20 @@ class _OrderDialogState extends State<_OrderDialog> {
                     ? (oi.item!['images'][0] as String)
                     : oi.item?['imageUrl'],
                 'sku': oi.item?['sku'],
+              },
+            )
+            .toList();
+      }
+      if (widget.order!.works != null) {
+        selectedWorks = widget.order!.works!
+            .map(
+              (work) => {
+                'workCatalogId': work.workCatalogId,
+                'name': work.name,
+                'normHours': work.normHours,
+                'pricePerHour': work.pricePerHour,
+                'performerId': work.performerId,
+                'performerName': work.performerName,
               },
             )
             .toList();
@@ -1123,13 +1168,25 @@ class _OrderDialogState extends State<_OrderDialog> {
     );
   }
 
-  double get totalAmount {
+  double get partsAmount {
     return selectedItems.fold(0.0, (sum, item) {
       final price = double.tryParse(item['price'].toString()) ?? 0;
       final quantity = item['quantity'] as int;
       return sum + (price * quantity);
     });
   }
+
+  double get worksAmount {
+    return selectedWorks.fold(0.0, (sum, work) {
+      final hours = (work['normHours'] as num?)?.toDouble() ?? 0;
+      final rate = (work['pricePerHour'] as num?)?.toDouble() ?? 0;
+      return sum + hours * rate;
+    });
+  }
+
+  double get totalAmount => partsAmount + worksAmount;
+
+  bool get _canSave => selectedItems.isNotEmpty || selectedWorks.isNotEmpty;
 
   @override
   Widget build(BuildContext context) {
@@ -1152,7 +1209,7 @@ class _OrderDialogState extends State<_OrderDialog> {
         ),
         actions: [
           FilledButton(
-            onPressed: selectedItems.isEmpty ? null : _createOrder,
+            onPressed: _canSave ? _createOrder : null,
             child: Text(widget.isEdit ? 'Сохранить' : 'Создать'),
           ),
           const SizedBox(width: 12),
@@ -1221,9 +1278,9 @@ class _OrderDialogState extends State<_OrderDialog> {
             ),
           ),
 
-          // Список товаров
+          // Список товаров и работ
           Expanded(
-            child: selectedItems.isEmpty
+            child: selectedItems.isEmpty && selectedWorks.isEmpty
                 ? Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -1245,15 +1302,25 @@ class _OrderDialogState extends State<_OrderDialog> {
                       ],
                     ),
                   )
-                : ListView.separated(
+                : ListView(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 16,
                       vertical: 8,
                     ),
-                    itemCount: selectedItems.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
-                    itemBuilder: (context, index) =>
-                        _buildMobileItemCard(index),
+                    children: [
+                      ...selectedItems.asMap().entries.map(
+                        (entry) => Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: _buildMobileItemCard(entry.key),
+                        ),
+                      ),
+                      ...selectedWorks.asMap().entries.map(
+                        (entry) => Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: _buildMobileWorkCard(entry.key),
+                        ),
+                      ),
+                    ],
                   ),
           ),
 
@@ -1430,6 +1497,86 @@ class _OrderDialogState extends State<_OrderDialog> {
     );
   }
 
+  Widget _buildMobileWorkCard(int index) {
+    final work = selectedWorks[index];
+    final hours = (work['normHours'] as num?)?.toDouble() ?? 0;
+    final rate = (work['pricePerHour'] as num?)?.toDouble() ?? 0;
+    final performer = work['performerName']?.toString();
+    return Card(
+      margin: EdgeInsets.zero,
+      child: ListTile(
+        leading: const Icon(Icons.handyman_outlined),
+        title: Text(work['name']?.toString() ?? 'Работа'),
+        subtitle: Text(
+          [
+            '${hours} н/ч × ${NumberFormat('#,###', 'ru_RU').format(rate)} ₸',
+            if (performer != null && performer.isNotEmpty) performer,
+          ].join(' · '),
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '${NumberFormat('#,###', 'ru_RU').format(hours * rate)} ₸',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            IconButton(
+              icon: const Icon(Icons.close, size: 18),
+              onPressed: () => setState(() => selectedWorks.removeAt(index)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWorksSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Работы',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            OutlinedButton.icon(
+              onPressed: _showAddWorkDialog,
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Добавить работу'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (selectedWorks.isEmpty)
+          Text(
+            'Работ пока нет',
+            style: TextStyle(color: Colors.grey.shade600),
+          )
+        else
+          ...selectedWorks.asMap().entries.map(
+            (entry) => _buildMobileWorkCard(entry.key),
+          ),
+      ],
+    );
+  }
+
+  Future<void> _showAddWorkDialog() async {
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (_) => _AddWorkDialog(
+        catalog: _workCatalog,
+        employees: _employees,
+      ),
+    );
+    if (result != null && mounted) {
+      setState(() => selectedWorks.add(result));
+    }
+  }
+
   Widget _stepperBtn(IconData icon, VoidCallback onTap) {
     return InkWell(
       onTap: onTap,
@@ -1460,11 +1607,20 @@ class _OrderDialogState extends State<_OrderDialog> {
             mainAxisSize: MainAxisSize.min,
             children: [
               // Итого
+              if (_isServiceBusiness)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: _showAddWorkDialog,
+                    icon: const Icon(Icons.handyman_outlined, size: 18),
+                    label: const Text('Добавить работу'),
+                  ),
+                ),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'Итого (${selectedItems.length} поз.)',
+                    'Итого (${selectedItems.length + selectedWorks.length} поз.)',
                     style: const TextStyle(
                       fontSize: 15,
                       color: AppTheme.textSecondary,
@@ -1833,6 +1989,10 @@ class _OrderDialogState extends State<_OrderDialog> {
                   ],
                 ),
               ),
+              if (_isServiceBusiness) ...[
+                const SizedBox(height: 16),
+                _buildWorksSection(),
+              ],
               const SizedBox(height: 16),
               _buildReserveSection(),
               const SizedBox(height: 24),
@@ -1929,7 +2089,7 @@ class _OrderDialogState extends State<_OrderDialog> {
           child: const Text('Отмена'),
         ),
         FilledButton(
-          onPressed: selectedItems.isEmpty ? null : _createOrder,
+          onPressed: _canSave ? _createOrder : null,
           child: Text(widget.isEdit ? 'Сохранить' : 'Создать заказ'),
         ),
       ],
@@ -1990,6 +2150,18 @@ class _OrderDialogState extends State<_OrderDialog> {
       'items': selectedItems
           .map((item) => {'itemId': item['id'], 'quantity': item['quantity']})
           .toList(),
+      if (_isServiceBusiness)
+        'works': selectedWorks
+            .map(
+              (work) => {
+                'workCatalogId': work['workCatalogId'],
+                'name': work['name'],
+                'normHours': work['normHours'],
+                'pricePerHour': work['pricePerHour'],
+                'performerId': work['performerId'],
+              },
+            )
+            .toList(),
     };
 
     try {
@@ -2016,6 +2188,162 @@ class _OrderDialogState extends State<_OrderDialog> {
         );
       }
     }
+  }
+}
+
+class _AddWorkDialog extends StatefulWidget {
+  final List<WorkCatalogModel> catalog;
+  final List<Map<String, dynamic>> employees;
+
+  const _AddWorkDialog({required this.catalog, required this.employees});
+
+  @override
+  State<_AddWorkDialog> createState() => _AddWorkDialogState();
+}
+
+class _AddWorkDialogState extends State<_AddWorkDialog> {
+  WorkCatalogModel? _catalogItem;
+  final _name = TextEditingController();
+  final _hours = TextEditingController(text: '1');
+  final _rate = TextEditingController(text: '0');
+  String? _performerId;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _hours.dispose();
+    _rate.dispose();
+    super.dispose();
+  }
+
+  void _onCatalogChanged(WorkCatalogModel? value) {
+    setState(() {
+      _catalogItem = value;
+      if (value != null) {
+        _name.text = value.name;
+        _hours.text = '${value.normHours}';
+        _rate.text = '${value.pricePerHour}';
+      }
+    });
+  }
+
+  void _submit() {
+    final name = _name.text.trim();
+    final hours = double.tryParse(_hours.text.replaceAll(',', '.'));
+    final rate = double.tryParse(_rate.text.replaceAll(',', '.'));
+    if (name.isEmpty || hours == null || hours <= 0 || rate == null || rate < 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Проверьте название, нормо-часы и ставку')),
+      );
+      return;
+    }
+    final performer = widget.employees
+        .where((employee) => employee['id']?.toString() == _performerId)
+        .firstOrNull;
+    Navigator.pop(context, {
+      'workCatalogId': _catalogItem?.id,
+      'name': name,
+      'normHours': hours,
+      'pricePerHour': rate,
+      'performerId': _performerId,
+      'performerName': performer?['name'],
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Работа'),
+      content: SizedBox(
+        width: 460,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (widget.catalog.isNotEmpty) ...[
+              DropdownButtonFormField<WorkCatalogModel>(
+                initialValue: _catalogItem,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Из справочника',
+                  border: OutlineInputBorder(),
+                ),
+                items: widget.catalog
+                    .map(
+                      (work) => DropdownMenuItem(
+                        value: work,
+                        child: Text(work.name, overflow: TextOverflow.ellipsis),
+                      ),
+                    )
+                    .toList(),
+                onChanged: _onCatalogChanged,
+              ),
+              const SizedBox(height: 12),
+            ],
+            TextField(
+              controller: _name,
+              decoration: const InputDecoration(
+                labelText: 'Название',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _hours,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      labelText: 'Нормо-часы',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextField(
+                    controller: _rate,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      labelText: 'Ставка, ₸/н·ч',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (widget.employees.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                initialValue: _performerId,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Исполнитель',
+                  border: OutlineInputBorder(),
+                ),
+                items: [
+                  const DropdownMenuItem(value: null, child: Text('Не назначен')),
+                  ...widget.employees.map(
+                    (employee) => DropdownMenuItem(
+                      value: employee['id']?.toString(),
+                      child: Text(employee['name']?.toString() ?? 'Сотрудник'),
+                    ),
+                  ),
+                ],
+                onChanged: (value) => setState(() => _performerId = value),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Отмена'),
+        ),
+        FilledButton(onPressed: _submit, child: const Text('Добавить')),
+      ],
+    );
   }
 }
 

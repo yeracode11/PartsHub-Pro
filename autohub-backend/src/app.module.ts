@@ -20,6 +20,7 @@ import { AutoDataModule } from './auto-data/auto-data.module';
 import { IncomingModule } from './incoming/incoming.module';
 import { WarehousesModule } from './warehouses/warehouses.module';
 import { AdminModule } from './admin/admin.module';
+import { WorksModule } from './works/works.module';
 import { WhatsAppExceptionFilter } from './whatsapp/whatsapp-exception.filter';
 
 const logger = new Logger('AppModule');
@@ -111,6 +112,7 @@ const logger = new Logger('AppModule');
     AutoDataModule,
     IncomingModule,
     WarehousesModule,
+    WorksModule,
     AdminModule,
   ],
   controllers: [AppController],

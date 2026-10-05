@@ -50,6 +50,78 @@ class OrderItemModel {
   }
 }
 
+/// Работа в заказ-наряде: снимок нормо-часов и ставки на момент добавления.
+class OrderWorkModel {
+  final int id;
+  final int? workCatalogId;
+  final String name;
+  final double normHours;
+  final double pricePerHour;
+  final double subtotal;
+  final String? performerId;
+  final String? performerName;
+  final bool done;
+
+  OrderWorkModel({
+    required this.id,
+    this.workCatalogId,
+    required this.name,
+    required this.normHours,
+    required this.pricePerHour,
+    required this.subtotal,
+    this.performerId,
+    this.performerName,
+    this.done = false,
+  });
+
+  factory OrderWorkModel.fromJson(Map<String, dynamic> json) {
+    final performer = json['performer'] as Map<String, dynamic>?;
+    return OrderWorkModel(
+      id: json['id'] as int,
+      workCatalogId: json['workCatalogId'] as int?,
+      name: json['name']?.toString() ?? '',
+      normHours: _asDouble(json['normHours']),
+      pricePerHour: _asDouble(json['pricePerHour']),
+      subtotal: _asDouble(json['subtotal']),
+      performerId: json['performerId']?.toString(),
+      performerName: performer?['name']?.toString(),
+      done: json['done'] == true,
+    );
+  }
+
+  static double _asDouble(dynamic value) {
+    if (value is String) return double.tryParse(value) ?? 0;
+    if (value is num) return value.toDouble();
+    return 0;
+  }
+}
+
+/// Позиция справочника работ организации.
+class WorkCatalogModel {
+  final int id;
+  final String name;
+  final double normHours;
+  final double pricePerHour;
+
+  WorkCatalogModel({
+    required this.id,
+    required this.name,
+    required this.normHours,
+    required this.pricePerHour,
+  });
+
+  double get price => normHours * pricePerHour;
+
+  factory WorkCatalogModel.fromJson(Map<String, dynamic> json) {
+    return WorkCatalogModel(
+      id: json['id'] as int,
+      name: json['name']?.toString() ?? '',
+      normHours: OrderWorkModel._asDouble(json['normHours']),
+      pricePerHour: OrderWorkModel._asDouble(json['pricePerHour']),
+    );
+  }
+}
+
 class WorkStageItemModel {
   final String id;
   final String title;
@@ -128,6 +200,7 @@ class OrderModel extends Equatable {
   final bool isB2C;
   final DateTime? reservedUntil;
   final List<OrderItemModel>? items;
+  final List<OrderWorkModel>? works;
   final Map<String, dynamic>? customer;
   final Map<String, dynamic>? vehicle;
   final List<WorkStageModel>? workStages;
@@ -148,6 +221,7 @@ class OrderModel extends Equatable {
     this.isB2C = false,
     this.reservedUntil,
     this.items,
+    this.works,
     this.customer,
     this.vehicle,
     this.workStages,
@@ -169,6 +243,7 @@ class OrderModel extends Equatable {
     bool? isB2C,
     DateTime? reservedUntil,
     List<OrderItemModel>? items,
+    List<OrderWorkModel>? works,
     Map<String, dynamic>? customer,
     Map<String, dynamic>? vehicle,
     List<WorkStageModel>? workStages,
@@ -189,6 +264,7 @@ class OrderModel extends Equatable {
       isB2C: isB2C ?? this.isB2C,
       reservedUntil: reservedUntil ?? this.reservedUntil,
       items: items ?? this.items,
+      works: works ?? this.works,
       customer: customer ?? this.customer,
       vehicle: vehicle ?? this.vehicle,
       workStages: workStages ?? this.workStages,
@@ -211,6 +287,14 @@ class OrderModel extends Equatable {
       'synced': synced,
       'isB2C': isB2C,
       'reservedUntil': reservedUntil?.toIso8601String(),
+      'works': works?.map((work) => {
+        'id': work.id,
+        'name': work.name,
+        'normHours': work.normHours,
+        'pricePerHour': work.pricePerHour,
+        'subtotal': work.subtotal,
+        'performerName': work.performerName,
+      }).toList(),
       'items': items?.map((item) => {
         'id': item.id,
         'itemId': item.itemId,
@@ -247,6 +331,13 @@ class OrderModel extends Equatable {
           .toList();
     }
 
+    List<OrderWorkModel>? works;
+    if (json['works'] != null) {
+      works = (json['works'] as List)
+          .map((work) => OrderWorkModel.fromJson(work as Map<String, dynamic>))
+          .toList();
+    }
+
     List<WorkStageModel>? workStages;
     if (json['workStages'] != null) {
       workStages = (json['workStages'] as List)
@@ -271,6 +362,7 @@ class OrderModel extends Equatable {
           ? DateTime.tryParse(json['reservedUntil'].toString())
           : null,
       items: items,
+      works: works,
       customer: json['customer'] as Map<String, dynamic>?,
       vehicle: json['vehicle'] as Map<String, dynamic>?,
       workStages: workStages,
@@ -294,6 +386,7 @@ class OrderModel extends Equatable {
         isB2C,
         reservedUntil,
         items,
+        works,
         customer,
         vehicle,
         workStages,

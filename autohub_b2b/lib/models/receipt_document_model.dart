@@ -26,6 +26,7 @@ class ReceiptDocumentData {
     this.customerName,
     this.paymentInfo,
     this.notes,
+    this.vehicleInfo,
     this.currencySymbol = '₸',
     this.logoAssetPath = 'assets/icons/auto-plus-logo.png',
   });
@@ -40,6 +41,7 @@ class ReceiptDocumentData {
   final String? customerName;
   final String? paymentInfo;
   final String? notes;
+  final String? vehicleInfo;
   final String logoAssetPath;
 
   /// Демо‑данные для экрана настроек (iOS).
@@ -71,6 +73,65 @@ class ReceiptDocumentData {
     );
   }
 
+  /// Заказ-наряд: работы и запчасти отдельными разделами.
+  static ReceiptDocumentData workOrder(OrderModel order) {
+    final lines = <ReceiptLineData>[
+      ...?order.works?.map(
+        (work) => ReceiptLineData(
+          name: work.performerName != null
+              ? '${work.name} (${work.performerName})'
+              : work.name,
+          quantity: 1,
+          unitPrice: work.subtotal,
+          lineTotal: work.subtotal,
+        ),
+      ),
+      ...?order.items?.map((i) {
+        final rawName = i.item?['name'] ?? i.item?['title'];
+        final name = rawName?.toString().trim();
+        return ReceiptLineData(
+          name: (name != null && name.isNotEmpty) ? name : 'Товар #${i.itemId}',
+          quantity: i.quantity,
+          unitPrice: i.priceAtTime,
+          lineTotal: i.subtotal,
+        );
+      }),
+    ];
+
+    return ReceiptDocumentData(
+      companyName: 'Auto+ Pro',
+      companySubtitle: 'Заказ-наряд',
+      orderNumber: order.orderNumber ?? '#${order.id ?? '—'}',
+      issuedAt: order.createdAt,
+      customerName: _customerName(order),
+      vehicleInfo: _vehicleInfo(order),
+      paymentInfo: _paymentLabel(order.paymentStatus),
+      notes: order.notes,
+      lines: lines,
+      total: order.total,
+    );
+  }
+
+  static String? _vehicleInfo(OrderModel order) {
+    final vehicle = order.vehicle;
+    if (vehicle == null) return null;
+    final brand = vehicle['brand']?.toString() ?? '';
+    final model = vehicle['model']?.toString() ?? '';
+    final plate = vehicle['plateNumber']?.toString() ?? '';
+    final text = '$brand $model ${plate.isNotEmpty ? '· $plate' : ''}'.trim();
+    return text.isEmpty ? null : text;
+  }
+
+  static String? _customerName(OrderModel order) {
+    final cust = order.customer;
+    if (cust == null) return null;
+    final name =
+        cust['name']?.toString() ??
+        cust['companyName']?.toString() ??
+        cust['title']?.toString();
+    return (name != null && name.isNotEmpty) ? name : null;
+  }
+
   static ReceiptDocumentData fromOrder(OrderModel order) {
     final items = order.items ?? [];
     final lines = items.map((i) {
@@ -84,23 +145,11 @@ class ReceiptDocumentData {
       );
     }).toList();
 
-    final cust = order.customer;
-    String? customerName;
-    if (cust != null) {
-      customerName =
-          cust['name']?.toString() ??
-          cust['companyName']?.toString() ??
-          cust['title']?.toString();
-      if (customerName != null && customerName.isEmpty) {
-        customerName = null;
-      }
-    }
-
     return ReceiptDocumentData(
       companyName: 'Auto+ Pro',
       orderNumber: order.orderNumber ?? '#${order.id ?? '—'}',
       issuedAt: order.createdAt,
-      customerName: customerName,
+      customerName: _customerName(order),
       paymentInfo: _paymentLabel(order.paymentStatus),
       notes: order.notes,
       lines: lines,

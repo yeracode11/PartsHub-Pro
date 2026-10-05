@@ -12,6 +12,7 @@ import {
 import { Organization } from '../../organizations/entities/organization.entity';
 import { Customer } from '../../customers/entities/customer.entity';
 import { OrderItem } from '../../order-items/entities/order-item.entity';
+import { OrderWork } from '../../works/entities/order-work.entity';
 import { User } from '../../users/entities/user.entity';
 import { Vehicle } from '../../vehicles/entities/vehicle.entity';
 
@@ -91,6 +92,9 @@ export class Order {
 
   @OneToMany(() => OrderItem, (orderItem) => orderItem.order, { cascade: true })
   items: OrderItem[];
+
+  @OneToMany(() => OrderWork, (orderWork) => orderWork.order)
+  works: OrderWork[];
 
   @CreateDateColumn()
   createdAt: Date;

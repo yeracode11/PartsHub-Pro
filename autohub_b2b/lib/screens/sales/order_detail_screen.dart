@@ -284,6 +284,84 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     }
   }
 
+  List<Widget> _documentActions() {
+    return [
+      if (_canSeeWorkOrder && (widget.order.works?.isNotEmpty ?? false))
+        IconButton(
+          icon: const Icon(Icons.description_outlined),
+          tooltip: 'Заказ-наряд',
+          onPressed: () => ReceiptPreviewScreen.open(
+            context,
+            ReceiptDocumentData.workOrder(widget.order),
+          ),
+        ),
+      IconButton(
+        icon: const Icon(Icons.picture_as_pdf_outlined),
+        tooltip: 'Скачать / печать чек',
+        onPressed: () => ReceiptPreviewScreen.open(
+          context,
+          ReceiptDocumentData.fromOrder(widget.order),
+        ),
+      ),
+    ];
+  }
+
+  Widget _buildWorksCard(NumberFormat numberFormat) {
+    final works = widget.order.works!;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Работы (${works.length})',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+            const SizedBox(height: 12),
+            ...works.map((work) {
+              final performer = work.performerName;
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(
+                  children: [
+                    const Icon(Icons.handyman_outlined, size: 18),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(work.name),
+                          Text(
+                            [
+                              '${work.normHours} н/ч × ${numberFormat.format(work.pricePerHour)} ₸',
+                              if (performer != null && performer.isNotEmpty) performer,
+                            ].join(' · '),
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: AppTheme.textSecondary,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Text(
+                      '${numberFormat.format(work.subtotal)} ₸',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+
   String _normalizeBusinessType(String? rawType) {
     if (rawType == null || rawType.isEmpty) return '';
     final parts = rawType.split('.');
@@ -301,16 +379,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       return Scaffold(
         appBar: AppBar(
           title: Text('Заказ ${widget.order.orderNumber ?? '#${widget.order.id}'}'),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.picture_as_pdf_outlined),
-              tooltip: 'Скачать / печать чек',
-              onPressed: () {
-                final doc = ReceiptDocumentData.fromOrder(widget.order);
-                ReceiptPreviewScreen.open(context, doc);
-              },
-            ),
-          ],
+          actions: _documentActions(),
         ),
         body: const Center(
           child: Text('Товары в заказе не найдены'),
@@ -322,14 +391,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       appBar: AppBar(
         title: Text('Заказ ${widget.order.orderNumber ?? '#${widget.order.id}'}'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.picture_as_pdf_outlined),
-            tooltip: 'Скачать / печать чек',
-            onPressed: () {
-              final doc = ReceiptDocumentData.fromOrder(widget.order);
-              ReceiptPreviewScreen.open(context, doc);
-            },
-          ),
+          ..._documentActions(),
           if (isSaving)
             const Padding(
               padding: EdgeInsets.all(16.0),
@@ -733,6 +795,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   ),
                 ),
               ),
+            ],
+
+            if (widget.order.works != null && widget.order.works!.isNotEmpty) ...[
+              const SizedBox(height: 24),
+              _buildWorksCard(numberFormat),
             ],
 
             const SizedBox(height: 24),

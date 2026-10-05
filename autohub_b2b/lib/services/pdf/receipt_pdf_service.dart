@@ -154,7 +154,15 @@ class ReceiptPdfService {
         pw.Padding(
           padding: const pw.EdgeInsets.only(top: 4),
           child: pw.Text(
-            'Покупатель: ${data.customerName}',
+            'Клиент: ${data.customerName}',
+            style: pw.TextStyle(fontSize: 7, font: regular),
+          ),
+        ),
+      if (data.vehicleInfo != null)
+        pw.Padding(
+          padding: const pw.EdgeInsets.only(top: 2),
+          child: pw.Text(
+            'Авто: ${data.vehicleInfo}',
             style: pw.TextStyle(fontSize: 7, font: regular),
           ),
         ),
@@ -326,7 +334,15 @@ class ReceiptPdfService {
         pw.Padding(
           padding: const pw.EdgeInsets.only(bottom: 8),
           child: pw.Text(
-            'Покупатель: ${data.customerName}',
+            'Клиент: ${data.customerName}',
+            style: pw.TextStyle(fontSize: 11, font: regular),
+          ),
+        ),
+      if (data.vehicleInfo != null)
+        pw.Padding(
+          padding: const pw.EdgeInsets.only(bottom: 8),
+          child: pw.Text(
+            'Автомобиль: ${data.vehicleInfo}',
             style: pw.TextStyle(fontSize: 11, font: regular),
           ),
         ),
