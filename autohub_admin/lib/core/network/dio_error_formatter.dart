@@ -12,12 +12,11 @@ String formatHttpError(Object error) {
       case DioExceptionType.connectionTimeout:
       case DioExceptionType.sendTimeout:
       case DioExceptionType.receiveTimeout:
-        return 'Таймаут соединения с сервером. Проверьте адрес API и сеть.';
+        return 'Время ожидания ответа истекло. Проверьте подключение к интернету.';
       case DioExceptionType.connectionError:
-        return 'Нет соединения с сервером (${error.message ?? 'connection error'}). '
-            'Проверьте API_BASE_URL и что бэкенд запущен.';
+        return 'Сервер временно недоступен. Проверьте интернет или повторите позже.';
       case DioExceptionType.badCertificate:
-        return 'Ошибка сертификата HTTPS.';
+        return 'Ошибка безопасного соединения (SSL).';
       case DioExceptionType.badResponse:
         final code = error.response?.statusCode;
         final data = error.response?.data;

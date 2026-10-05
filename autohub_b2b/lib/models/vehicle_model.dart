@@ -3,6 +3,9 @@ class VehicleModel {
   final String organizationId;
   final int customerId;
   final String customerName;
+  final String? customerPhone;
+  final String? customerEmail;
+  final String? customerNotes;
   final String brand;
   final String model;
   final int year;
@@ -32,6 +35,9 @@ class VehicleModel {
     required this.organizationId,
     required this.customerId,
     required this.customerName,
+    this.customerPhone,
+    this.customerEmail,
+    this.customerNotes,
     required this.brand,
     required this.model,
     required this.year,
@@ -55,38 +61,56 @@ class VehicleModel {
     this.orders,
   });
 
-  factory VehicleModel.fromJson(Map<String, dynamic> json) {
+  factory VehicleModel.fromJson(
+    Map<String, dynamic> json, {
+    String? defaultCustomerName,
+    String? defaultCustomerPhone,
+    String? defaultCustomerEmail,
+  }) {
     return VehicleModel(
       id: json['id'] as int,
-      organizationId: json['organizationId'] as String,
-      customerId: json['customerId'] as int,
+      organizationId: (json['organizationId'] as String?) ?? '',
+      customerId: (json['customerId'] as int?) ?? 0,
       customerName: json['customer'] != null
-          ? json['customer']['name'] as String
-          : 'Неизвестный клиент',
-      brand: json['brand'] as String,
-      model: json['model'] as String,
-      year: json['year'] as int,
-      color: json['color'] as String?,
-      plateNumber: json['plateNumber'] as String,
-      vin: json['vin'] as String?,
-      fuelType: json['fuelType'] as String,
-      transmission: json['transmission'] as String,
-      engineVolume: json['engineVolume'] as String?,
-      enginePower: json['enginePower'] as int?,
-      currentMileage: json['currentMileage'] as int,
-      lastServiceMileage: json['lastServiceMileage'] as int?,
-      lastServiceDate: json['lastServiceDate'] != null
-          ? DateTime.parse(json['lastServiceDate'] as String)
+          ? (json['customer']['name'] as String? ?? defaultCustomerName ?? 'Неизвестный клиент')
+          : (defaultCustomerName ?? 'Неизвестный клиент'),
+      customerPhone: json['customer'] != null
+          ? (json['customer']['phone'] as String? ?? defaultCustomerPhone)
+          : defaultCustomerPhone,
+      customerEmail: json['customer'] != null
+          ? (json['customer']['email'] as String? ?? defaultCustomerEmail)
+          : defaultCustomerEmail,
+      customerNotes: json['customer'] != null
+          ? json['customer']['notes'] as String?
           : null,
-      nextServiceMileage: json['nextServiceMileage'] as int?,
+      brand: (json['brand'] as String?) ?? '',
+      model: (json['model'] as String?) ?? '',
+      year: (json['year'] as num?)?.toInt() ?? DateTime.now().year,
+      color: json['color'] as String?,
+      plateNumber: (json['plateNumber'] as String?) ?? '',
+      vin: json['vin'] as String?,
+      fuelType: (json['fuelType'] as String?) ?? 'Бензин',
+      transmission: (json['transmission'] as String?) ?? 'АКПП',
+      engineVolume: json['engineVolume'] as String?,
+      enginePower: (json['enginePower'] as num?)?.toInt(),
+      currentMileage: (json['currentMileage'] as num?)?.toInt() ?? 0,
+      lastServiceMileage: (json['lastServiceMileage'] as num?)?.toInt(),
+      lastServiceDate: json['lastServiceDate'] != null
+          ? DateTime.tryParse(json['lastServiceDate'] as String)
+          : null,
+      nextServiceMileage: (json['nextServiceMileage'] as num?)?.toInt(),
       nextServiceDate: json['nextServiceDate'] != null
-          ? DateTime.parse(json['nextServiceDate'] as String)
+          ? DateTime.tryParse(json['nextServiceDate'] as String)
           : null,
       notes: json['notes'] as String?,
       photoUrl: json['photoUrl'] as String?,
       isActive: json['isActive'] as bool? ?? true,
-      createdAt: DateTime.parse(json['createdAt'] as String),
-      updatedAt: DateTime.parse(json['updatedAt'] as String),
+      createdAt: json['createdAt'] != null
+          ? DateTime.parse(json['createdAt'] as String)
+          : DateTime.now(),
+      updatedAt: json['updatedAt'] != null
+          ? DateTime.parse(json['updatedAt'] as String)
+          : DateTime.now(),
       orders: json['orders'] as List<dynamic>?,
     );
   }

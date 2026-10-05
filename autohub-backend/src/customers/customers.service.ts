@@ -11,19 +11,34 @@ export class CustomersService {
   ) {}
 
   async findAll(organizationId: string) {
-    return await this.customerRepository.find({
+    const customers = await this.customerRepository.find({
       where: { organizationId },
+      relations: ['vehicles'],
       order: { createdAt: 'DESC' },
     });
+
+    // Фильтруем только активные автомобили
+    return customers.map((customer) => ({
+      ...customer,
+      vehicles: customer.vehicles
+        ? customer.vehicles.filter((v) => v.isActive !== false)
+        : [],
+    }));
   }
 
   async findOne(id: number, organizationId: string) {
     const customer = await this.customerRepository.findOne({
       where: { id, organizationId },
+      relations: ['vehicles', 'orders'],
     });
     if (!customer) {
       throw new Error(`Customer with ID ${id} not found`);
     }
+
+    if (customer.vehicles) {
+      customer.vehicles = customer.vehicles.filter((v) => v.isActive !== false);
+    }
+
     return customer;
   }
 

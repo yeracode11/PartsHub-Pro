@@ -13,6 +13,7 @@ String? extractApiErrorMessage(dynamic data) {
     final trimmed = data.trim();
     if (trimmed.isEmpty) return null;
     if (trimmed.startsWith('<!') || trimmed.startsWith('<html')) return null;
+    if (_looksTechnical(trimmed)) return null;
     if (trimmed.length > 280) return null;
     return trimmed;
   }
@@ -68,6 +69,7 @@ bool _looksTechnical(String message) {
   final m = message.toLowerCase();
   return m.startsWith('dioexception') ||
       m.startsWith('apiexception') ||
+      m.contains('backend запущен') ||
       m.contains('status code') ||
       m.contains('status:') ||
       m.contains('(status:') ||

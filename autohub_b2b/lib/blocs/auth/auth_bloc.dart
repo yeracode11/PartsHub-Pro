@@ -162,8 +162,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           e.type == DioExceptionType.sendTimeout ||
           e.type == DioExceptionType.receiveTimeout ||
           e.message?.contains('Connection refused') == true) {
-        emit(AuthError(
-          'Не удалось подключиться к серверу. Проверьте сеть и что backend доступен.',
+        emit(const AuthError(
+          'Сервер временно недоступен. Проверьте подключение к интернету или повторите попытку позже.',
         ));
         return;
       }
@@ -270,8 +270,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           e.type == DioExceptionType.sendTimeout ||
           e.type == DioExceptionType.receiveTimeout ||
           e.message?.contains('Connection refused') == true) {
-        emit(AuthError(
-          'Не удалось подключиться к серверу. Проверьте сеть и что backend доступен.',
+        emit(const AuthError(
+          'Сервер временно недоступен. Проверьте подключение к интернету или повторите попытку позже.',
         ));
         return;
       }

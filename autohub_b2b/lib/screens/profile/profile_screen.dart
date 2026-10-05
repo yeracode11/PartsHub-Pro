@@ -22,7 +22,6 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   String? _organizationName;
   String? _organizationPhone;
-  bool _loading = true;
 
   @override
   void initState() {
@@ -35,15 +34,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final userData = await storage.getUserData();
     if (userData != null && userData['organization'] != null) {
       final organization = userData['organization'];
-      setState(() {
-        _organizationName = organization['name'] as String?;
-        _organizationPhone = (organization['phone'] as String?) ?? userData['phone'] as String?;
-        _loading = false;
-      });
-    } else {
-      setState(() {
-        _loading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _organizationName = organization['name'] as String?;
+          _organizationPhone = (organization['phone'] as String?) ?? userData['phone'] as String?;
+        });
+      }
     }
   }
 
@@ -127,15 +123,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ],
                   const SizedBox(height: 16),
                   // Роль и тип бизнеса
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 12,
+                    runSpacing: 8,
                     children: [
                       _buildBadge(
                         icon: Icons.badge,
                         label: user.role.displayName,
                         color: AppTheme.primaryColor,
                       ),
-                      const SizedBox(width: 12),
                       _buildBadge(
                         icon: Icons.business,
                         label: user.businessType.displayName,
@@ -338,9 +335,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

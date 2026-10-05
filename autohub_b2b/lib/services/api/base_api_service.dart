@@ -174,28 +174,21 @@ class BaseApiService {
         }
 
       case DioExceptionType.connectionError:
-        // Проверяем, содержит ли сообщение об ошибке "Connection refused"
-        if (error.message?.contains('Connection refused') == true) {
-          return ApiException(
-            message: 'Сервер недоступен. Проверьте, что backend запущен на ${error.requestOptions.baseUrl}',
-          );
-        }
         return NetworkException(
-          message: 'Не удалось подключиться к серверу. Убедитесь, что backend запущен.',
+          message: 'Сервер временно недоступен. Проверьте интернет или повторите позже.',
         );
 
       case DioExceptionType.cancel:
         return ApiException(message: 'Запрос отменен');
 
       default:
-        // Проверяем сообщение об ошибке для более точной диагностики
         if (error.message?.contains('Connection refused') == true) {
-          return ApiException(
-            message: 'Сервер недоступен. Проверьте, что backend запущен.',
+          return NetworkException(
+            message: 'Сервер временно недоступен. Попробуйте позже.',
           );
         }
         return ApiException(
-          message: error.message ?? 'Неизвестная ошибка',
+          message: error.message ?? 'Не удалось выполнить запрос',
         );
     }
   }

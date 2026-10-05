@@ -7,7 +7,6 @@ import 'package:autohub_b2b/widgets/offline_placeholder.dart';
 import 'package:autohub_b2b/services/api/api_client.dart';
 import 'package:autohub_b2b/models/vehicle_model.dart';
 import 'package:dio/dio.dart';
-import 'package:intl/intl.dart';
 import 'package:autohub_b2b/screens/vehicles/vehicle_detail_screen.dart';
 import 'package:autohub_b2b/services/api/api_user_message.dart';
 
@@ -108,21 +107,11 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
   }
 
   Future<void> _showVehicleDialog(VehicleModel? vehicle) async {
-    if (!await ensureAuthenticated(context)) return;
-    if (!context.mounted) return;
-    final isMobile = MediaQuery.of(context).size.width < 768;
-    final dialog = _VehicleDialog(
+    await showVehicleDialog(
+      context,
       vehicle: vehicle,
-      onSave: () {
-        Navigator.pop(context);
-        _loadVehicles();
-      },
+      onSave: _loadVehicles,
     );
-    if (isMobile) {
-      Navigator.of(context).push(MaterialPageRoute(builder: (_) => dialog));
-    } else {
-      showDialog(context: context, builder: (_) => dialog);
-    }
   }
 
   Future<void> _deleteVehicle(VehicleModel vehicle) async {
@@ -510,18 +499,48 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
   }
 }
 
-// Диалог добавления/редактирования автомобиля
-class _VehicleDialog extends StatefulWidget {
-  final VehicleModel? vehicle;
-  final VoidCallback onSave;
-
-  const _VehicleDialog({this.vehicle, required this.onSave});
-
-  @override
-  State<_VehicleDialog> createState() => _VehicleDialogState();
+Future<void> showVehicleDialog(
+  BuildContext context, {
+  VehicleModel? vehicle,
+  int? preselectedCustomerId,
+  VoidCallback? onSave,
+}) async {
+  if (!await ensureAuthenticated(context)) return;
+  if (!context.mounted) return;
+  final isMobile = MediaQuery.of(context).size.width < 768;
+  final dialog = VehicleDialog(
+    vehicle: vehicle,
+    preselectedCustomerId: preselectedCustomerId,
+    onSave: () {
+      Navigator.pop(context);
+      onSave?.call();
+    },
+  );
+  if (isMobile) {
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => dialog));
+  } else {
+    await showDialog(context: context, builder: (_) => dialog);
+  }
 }
 
-class _VehicleDialogState extends State<_VehicleDialog> {
+// Диалог добавления/редактирования автомобиля
+class VehicleDialog extends StatefulWidget {
+  final VehicleModel? vehicle;
+  final int? preselectedCustomerId;
+  final VoidCallback onSave;
+
+  const VehicleDialog({
+    super.key,
+    this.vehicle,
+    this.preselectedCustomerId,
+    required this.onSave,
+  });
+
+  @override
+  State<VehicleDialog> createState() => _VehicleDialogState();
+}
+
+class _VehicleDialogState extends State<VehicleDialog> {
   final _formKey = GlobalKey<FormState>();
   final dio = ApiClient().dio;
 
@@ -575,7 +594,7 @@ class _VehicleDialogState extends State<_VehicleDialog> {
     );
     _notesController = TextEditingController(text: v?.notes ?? '');
 
-    _selectedCustomerId = v?.customerId;
+    _selectedCustomerId = v?.customerId ?? widget.preselectedCustomerId;
     _selectedFuelType = v?.fuelType ?? 'petrol';
     _selectedTransmission = v?.transmission ?? 'manual';
 
@@ -864,12 +883,17 @@ class _VehicleDialogState extends State<_VehicleDialog> {
       const CircularProgressIndicator()
     else
       DropdownButtonFormField<int>(
-        value: _selectedCustomerId,
+        value: customers.any((c) => c['id'] == _selectedCustomerId)
+            ? _selectedCustomerId
+            : null,
         decoration: const InputDecoration(labelText: 'Владелец *'),
         items: customers.map((customer) {
+          final phone = customer['phone'] as String?;
+          final phoneSuffix =
+              (phone != null && phone.isNotEmpty) ? ' ($phone)' : '';
           return DropdownMenuItem<int>(
-            value: customer['id'],
-            child: Text(customer['name']),
+            value: customer['id'] as int,
+            child: Text('${customer['name']}$phoneSuffix'),
           );
         }).toList(),
         onChanged: (value) {

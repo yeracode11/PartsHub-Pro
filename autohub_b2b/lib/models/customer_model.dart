@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import 'package:autohub_b2b/models/vehicle_model.dart';
 
 class CustomerModel extends Equatable {
   final int? id;
@@ -12,6 +13,7 @@ class CustomerModel extends Equatable {
   final String? notes;
   final bool synced;
   final DateTime createdAt;
+  final List<VehicleModel> vehicles;
 
   const CustomerModel({
     this.id,
@@ -25,7 +27,23 @@ class CustomerModel extends Equatable {
     this.notes,
     this.synced = false,
     required this.createdAt,
+    this.vehicles = const [],
   });
+
+  bool get hasVehicles => vehicles.isNotEmpty;
+  int get vehiclesCount => vehicles.length;
+
+  String? get primaryCarDisplay {
+    if (vehicles.isNotEmpty) {
+      final v = vehicles.first;
+      final plate = v.plateNumber.isNotEmpty ? ' (${v.plateNumber})' : '';
+      return '${v.brand} ${v.model}$plate';
+    }
+    if (carBrand != null && carBrand!.isNotEmpty) {
+      return '$carBrand ${carModel ?? ''}'.trim();
+    }
+    return null;
+  }
 
   CustomerModel copyWith({
     int? id,
@@ -39,6 +57,7 @@ class CustomerModel extends Equatable {
     String? notes,
     bool? synced,
     DateTime? createdAt,
+    List<VehicleModel>? vehicles,
   }) {
     return CustomerModel(
       id: id ?? this.id,
@@ -52,6 +71,7 @@ class CustomerModel extends Equatable {
       notes: notes ?? this.notes,
       synced: synced ?? this.synced,
       createdAt: createdAt ?? this.createdAt,
+      vehicles: vehicles ?? this.vehicles,
     );
   }
 
@@ -84,6 +104,15 @@ class CustomerModel extends Equatable {
       notes: json['notes'] as String?,
       synced: json['synced'] as bool? ?? false,
       createdAt: DateTime.parse(json['createdAt'] as String),
+      vehicles: (json['vehicles'] as List<dynamic>?)
+              ?.map((v) => VehicleModel.fromJson(
+                    v as Map<String, dynamic>,
+                    defaultCustomerName: json['name'] as String?,
+                    defaultCustomerPhone: json['phone'] as String?,
+                    defaultCustomerEmail: json['email'] as String?,
+                  ))
+              .toList() ??
+          const [],
     );
   }
 
@@ -100,6 +129,7 @@ class CustomerModel extends Equatable {
         notes,
         synced,
         createdAt,
+        vehicles,
       ];
 }
 

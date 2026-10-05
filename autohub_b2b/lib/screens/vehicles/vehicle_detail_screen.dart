@@ -3,9 +3,12 @@ import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/widgets/unauthorized_placeholder.dart';
 import 'package:autohub_b2b/services/api/api_client.dart';
 import 'package:autohub_b2b/models/vehicle_model.dart';
+import 'package:autohub_b2b/models/customer_model.dart';
+import 'package:autohub_b2b/screens/crm/crm_screen.dart';
 import 'package:dio/dio.dart';
 import 'package:intl/intl.dart';
 import 'package:autohub_b2b/services/api/api_user_message.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class VehicleDetailScreen extends StatefulWidget {
   final int vehicleId;
@@ -260,6 +263,58 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
     }
   }
 
+  Future<void> _makePhoneCall(String phone) async {
+    final clean = phone.replaceAll(RegExp(r'[\s\-\(\)]'), '');
+    final uri = Uri.parse('tel:$clean');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Не удалось совершить вызов')),
+      );
+    }
+  }
+
+  Future<void> _openWhatsApp(String phone) async {
+    var digits = phone.replaceAll(RegExp(r'\D'), '');
+    if (digits.startsWith('8') && digits.length == 11) {
+      digits = '7${digits.substring(1)}';
+    }
+    final uri = Uri.parse('https://wa.me/$digits');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Не удалось открыть WhatsApp')),
+      );
+    }
+  }
+
+  Future<void> _openCustomerInCrm() async {
+    if (vehicle?.customerId == null || vehicle!.customerId == 0) return;
+    try {
+      final res = await dio.get('/api/customers/${vehicle!.customerId}');
+      if (!mounted) return;
+      final customer =
+          CustomerModel.fromJson(res.data as Map<String, dynamic>);
+      await showCustomerDialog(
+        context,
+        customer: customer,
+        onSuccess: _loadVehicleDetails,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              userFacingApiMessage(e, prefix: 'Ошибка загрузки клиента'),
+            ),
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -292,6 +347,10 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
                   _buildMainInfoCard(),
                   const SizedBox(height: 24),
 
+                  // Владелец (CRM)
+                  _buildOwnerCard(),
+                  const SizedBox(height: 24),
+
                   // Технические характеристики
                   _buildTechSpecsCard(),
                   const SizedBox(height: 24),
@@ -305,6 +364,153 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
                 ],
               ),
             ),
+    );
+  }
+
+  Widget _buildOwnerCard() {
+    final hasPhone = vehicle?.customerPhone != null &&
+        vehicle!.customerPhone!.trim().isNotEmpty;
+    final hasEmail = vehicle?.customerEmail != null &&
+        vehicle!.customerEmail!.trim().isNotEmpty;
+    final hasNotes = vehicle?.customerNotes != null &&
+        vehicle!.customerNotes!.trim().isNotEmpty;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(
+                  Icons.person_outline,
+                  size: 24,
+                  color: AppTheme.primaryColor,
+                ),
+                const SizedBox(width: 8),
+                const Text(
+                  'Владелец (CRM)',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const Spacer(),
+                TextButton.icon(
+                  onPressed: _openCustomerInCrm,
+                  icon: const Icon(Icons.open_in_new, size: 16),
+                  label: const Text('Карточка в CRM'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 20,
+                  backgroundColor: AppTheme.primaryColor.withValues(alpha: 0.1),
+                  child: Text(
+                    (vehicle?.customerName.isNotEmpty ?? false)
+                        ? vehicle!.customerName.trim()[0].toUpperCase()
+                        : '?',
+                    style: const TextStyle(
+                      color: AppTheme.primaryColor,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        vehicle?.customerName ?? 'Неизвестный клиент',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (hasPhone)
+                        Text(
+                          vehicle!.customerPhone!,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: AppTheme.textSecondary,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (hasEmail || hasNotes) ...[
+              const SizedBox(height: 12),
+              if (hasEmail)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.email_outlined,
+                        size: 16,
+                        color: AppTheme.textSecondary,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        vehicle!.customerEmail!,
+                        style: TextStyle(
+                          color: AppTheme.textSecondary,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              if (hasNotes)
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.notes_outlined,
+                      size: 16,
+                      color: AppTheme.textSecondary,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        vehicle!.customerNotes!,
+                        style: TextStyle(
+                          color: AppTheme.textSecondary,
+                          fontSize: 13,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+            ],
+            if (hasPhone) ...[
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: () => _makePhoneCall(vehicle!.customerPhone!),
+                    icon: const Icon(Icons.phone, size: 16),
+                    label: const Text('Позвонить'),
+                  ),
+                  FilledButton.tonalIcon(
+                    onPressed: () => _openWhatsApp(vehicle!.customerPhone!),
+                    icon: const Icon(Icons.chat_bubble_outline, size: 16),
+                    label: const Text('WhatsApp'),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 

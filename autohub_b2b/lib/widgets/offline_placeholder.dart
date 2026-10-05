@@ -7,10 +7,12 @@ bool isNetworkError(Object e) {
   if (e is DioException) {
     return e.type == DioExceptionType.connectionError ||
         e.type == DioExceptionType.connectionTimeout ||
-        e.type == DioExceptionType.sendTimeout;
+        e.type == DioExceptionType.sendTimeout ||
+        e.type == DioExceptionType.receiveTimeout;
   }
   if (e is Exception && e.toString().contains('SocketException')) return true;
   if (e is Exception && e.toString().contains('Connection failed')) return true;
+  if (e is Exception && e.toString().contains('Connection refused')) return true;
   return false;
 }
 
