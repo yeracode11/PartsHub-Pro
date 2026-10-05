@@ -358,6 +358,7 @@ class _IncomingAddItemScreenState extends State<IncomingAddItemScreen> {
             else
               DropdownButtonFormField<ItemModel?>(
                 value: _selectedItem,
+                isExpanded: true,
                 decoration: const InputDecoration(
                   labelText: 'Товар из каталога',
                   prefixIcon: Icon(Icons.search),
@@ -367,13 +368,17 @@ class _IncomingAddItemScreenState extends State<IncomingAddItemScreen> {
                 items: [
                   const DropdownMenuItem<ItemModel?>(
                     value: null,
-                    child: Text('Ввести вручную'),
+                    child: Text(
+                      'Ввести вручную',
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                   ..._items.map((item) {
                     return DropdownMenuItem<ItemModel?>(
                       value: item,
                       child: Text(
                         '${item.name} (${item.sku ?? 'нет артикула'})',
+                        overflow: TextOverflow.ellipsis,
                       ),
                     );
                   }),
@@ -467,17 +472,24 @@ class _IncomingAddItemScreenState extends State<IncomingAddItemScreen> {
             // Состояние
             DropdownButtonFormField<String>(
               value: _selectedCondition,
+              isExpanded: true,
               decoration: const InputDecoration(
                 labelText: 'Состояние',
                 prefixIcon: Icon(Icons.check_circle),
                 border: OutlineInputBorder(),
               ),
               items: const [
-                DropdownMenuItem(value: 'new', child: Text('Новое')),
-                DropdownMenuItem(value: 'used', child: Text('Б/У')),
+                DropdownMenuItem(
+                  value: 'new',
+                  child: Text('Новое', overflow: TextOverflow.ellipsis),
+                ),
+                DropdownMenuItem(
+                  value: 'used',
+                  child: Text('Б/У', overflow: TextOverflow.ellipsis),
+                ),
                 DropdownMenuItem(
                   value: 'refurbished',
-                  child: Text('Восстановленное'),
+                  child: Text('Восстановленное', overflow: TextOverflow.ellipsis),
                 ),
               ],
               onChanged: (value) {

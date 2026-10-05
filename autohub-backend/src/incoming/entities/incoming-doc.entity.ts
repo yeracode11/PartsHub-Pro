@@ -7,6 +7,7 @@ import {
   ManyToOne,
   OneToMany,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { Organization } from '../../organizations/entities/organization.entity';
 import { User } from '../../users/entities/user.entity';
@@ -26,6 +27,7 @@ export enum IncomingDocType {
 }
 
 @Entity('incoming_docs')
+@Index('IDX_incoming_docs_org_doc_number', ['organizationId', 'docNumber'], { unique: true })
 export class IncomingDoc {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -39,7 +41,7 @@ export class IncomingDoc {
   organization: Organization;
 
   // Номер накладной (генерируется автоматически)
-  @Column({ type: 'varchar', length: 50, unique: true })
+  @Column({ type: 'varchar', length: 50 })
   docNumber: string;
 
   // Дата накладной

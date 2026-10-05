@@ -377,6 +377,7 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
             // Тип прихода
             DropdownButtonFormField<IncomingDocType>(
               value: _selectedType,
+              isExpanded: true,
               decoration: const InputDecoration(
                 labelText: 'Тип прихода *',
                 prefixIcon: Icon(Icons.category),
@@ -385,7 +386,10 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
               items: IncomingDocType.values.map((type) {
                 return DropdownMenuItem(
                   value: type,
-                  child: Text(type.displayName),
+                  child: Text(
+                    type.displayName,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 );
               }).toList(),
               onChanged: _document?.status == IncomingDocStatus.done
@@ -403,6 +407,7 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
             // Поставщик из справочника
             DropdownButtonFormField<String?>(
               value: _selectedSupplierId,
+              isExpanded: true,
               decoration: const InputDecoration(
                 labelText: 'Поставщик (из справочника)',
                 prefixIcon: Icon(Icons.person),
@@ -411,12 +416,12 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
               items: [
                 const DropdownMenuItem<String?>(
                   value: null,
-                  child: Text('Не выбран'),
+                  child: Text('Не выбран', overflow: TextOverflow.ellipsis),
                 ),
                 ..._customers.map((customer) {
                   return DropdownMenuItem<String?>(
                     value: customer.id.toString(),
-                    child: Text(customer.name),
+                    child: Text(customer.name, overflow: TextOverflow.ellipsis),
                   );
                 }),
               ],
