@@ -7,6 +7,7 @@ import {
   ManyToOne,
   OneToMany,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { Organization } from '../../organizations/entities/organization.entity';
 import { Customer } from '../../customers/entities/customer.entity';
@@ -28,6 +29,14 @@ export enum TransmissionType {
 }
 
 @Entity('vehicles')
+@Index('UQ_vehicles_org_plate_active', ['organizationId', 'plateNumber'], {
+  unique: true,
+  where: '"isActive" = true',
+})
+@Index('UQ_vehicles_org_vin_active', ['organizationId', 'vin'], {
+  unique: true,
+  where: '"isActive" = true AND "vin" IS NOT NULL',
+})
 export class Vehicle {
   @PrimaryGeneratedColumn('increment')
   id: number;
@@ -61,10 +70,10 @@ export class Vehicle {
   @Column({ type: 'varchar', length: 50, nullable: true })
   color: string; // Цвет
 
-  @Column({ type: 'varchar', length: 20, unique: true })
+  @Column({ type: 'varchar', length: 20 })
   plateNumber: string; // Госномер (А123БВ77)
 
-  @Column({ type: 'varchar', length: 17, nullable: true, unique: true })
+  @Column({ type: 'varchar', length: 17, nullable: true })
   vin: string; // VIN номер (17 символов)
 
   // Технические характеристики

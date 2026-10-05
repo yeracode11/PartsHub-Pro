@@ -1,14 +1,107 @@
-import { Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Not, Repository } from 'typeorm';
 import { Vehicle } from './entities/vehicle.entity';
+import { Customer } from '../customers/entities/customer.entity';
+
+const IMMUTABLE_FIELDS = ['id', 'organizationId', 'createdAt', 'updatedAt'];
 
 @Injectable()
 export class VehiclesService {
   constructor(
     @InjectRepository(Vehicle)
     private readonly vehicleRepository: Repository<Vehicle>,
+    @InjectRepository(Customer)
+    private readonly customerRepository: Repository<Customer>,
   ) {}
+
+  /** Госномер и VIN храним в одном виде, иначе «123 ABC 02» и «123abc02» станут разными машинами. */
+  static normalizePlate(value?: string | null): string | undefined {
+    if (value == null) return undefined;
+    return value.replace(/\s+/g, '').toUpperCase();
+  }
+
+  static normalizeVin(value?: string | null): string | null | undefined {
+    if (value === undefined) return undefined;
+    if (value === null) return null;
+    const vin = value.replace(/\s+/g, '').toUpperCase();
+    return vin.length ? vin : null;
+  }
+
+  private sanitize(data: Partial<Vehicle>): Partial<Vehicle> {
+    const clean: Partial<Vehicle> = { ...data };
+    for (const key of IMMUTABLE_FIELDS) delete (clean as any)[key];
+    delete (clean as any).customer;
+    delete (clean as any).orders;
+    delete (clean as any).organization;
+
+    if (clean.plateNumber !== undefined) {
+      clean.plateNumber = VehiclesService.normalizePlate(clean.plateNumber)!;
+      if (!clean.plateNumber) {
+        throw new BadRequestException('Укажите госномер автомобиля');
+      }
+    }
+    if (clean.vin !== undefined) {
+      clean.vin = VehiclesService.normalizeVin(clean.vin) as string;
+      if (clean.vin && clean.vin.length !== 17) {
+        throw new BadRequestException('VIN должен содержать 17 символов');
+      }
+    }
+    return clean;
+  }
+
+  private async assertCustomerInOrganization(
+    customerId: number | undefined,
+    organizationId: string,
+  ) {
+    if (customerId == null) return;
+    const count = await this.customerRepository.count({
+      where: { id: customerId, organizationId },
+    });
+    if (count === 0) {
+      throw new BadRequestException('Владелец не найден в вашей организации');
+    }
+  }
+
+  private async assertUnique(
+    organizationId: string,
+    data: Partial<Vehicle>,
+    excludeId?: number,
+  ) {
+    const idFilter = excludeId ? { id: Not(excludeId) } : {};
+    if (data.plateNumber) {
+      const duplicate = await this.vehicleRepository.findOne({
+        where: {
+          organizationId,
+          plateNumber: data.plateNumber,
+          isActive: true,
+          ...idFilter,
+        },
+        relations: ['customer'],
+      });
+      if (duplicate) {
+        throw new ConflictException(
+          `Автомобиль с госномером ${data.plateNumber} уже есть у клиента «${duplicate.customer?.name ?? '—'}». Смените владельца в карточке автомобиля.`,
+        );
+      }
+    }
+    if (data.vin) {
+      const duplicate = await this.vehicleRepository.findOne({
+        where: { organizationId, vin: data.vin, isActive: true, ...idFilter },
+        relations: ['customer'],
+      });
+      if (duplicate) {
+        throw new ConflictException(
+          `Автомобиль с VIN ${data.vin} уже есть у клиента «${duplicate.customer?.name ?? '—'}».`,
+        );
+      }
+    }
+  }
 
   /**
    * Получить все автомобили организации
@@ -41,7 +134,14 @@ export class VehiclesService {
     });
 
     if (!vehicle) {
-      throw new Error(`Vehicle with ID ${id} not found`);
+      throw new NotFoundException(`Автомобиль #${id} не найден`);
+    }
+
+    if (vehicle.orders) {
+      vehicle.orders.sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      );
     }
 
     return vehicle;
@@ -51,12 +151,24 @@ export class VehiclesService {
    * Создать новый автомобиль
    */
   async create(organizationId: string, data: Partial<Vehicle>) {
+    const clean = this.sanitize(data);
+    if (!clean.customerId) {
+      throw new BadRequestException('Выберите владельца автомобиля');
+    }
+    if (!clean.plateNumber) {
+      throw new BadRequestException('Укажите госномер автомобиля');
+    }
+    await this.assertCustomerInOrganization(clean.customerId, organizationId);
+    await this.assertUnique(organizationId, clean);
+
     const vehicle = this.vehicleRepository.create({
-      ...data,
+      ...clean,
       organizationId,
+      isActive: true,
     });
 
-    return await this.vehicleRepository.save(vehicle);
+    const saved = await this.vehicleRepository.save(vehicle);
+    return await this.findOne(saved.id, organizationId);
   }
 
   /**
@@ -69,7 +181,14 @@ export class VehiclesService {
   ) {
     await this.findOne(id, organizationId); // Проверка существования
 
-    await this.vehicleRepository.update({ id, organizationId }, data);
+    const clean = this.sanitize(data);
+    delete clean.isActive;
+    await this.assertCustomerInOrganization(clean.customerId, organizationId);
+    await this.assertUnique(organizationId, clean, id);
+
+    if (Object.keys(clean).length > 0) {
+      await this.vehicleRepository.update({ id, organizationId }, clean);
+    }
 
     return await this.findOne(id, organizationId);
   }

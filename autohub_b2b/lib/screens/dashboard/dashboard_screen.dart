@@ -5,6 +5,9 @@ import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/blocs/dashboard/dashboard_bloc.dart';
 import 'package:autohub_b2b/blocs/dashboard/dashboard_event.dart';
 import 'package:autohub_b2b/blocs/dashboard/dashboard_state.dart';
+import 'package:autohub_b2b/blocs/auth/auth_bloc.dart';
+import 'package:autohub_b2b/blocs/auth/auth_state.dart';
+import 'package:autohub_b2b/models/user_model.dart';
 import 'package:autohub_b2b/widgets/service_reminders_widget.dart';
 import 'package:autohub_b2b/widgets/unauthorized_placeholder.dart';
 import 'package:autohub_b2b/widgets/offline_placeholder.dart';
@@ -239,7 +242,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           SizedBox(height: isMobile ? 16 : 32),
 
           // Напоминания о ТО и Популярные товары
-          if (isMobile) ...[
+          if (!_showServiceReminders(context))
+            _buildPopularItems(context, state, isMobile: isMobile)
+          else if (isMobile) ...[
             const ServiceRemindersWidget(),
             const SizedBox(height: 16),
             _buildPopularItems(context, state, isMobile: true),
@@ -256,6 +261,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ],
       ),
     );
+  }
+
+  bool _showServiceReminders(BuildContext context) {
+    final authState = context.read<AuthBloc>().state;
+    return authState is! AuthAuthenticated ||
+        authState.user.businessType != BusinessType.dismantler;
   }
 
   Widget _buildStatCard(

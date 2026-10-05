@@ -14,6 +14,7 @@ import { AuthModule } from './auth/auth.module';
 import { OrderItemsModule } from './order-items/order-items.module';
 import { WhatsAppModule } from './whatsapp/whatsapp.module';
 import { VehiclesModule } from './vehicles/vehicles.module';
+import { DonorsModule } from './donors/donors.module';
 import { B2CModule } from './b2c/b2c.module';
 import { AutoDataModule } from './auto-data/auto-data.module';
 import { IncomingModule } from './incoming/incoming.module';
@@ -105,6 +106,7 @@ const logger = new Logger('AppModule');
     CustomersModule,
     WhatsAppModule,
     VehiclesModule,
+    DonorsModule,
     B2CModule,
     AutoDataModule,
     IncomingModule,

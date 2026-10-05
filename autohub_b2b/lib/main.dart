@@ -7,6 +7,7 @@ import 'package:auto_updater/auto_updater.dart';
 import 'package:autohub_b2b/blocs/auth/auth_bloc.dart';
 import 'package:autohub_b2b/blocs/auth/auth_event.dart';
 import 'package:autohub_b2b/blocs/auth/auth_state.dart';
+import 'package:autohub_b2b/models/user_model.dart';
 import 'package:autohub_b2b/blocs/warehouse/warehouse_bloc.dart';
 import 'package:autohub_b2b/blocs/dashboard/dashboard_bloc.dart';
 import 'package:autohub_b2b/services/database/database.dart';
@@ -19,6 +20,7 @@ import 'package:autohub_b2b/screens/warehouse/incoming_list_screen.dart';
 import 'package:autohub_b2b/screens/warehouse/warehouse_location_screen.dart';
 import 'package:autohub_b2b/screens/warehouse/warehouses_screen.dart';
 import 'package:autohub_b2b/screens/warehouse/warehouse_transfers_screen.dart';
+import 'package:autohub_b2b/screens/warehouse/donors_screen.dart';
 import 'package:autohub_b2b/screens/warehouse/find_part_screen.dart';
 import 'package:autohub_b2b/screens/sales/sales_screen.dart';
 import 'package:autohub_b2b/screens/crm/crm_screen.dart';
@@ -155,7 +157,7 @@ class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
   bool _warehouseMenuExpanded = false;
   int?
-  _warehouseSubMenuIndex; // null = закрыто, 0 = Товары, 1 = Оприходование, 2 = Расположение, 3 = Склады, 4 = Перемещения
+  _warehouseSubMenuIndex; // null = закрыто, 0 = Товары, 1 = Оприходование, 2 = Расположение, 3 = Склады, 4 = Перемещения, 5 = Доноры (авторазбор)
   String? _userRole; // Роль текущего пользователя
 
   final List<Widget> _screens = [
@@ -195,6 +197,12 @@ class _MainScreenState extends State<MainScreen> {
   bool _canAccessSection(String section, AuthState authState) {
     if (authState is! AuthAuthenticated) return true;
 
+    // Авторазбор продаёт запчасти, а не обслуживает машины: авто клиента живёт в CRM и в заказе.
+    if (section == 'vehicles' &&
+        authState.user.businessType == BusinessType.dismantler) {
+      return false;
+    }
+
     if (_userRole == null) return true;
 
     if (_userRole == 'UserRole.storekeeper') {
@@ -205,6 +213,12 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   bool _isGuest(AuthState state) => state is! AuthAuthenticated;
+
+  bool get _isDismantler {
+    final state = context.read<AuthBloc>().state;
+    return state is AuthAuthenticated &&
+        state.user.businessType == BusinessType.dismantler;
+  }
 
   void _openLogin(BuildContext context) {
     AuthNavigation.pushLoginOverlay(context);
@@ -226,6 +240,8 @@ class _MainScreenState extends State<MainScreen> {
         return const WarehousesScreen(); // Склады
       case 4:
         return const WarehouseTransfersScreen(); // Перемещения
+      case 5:
+        return _isDismantler ? const DonorsScreen() : const WarehouseScreen();
       default:
         return const WarehouseScreen();
     }
@@ -246,6 +262,8 @@ class _MainScreenState extends State<MainScreen> {
           return 'Склады';
         case 4:
           return 'Перемещения';
+        case 5:
+          return 'Доноры';
         default:
           return 'Склад';
       }
@@ -621,6 +639,8 @@ class _MainScreenState extends State<MainScreen> {
           return 'Склады';
         case 4:
           return 'Перемещения';
+        case 5:
+          return 'Доноры';
         default:
           return 'Склад';
       }
@@ -924,10 +944,10 @@ class _MainScreenState extends State<MainScreen> {
         'section': 'sales',
       },
       {
-        'index': 4,
-        'icon': Icons.directions_car,
-        'label': 'Авто',
-        'section': 'vehicles',
+        'index': 3,
+        'icon': Icons.people,
+        'label': 'CRM',
+        'section': 'crm',
       },
       {
         'index': 5,
@@ -1069,6 +1089,13 @@ class _MainScreenState extends State<MainScreen> {
           subIndex: 4,
           context: context,
         ),
+        if (_isDismantler)
+          _buildDrawerSubMenuItem(
+            icon: Icons.directions_car_outlined,
+            label: 'Доноры',
+            subIndex: 5,
+            context: context,
+          ),
       ],
     );
   }
@@ -1220,6 +1247,12 @@ class _MainScreenState extends State<MainScreen> {
                   label: 'Перемещения',
                   subIndex: 4,
                 ),
+                if (_isDismantler)
+                  _buildSubMenuItem(
+                    icon: Icons.directions_car_outlined,
+                    label: 'Доноры',
+                    subIndex: 5,
+                  ),
               ],
             ),
           ),

@@ -5,6 +5,8 @@ import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/widgets/unauthorized_placeholder.dart';
 import 'package:autohub_b2b/services/database/database.dart';
 import 'package:autohub_b2b/models/order_model.dart';
+import 'package:autohub_b2b/models/customer_model.dart';
+import 'package:autohub_b2b/models/vehicle_model.dart';
 import 'package:autohub_b2b/screens/sales/order_detail_screen.dart';
 import 'package:autohub_b2b/services/hardware/barcode_scanner_service.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -218,6 +220,20 @@ class _SalesScreenState extends State<SalesScreen> {
     return _buildOrdersTable();
   }
 
+  String? _orderSubtitle(OrderModel order) {
+    final customerName = order.customer?['name'] as String?;
+    final vehicle = order.vehicle;
+    final vehicleLabel = vehicle == null
+        ? null
+        : '${vehicle['brand'] ?? ''} ${vehicle['model'] ?? ''} · ${vehicle['plateNumber'] ?? ''}'
+              .trim();
+    final parts = [
+      if (customerName != null && customerName.isNotEmpty) customerName,
+      if (vehicleLabel != null && vehicleLabel.isNotEmpty) vehicleLabel,
+    ];
+    return parts.isEmpty ? null : parts.join(' — ');
+  }
+
   Widget _buildOrdersCards() {
     final numberFormat = NumberFormat('#,###', 'ru_RU');
     final dateFormat = DateFormat('dd.MM.yyyy HH:mm');
@@ -284,6 +300,18 @@ class _SalesScreenState extends State<SalesScreen> {
                       ),
                     ],
                   ),
+                  if (_orderSubtitle(order) != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      _orderSubtitle(order)!,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: AppTheme.textSecondary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -744,9 +772,45 @@ class _OrderDialogState extends State<_OrderDialog> {
   final FocusNode _barcodeFocusNode = FocusNode();
   final BarcodeScannerService _barcodeScanner = BarcodeScannerService();
 
+  List<CustomerModel> _customers = [];
+  bool _isLoadingCustomers = true;
+  int? _customerId;
+  int? _vehicleId;
+  bool _linkChanged = false;
+
+  CustomerModel? get _selectedCustomer {
+    for (final c in _customers) {
+      if (c.id == _customerId) return c;
+    }
+    return null;
+  }
+
+  Future<void> _loadCustomers() async {
+    try {
+      final res = await widget.dio.get('/api/customers');
+      final list = (res.data as List)
+          .map((j) => CustomerModel.fromJson(j as Map<String, dynamic>))
+          .toList();
+      if (!mounted) return;
+      setState(() {
+        _customers = list;
+        _isLoadingCustomers = false;
+        if (_customerId != null && _selectedCustomer == null) {
+          _customerId = null;
+          _vehicleId = null;
+        }
+      });
+    } catch (_) {
+      if (mounted) setState(() => _isLoadingCustomers = false);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    _customerId = widget.order?.customerId;
+    _vehicleId = widget.order?.vehicleId;
+    _loadCustomers();
     if (widget.order != null) {
       notesController.text = widget.order!.notes ?? '';
       selectedStatus = widget.order!.status;
@@ -973,6 +1037,89 @@ class _OrderDialogState extends State<_OrderDialog> {
           ],
         ],
       ),
+    );
+  }
+
+  /// Клиент необязателен (розничная продажа), авто — только из гаража выбранного клиента.
+  Widget _buildCustomerVehicleFields({bool dense = false}) {
+    if (_isLoadingCustomers) return const LinearProgressIndicator();
+
+    final vehicles = _selectedCustomer?.vehicles ?? const <VehicleModel>[];
+    final padding = dense
+        ? const EdgeInsets.symmetric(horizontal: 12, vertical: 8)
+        : null;
+
+    final customerField = DropdownButtonFormField<int?>(
+      value: _customerId,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: 'Клиент',
+        border: const OutlineInputBorder(),
+        isDense: dense,
+        contentPadding: padding,
+      ),
+      items: [
+        const DropdownMenuItem<int?>(
+          value: null,
+          child: Text('Розничный покупатель'),
+        ),
+        ..._customers.map(
+          (c) => DropdownMenuItem<int?>(
+            value: c.id,
+            child: Text(
+              c.phone.trim().isEmpty ? c.name : '${c.name} · ${c.phone}',
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ),
+      ],
+      onChanged: (value) => setState(() {
+        _linkChanged = true;
+        _customerId = value;
+        final garage = _selectedCustomer?.vehicles ?? const <VehicleModel>[];
+        _vehicleId = garage.length == 1 ? garage.first.id : null;
+      }),
+    );
+
+    final vehicleField = DropdownButtonFormField<int?>(
+      value: vehicles.any((v) => v.id == _vehicleId) ? _vehicleId : null,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: 'Автомобиль',
+        border: const OutlineInputBorder(),
+        isDense: dense,
+        contentPadding: padding,
+        helperText: _customerId != null && vehicles.isEmpty
+            ? 'В гараже клиента нет авто'
+            : null,
+      ),
+      items: [
+        const DropdownMenuItem<int?>(value: null, child: Text('Без авто')),
+        ...vehicles.map(
+          (v) => DropdownMenuItem<int?>(
+            value: v.id,
+            child: Text(
+              '${v.brand} ${v.model} · ${v.plateNumber}',
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ),
+      ],
+      onChanged: vehicles.isEmpty
+          ? null
+          : (value) => setState(() {
+              _linkChanged = true;
+              _vehicleId = value;
+            }),
+    );
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: customerField),
+        const SizedBox(width: 12),
+        Expanded(child: vehicleField),
+      ],
     );
   }
 
@@ -1335,6 +1482,9 @@ class _OrderDialogState extends State<_OrderDialog> {
               ),
               const SizedBox(height: 12),
 
+              _buildCustomerVehicleFields(dense: true),
+              const SizedBox(height: 12),
+
               // Статус + Оплата
               Row(
                 children: [
@@ -1436,6 +1586,8 @@ class _OrderDialogState extends State<_OrderDialog> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              _buildCustomerVehicleFields(),
+              const SizedBox(height: 16),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -1827,6 +1979,10 @@ class _OrderDialogState extends State<_OrderDialog> {
     }
 
     final data = {
+      if (!widget.isEdit || _linkChanged) ...{
+        'customerId': _customerId,
+        'vehicleId': _vehicleId,
+      },
       'status': reserveEnabled ? 'reserved' : selectedStatus,
       'paymentStatus': selectedPaymentStatus,
       'notes': notesController.text.isEmpty ? null : notesController.text,

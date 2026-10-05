@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:dio/dio.dart';
 import 'package:autohub_b2b/models/receipt_document_model.dart';
 import 'package:autohub_b2b/screens/receipt/receipt_preview_screen.dart';
+import 'package:autohub_b2b/screens/vehicles/vehicle_detail_screen.dart';
 import 'package:autohub_b2b/services/auth/secure_storage_service.dart';
 import 'package:autohub_b2b/services/api/api_user_message.dart';
 
@@ -665,6 +666,36 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                                 color: AppTheme.textSecondary,
                               ),
+                        ),
+                      ],
+                      if (widget.order.vehicle != null) ...[
+                        const SizedBox(height: 12),
+                        InkWell(
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => VehicleDetailScreen(
+                                vehicleId: widget.order.vehicle!['id'] as int,
+                              ),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.directions_car_outlined,
+                                size: 18,
+                                color: AppTheme.textSecondary,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  '${widget.order.vehicle!['brand'] ?? ''} ${widget.order.vehicle!['model'] ?? ''} · ${widget.order.vehicle!['plateNumber'] ?? ''}',
+                                  style: Theme.of(context).textTheme.bodyMedium,
+                                ),
+                              ),
+                              const Icon(Icons.chevron_right, size: 18),
+                            ],
+                          ),
                         ),
                       ],
                     ],

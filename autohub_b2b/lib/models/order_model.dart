@@ -118,6 +118,7 @@ class OrderModel extends Equatable {
   final int? id;
   final String? orderNumber;
   final int? customerId;
+  final int? vehicleId;
   final double total;
   final String status;
   final String paymentStatus;
@@ -128,6 +129,7 @@ class OrderModel extends Equatable {
   final DateTime? reservedUntil;
   final List<OrderItemModel>? items;
   final Map<String, dynamic>? customer;
+  final Map<String, dynamic>? vehicle;
   final List<WorkStageModel>? workStages;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -136,6 +138,7 @@ class OrderModel extends Equatable {
     this.id,
     this.orderNumber,
     this.customerId,
+    this.vehicleId,
     required this.total,
     required this.status,
     required this.paymentStatus,
@@ -146,6 +149,7 @@ class OrderModel extends Equatable {
     this.reservedUntil,
     this.items,
     this.customer,
+    this.vehicle,
     this.workStages,
     required this.createdAt,
     required this.updatedAt,
@@ -155,6 +159,7 @@ class OrderModel extends Equatable {
     int? id,
     String? orderNumber,
     int? customerId,
+    int? vehicleId,
     double? total,
     String? status,
     String? paymentStatus,
@@ -165,6 +170,7 @@ class OrderModel extends Equatable {
     DateTime? reservedUntil,
     List<OrderItemModel>? items,
     Map<String, dynamic>? customer,
+    Map<String, dynamic>? vehicle,
     List<WorkStageModel>? workStages,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -173,6 +179,7 @@ class OrderModel extends Equatable {
       id: id ?? this.id,
       orderNumber: orderNumber ?? this.orderNumber,
       customerId: customerId ?? this.customerId,
+      vehicleId: vehicleId ?? this.vehicleId,
       total: total ?? this.total,
       status: status ?? this.status,
       paymentStatus: paymentStatus ?? this.paymentStatus,
@@ -183,6 +190,7 @@ class OrderModel extends Equatable {
       reservedUntil: reservedUntil ?? this.reservedUntil,
       items: items ?? this.items,
       customer: customer ?? this.customer,
+      vehicle: vehicle ?? this.vehicle,
       workStages: workStages ?? this.workStages,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -194,6 +202,7 @@ class OrderModel extends Equatable {
       'id': id,
       'orderNumber': orderNumber,
       'customerId': customerId,
+      'vehicleId': vehicleId,
       'total': total,
       'status': status,
       'paymentStatus': paymentStatus,
@@ -211,6 +220,7 @@ class OrderModel extends Equatable {
         'item': item.item,
       }).toList(),
       'customer': customer,
+      'vehicle': vehicle,
       'workStages': workStages?.map((stage) => stage.toJson()).toList(),
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
@@ -249,6 +259,7 @@ class OrderModel extends Equatable {
       id: json['id'] as int?,
       orderNumber: json['orderNumber'] as String?,
       customerId: json['customerId'] as int?,
+      vehicleId: json['vehicleId'] as int?,
       total: total,
       status: json['status'] as String,
       paymentStatus: json['paymentStatus'] as String? ?? 'pending',
@@ -261,6 +272,7 @@ class OrderModel extends Equatable {
           : null,
       items: items,
       customer: json['customer'] as Map<String, dynamic>?,
+      vehicle: json['vehicle'] as Map<String, dynamic>?,
       workStages: workStages,
       createdAt: DateTime.parse(json['createdAt'] as String),
       updatedAt: DateTime.parse(json['updatedAt'] as String),
@@ -272,6 +284,7 @@ class OrderModel extends Equatable {
         id,
         orderNumber,
         customerId,
+        vehicleId,
         total,
         status,
         paymentStatus,
@@ -282,6 +295,7 @@ class OrderModel extends Equatable {
         reservedUntil,
         items,
         customer,
+        vehicle,
         workStages,
         createdAt,
         updatedAt,

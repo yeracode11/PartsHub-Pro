@@ -6,9 +6,11 @@ import {
   UpdateDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { Organization } from '../../organizations/entities/organization.entity';
 import { Warehouse } from '../../warehouses/entities/warehouse.entity';
+import { DonorVehicle } from '../../donors/entities/donor-vehicle.entity';
 
 @Entity('items')
 export class Item {
@@ -59,6 +61,18 @@ export class Item {
   @ManyToOne(() => Warehouse, warehouse => warehouse.items, { nullable: true })
   @JoinColumn({ name: 'warehouseId' })
   warehouse: Warehouse;
+
+  // Машина-донор, с которой снята деталь (только для авторазбора)
+  @Index('IDX_items_donorId')
+  @Column({ type: 'int', nullable: true })
+  donorId: number | null;
+
+  @ManyToOne(() => DonorVehicle, (donor) => donor.parts, {
+    nullable: true,
+    onDelete: 'SET NULL',
+  })
+  @JoinColumn({ name: 'donorId' })
+  donor: DonorVehicle | null;
 
   @Column({ type: 'boolean', default: false })
   synced: boolean; // Для оффлайн синхронизации

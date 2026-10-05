@@ -1,7 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Order, OrderWorkStage } from './entities/order.entity';
+import { Vehicle } from '../vehicles/entities/vehicle.entity';
+import { Customer } from '../customers/entities/customer.entity';
 import { OrderItemsService } from '../order-items/order-items.service';
 import { CustomersService } from '../customers/customers.service';
 import { WhatsAppService } from '../whatsapp/whatsapp.service';
@@ -16,6 +18,10 @@ export class OrdersService {
   constructor(
     @InjectRepository(Order)
     private readonly orderRepository: Repository<Order>,
+    @InjectRepository(Vehicle)
+    private readonly vehicleRepository: Repository<Vehicle>,
+    @InjectRepository(Customer)
+    private readonly customerRepository: Repository<Customer>,
     private readonly orderItemsService: OrderItemsService,
     private readonly customersService: CustomersService,
     private readonly whatsAppService: WhatsAppService,
@@ -47,7 +53,7 @@ export class OrdersService {
   async findAll(organizationId: string) {
     const orders = await this.orderRepository.find({
       where: { organizationId },
-      relations: ['customer', 'items', 'items.item'],
+      relations: ['customer', 'vehicle', 'items', 'items.item'],
       order: { createdAt: 'DESC' },
     });
     return orders;
@@ -56,7 +62,7 @@ export class OrdersService {
   async findOne(id: number, organizationId: string) {
     const order = await this.orderRepository.findOne({
       where: { id, organizationId },
-      relations: ['customer', 'items', 'items.item'], // Загружаем товары с полной информацией
+      relations: ['customer', 'vehicle', 'items', 'items.item'], // Загружаем товары с полной информацией
     });
     if (!order) {
       throw new Error(`Order with ID ${id} not found`);
@@ -101,11 +107,17 @@ export class OrdersService {
     const isB2C = (data as any).isB2C || false;
     const actorUserId = actor?.userId || actor?.id || null;
     const isServiceOrg = await this.isServiceOrganization(organizationId);
+    const link = await this.resolveCustomerAndVehicle(
+      organizationId,
+      data.customerId,
+      data.vehicleId,
+    );
     const order = this.orderRepository.create({
       orderNumber: data.orderNumber,
       organizationId,
       createdByUserId: actorUserId,
-      customerId: data.customerId,
+      customerId: link.customerId ?? undefined,
+      vehicleId: link.vehicleId ?? undefined,
       status: data.status || 'pending',
       paymentStatus: data.paymentStatus || 'pending',
       notes: data.notes,
@@ -135,7 +147,7 @@ export class OrdersService {
 
     const createdOrder = await this.orderRepository.findOne({
       where: { id: savedOrder.id },
-      relations: ['customer', 'items', 'items.item'],
+      relations: ['customer', 'vehicle', 'items', 'items.item'],
     });
 
     if (
@@ -164,9 +176,39 @@ export class OrdersService {
     const existingOrder = await this.findOne(id, organizationId); // Проверка существования
 
     // Извлекаем items из data, чтобы не пытаться обновить relation
-    const { items, workStages, ...orderData } = data;
+    const {
+      items,
+      workStages,
+      id: _id,
+      organizationId: _organizationId,
+      customer: _customer,
+      vehicle: _vehicle,
+      organization: _organization,
+      createdAt: _createdAt,
+      updatedAt: _updatedAt,
+      ...orderData
+    } = data as any;
     const previousStatus = existingOrder.status;
     const previousReservedUntil = existingOrder.reservedUntil;
+
+    if ('customerId' in orderData || 'vehicleId' in orderData) {
+      const customerId =
+        'customerId' in orderData ? orderData.customerId : existingOrder.customerId;
+      // Смена клиента без явного авто сбрасывает авто прежнего владельца.
+      const vehicleId =
+        'vehicleId' in orderData
+          ? orderData.vehicleId
+          : customerId === existingOrder.customerId
+            ? existingOrder.vehicleId
+            : null;
+      const link = await this.resolveCustomerAndVehicle(
+        organizationId,
+        customerId,
+        vehicleId,
+      );
+      orderData.customerId = link.customerId;
+      orderData.vehicleId = link.vehicleId;
+    }
 
     if (orderData.reservedUntil) {
       orderData.reservedUntil = new Date(orderData.reservedUntil as any);
@@ -583,6 +625,44 @@ export class OrdersService {
     } catch (error) {
       return 'наша компания';
     }
+  }
+
+  /**
+   * Заказ ↔ клиент ↔ автомобиль: авто должно принадлежать организации и выбранному клиенту.
+   * Если указано только авто — клиентом становится его владелец.
+   */
+  async resolveCustomerAndVehicle(
+    organizationId: string,
+    customerId?: number | null,
+    vehicleId?: number | null,
+  ): Promise<{ customerId: number | null; vehicleId: number | null }> {
+    const normalizedCustomerId = customerId ? Number(customerId) : null;
+    const normalizedVehicleId = vehicleId ? Number(vehicleId) : null;
+
+    if (normalizedCustomerId) {
+      const count = await this.customerRepository.count({
+        where: { id: normalizedCustomerId, organizationId },
+      });
+      if (count === 0) {
+        throw new BadRequestException('Клиент не найден в вашей организации');
+      }
+    }
+
+    if (!normalizedVehicleId) {
+      return { customerId: normalizedCustomerId, vehicleId: null };
+    }
+
+    const vehicle = await this.vehicleRepository.findOne({
+      where: { id: normalizedVehicleId, organizationId, isActive: true },
+    });
+    if (!vehicle) {
+      throw new BadRequestException('Автомобиль не найден в вашей организации');
+    }
+    if (normalizedCustomerId && vehicle.customerId !== normalizedCustomerId) {
+      throw new BadRequestException('Автомобиль принадлежит другому клиенту');
+    }
+
+    return { customerId: vehicle.customerId, vehicleId: vehicle.id };
   }
 
   private async isServiceOrganization(organizationId: string): Promise<boolean> {

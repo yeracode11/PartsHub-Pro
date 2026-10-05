@@ -127,9 +127,21 @@ export class ItemsService {
     return item;
   }
 
+  /** Привязка к донору и организации меняется только через свои модули, не через общий CRUD. */
+  private stripProtectedFields(data: Partial<Item>): Partial<Item> {
+    const {
+      id: _id,
+      organizationId: _organizationId,
+      donorId: _donorId,
+      donor: _donor,
+      ...rest
+    } = data as any;
+    return rest;
+  }
+
   async create(organizationId: string, data: Partial<Item>) {
     const item = this.itemRepository.create({
-      ...data,
+      ...this.stripProtectedFields(data),
       organizationId,
       syncedToB2C: true, // Автоматически синхронизируем новые товары в B2C
     });
@@ -138,7 +150,10 @@ export class ItemsService {
 
   async update(id: number, organizationId: string, data: Partial<Item>) {
     await this.findOne(id, organizationId); // Проверка существования
-    await this.itemRepository.update({ id, organizationId }, data);
+    const clean = this.stripProtectedFields(data);
+    if (Object.keys(clean).length > 0) {
+      await this.itemRepository.update({ id, organizationId }, clean);
+    }
     return await this.findOne(id, organizationId);
   }
 
