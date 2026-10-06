@@ -142,11 +142,11 @@ class PopularItem extends Equatable {
 
   factory PopularItem.fromJson(Map<String, dynamic> json) {
     return PopularItem(
-      id: json['id'] as int,
-      name: json['name'] as String,
-      soldCount: json['soldCount'] as int? ?? 0,
+      id: int.tryParse(json['id']?.toString() ?? '') ?? 0,
+      name: json['name']?.toString() ?? '',
+      soldCount: int.tryParse(json['soldCount']?.toString() ?? '') ?? 0,
       imageUrl: json['imageUrl'] as String?,
-      price: (json['price'] as num?)?.toDouble() ?? 0.0,
+      price: double.tryParse(json['price']?.toString() ?? '') ?? 0,
     );
   }
 

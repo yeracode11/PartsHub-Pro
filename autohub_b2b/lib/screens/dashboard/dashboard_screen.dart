@@ -101,7 +101,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return SingleChildScrollView(
       padding: EdgeInsets.all(padding),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // Заголовок
           Row(
@@ -185,7 +185,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     value: '${numberFormat.format(state.stats.totalRevenue)} ₸',
                     icon: Icons.attach_money,
                     gradient: AppTheme.primaryGradient,
-                    trend: '+12.5%',
                     isMobile: isMobile,
                   ),
                   _buildStatCard(
@@ -195,7 +194,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         '${numberFormat.format(state.stats.monthlyRevenue)} ₸',
                     icon: Icons.trending_up,
                     gradient: AppTheme.successGradient,
-                    trend: '+8.2%',
                     isMobile: isMobile,
                   ),
                   _buildStatCard(
@@ -275,7 +273,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     required String value,
     required IconData icon,
     required Gradient gradient,
-    String? trend,
     bool isMobile = false,
   }) {
     return Container(
@@ -311,25 +308,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   size: isMobile ? 20 : 24,
                 ),
               ),
-              if (trend != null && !isMobile)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppTheme.successGradient.colors[0].withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    trend,
-                    style: TextStyle(
-                      color: AppTheme.successGradient.colors[0],
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
             ],
           ),
           Column(
@@ -588,11 +566,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
     DashboardLoaded state, {
     bool isMobile = false,
   }) {
+    final orders = state.recentOrders;
+    final dateFormat = DateFormat('dd.MM.yyyy HH:mm');
+    final money = NumberFormat('#,###', 'ru_RU');
+
     return Container(
+      width: double.infinity,
       padding: EdgeInsets.all(isMobile ? 16 : 24),
       decoration: BoxDecoration(
         color: AppTheme.surfaceColor,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppTheme.borderColor),
       ),
       child: Column(
@@ -600,98 +583,84 @@ class _DashboardScreenState extends State<DashboardScreen> {
         children: [
           Text(
             'Последние заказы',
-            style: Theme.of(context).textTheme.titleLarge,
+            style: Theme.of(context).textTheme.titleMedium,
           ),
-          const SizedBox(height: 24),
-          ...state.recentOrders.map((order) {
-            final dateFormat = DateFormat('dd.MM.yyyy HH:mm');
-            return Container(
-              margin: const EdgeInsets.only(bottom: 16),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppTheme.backgroundColor,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppTheme.borderColor),
+          const SizedBox(height: 8),
+          if (orders.isEmpty)
+            Text(
+              'Заказов пока нет',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: AppTheme.textSecondary,
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        order.orderNumber ?? '#${order.id}',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
-                        ),
+            )
+          else
+            ...orders.map((order) {
+              final customerName = order.customer?['name']?.toString();
+              final subtitle = [
+                if (customerName != null && customerName.isNotEmpty)
+                  customerName,
+                dateFormat.format(order.createdAt),
+                _orderStatusLabel(order.status),
+              ].join(' · ');
+              return Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            order.orderNumber ?? '#${order.id}',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 15,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            subtitle,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: AppTheme.textSecondary,
+                            ),
+                          ),
+                        ],
                       ),
-                      _buildStatusBadge(order.status),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '${NumberFormat('#,###', 'ru_RU').format(order.total)} ₸',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.primaryColor,
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    dateFormat.format(order.createdAt),
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppTheme.textSecondary,
+                    const SizedBox(width: 12),
+                    Text(
+                      '${money.format(order.total)} ₸',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 15,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            );
-          }).toList(),
+                  ],
+                ),
+              );
+            }),
         ],
       ),
     );
   }
 
-  Widget _buildStatusBadge(String status) {
-    Color color;
-    String label;
-
+  String _orderStatusLabel(String status) {
     switch (status) {
       case 'completed':
-        color = AppTheme.successGradient.colors[0];
-        label = 'Завершен';
-        break;
+        return 'Завершен';
       case 'processing':
-        color = Colors.blue.shade400;
-        label = 'В работе';
-        break;
+        return 'В работе';
       case 'cancelled':
-        color = Colors.red;
-        label = 'Отменен';
-        break;
+        return 'Отменен';
+      case 'ready':
+        return 'Готов';
+      case 'reserved':
+        return 'Бронь';
       default:
-        color = AppTheme.warningGradient.colors[0];
-        label = 'Ожидание';
+        return 'Ожидание';
     }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: color,
-          fontWeight: FontWeight.w600,
-          fontSize: 12,
-        ),
-      ),
-    );
   }
 
   Widget _buildPopularItems(
@@ -700,10 +669,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     bool isMobile = false,
   }) {
     return Container(
+      width: double.infinity,
       padding: EdgeInsets.all(isMobile ? 16 : 24),
       decoration: BoxDecoration(
         color: AppTheme.surfaceColor,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppTheme.borderColor),
       ),
       child: Column(
@@ -711,56 +681,57 @@ class _DashboardScreenState extends State<DashboardScreen> {
         children: [
           Text(
             'Популярные товары',
-            style: Theme.of(
-              context,
-            ).textTheme.titleLarge?.copyWith(fontSize: isMobile ? 18 : 20),
+            style: Theme.of(context).textTheme.titleMedium,
           ),
-          SizedBox(height: isMobile ? 16 : 24),
-          if (isMobile)
+          const SizedBox(height: 8),
+          if (state.popularItems.isEmpty)
+            Text(
+              'Продаж пока нет',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: AppTheme.textSecondary,
+              ),
+            )
+          else if (isMobile)
             ...state.popularItems.map((item) {
-              return Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppTheme.backgroundColor,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppTheme.borderColor),
-                ),
-                child: Column(
+              return Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      item.name,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item.name,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 15,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Продано ${item.soldCount}',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: AppTheme.textSecondary,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Продано: ${item.soldCount}',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: AppTheme.textSecondary,
-                          ),
-                        ),
-                        Text(
-                          '${NumberFormat('#,###', 'ru_RU').format(item.price)} ₸',
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: AppTheme.primaryColor,
-                          ),
-                        ),
-                      ],
+                    const SizedBox(width: 12),
+                    Text(
+                      '${NumberFormat('#,###', 'ru_RU').format(item.price)} ₸',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 15,
+                      ),
                     ),
                   ],
                 ),
               );
-            }).toList()
+            })
           else
             Table(
               columnWidths: const {

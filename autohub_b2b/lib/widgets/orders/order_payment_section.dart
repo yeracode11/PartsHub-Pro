@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/models/order_model.dart';
 import 'package:autohub_b2b/services/api/api_user_message.dart';
+import 'package:autohub_b2b/services/offline_queue.dart';
 
 /// Приём оплаты по заказу: сумма, нал или карта, остаток.
 class OrderPaymentSection extends StatefulWidget {
@@ -128,12 +129,38 @@ class _OrderPaymentSectionState extends State<OrderPaymentSection> {
 
     setState(() => _busy = true);
     try {
-      final response = await widget.dio.post(
-        '/api/orders/${widget.orderId}/payments',
-        data: {'amount': amount, 'method': method},
+      final paymentId = OfflineQueue.newLocalIntId();
+      final createdAt = DateTime.now().toIso8601String();
+      final payment = {
+        'id': paymentId,
+        'amount': amount,
+        'method': method,
+        'createdAt': createdAt,
+      };
+      final result = await OfflineQueue().send(
+        method: 'POST',
+        path: '/api/orders/${widget.orderId}/payments',
+        body: {'amount': amount, 'method': method},
+        entity: 'payment',
+        localId: '$paymentId',
+        snapshot: {
+          'orderId': widget.orderId,
+          'payment': payment,
+        },
       );
       if (!mounted) return;
-      await _apply(response.data as Map<String, dynamic>);
+      if (result.queued) {
+        await _apply(_localOrder([
+          ..._payments.map(_paymentJson),
+          payment,
+        ]));
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text(offlineSavedMessage)),
+        );
+      } else {
+        await _apply(Map<String, dynamic>.from(result.data as Map));
+      }
     } catch (e) {
       if (mounted) _showError(userFacingApiMessage(e, prefix: 'Ошибка'));
     } finally {
@@ -163,16 +190,64 @@ class _OrderPaymentSectionState extends State<OrderPaymentSection> {
 
     setState(() => _busy = true);
     try {
-      final response = await widget.dio.delete(
-        '/api/orders/${widget.orderId}/payments/${payment.id}',
+      final result = await OfflineQueue().send(
+        method: 'DELETE',
+        path: '/api/orders/${widget.orderId}/payments/${payment.id}',
+        entity: 'payment',
+        localId: '${payment.id}',
+        snapshot: {
+          'orderId': widget.orderId,
+          'paymentId': payment.id,
+          'remove': true,
+        },
       );
       if (!mounted) return;
-      await _apply(response.data as Map<String, dynamic>);
+      if (result.queued) {
+        await _apply(_localOrder([
+          for (final item in _payments)
+            if (item.id != payment.id) _paymentJson(item),
+        ]));
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text(offlineSavedMessage)),
+        );
+      } else {
+        await _apply(Map<String, dynamic>.from(result.data as Map));
+      }
     } catch (e) {
       if (mounted) _showError(userFacingApiMessage(e, prefix: 'Ошибка'));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Map<String, dynamic> _paymentJson(OrderPaymentModel payment) {
+    return {
+      'id': payment.id,
+      'amount': payment.amount,
+      'method': payment.method,
+      'createdAt': payment.createdAt?.toIso8601String(),
+    };
+  }
+
+  Map<String, dynamic> _localOrder(Iterable<Map<String, dynamic>> payments) {
+    final now = DateTime.now().toIso8601String();
+    final paid = payments.fold<double>(0, (sum, payment) {
+      final amount = payment['amount'];
+      return sum + (amount is num ? amount.toDouble() : 0);
+    });
+    final due = widget.total - paid;
+    return {
+      'id': widget.orderId,
+      'status': 'pending',
+      'paymentStatus': paid <= 0 ? 'unpaid' : due <= 0.009 ? 'paid' : 'partial',
+      'total': widget.total,
+      'paidAmount': paid,
+      'dueAmount': due < 0 ? 0 : due,
+      'payments': payments.toList(),
+      'createdAt': now,
+      'updatedAt': now,
+    };
   }
 
   void _showError(String message) {

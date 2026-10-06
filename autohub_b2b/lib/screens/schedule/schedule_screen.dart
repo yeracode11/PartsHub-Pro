@@ -6,11 +6,14 @@ import 'package:autohub_b2b/blocs/auth/auth_bloc.dart';
 import 'package:autohub_b2b/blocs/auth/auth_state.dart';
 import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/models/customer_model.dart';
+import 'package:autohub_b2b/models/vehicle_model.dart';
 import 'package:autohub_b2b/models/order_model.dart';
 import 'package:autohub_b2b/models/user_model.dart';
 import 'package:autohub_b2b/screens/sales/order_detail_screen.dart';
 import 'package:autohub_b2b/services/api/api_client.dart';
 import 'package:autohub_b2b/services/api/api_user_message.dart';
+import 'package:autohub_b2b/services/offline_queue.dart';
+import 'package:autohub_b2b/services/service_locator.dart';
 
 class ScheduleScreen extends StatefulWidget {
   const ScheduleScreen({super.key});
@@ -30,7 +33,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   bool get _canEdit {
     final state = context.read<AuthBloc>().state;
     return state is AuthAuthenticated &&
-        (state.user.role == UserRole.owner || state.user.role == UserRole.manager);
+        (state.user.role == UserRole.owner ||
+            state.user.role == UserRole.manager ||
+            state.user.role == UserRole.sto);
   }
 
   @override
@@ -41,11 +46,33 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
   DateTime get _dayStart => DateTime(_day.year, _day.month, _day.day);
 
-  Future<void> _load() async {
+  String get _dayKey =>
+      'appointments-${_dayStart.year}-${_dayStart.month}-${_dayStart.day}';
+
+  Future<void> _load({bool silent = false}) async {
     setState(() {
-      _loading = true;
+      if (!silent) _loading = true;
       _error = null;
     });
+    if (!OfflineQueue().isOnline) {
+      final posts = await OfflineQueue().readList('posts');
+      final appointments = await OfflineQueue().readList(_dayKey);
+      final merged = await _withPending(appointments ?? []);
+      if (!mounted) return;
+      if (posts == null && appointments == null && merged.isEmpty) {
+        setState(() {
+          _error = 'Нет подключения и нет сохранённой копии';
+          _loading = false;
+        });
+        return;
+      }
+      setState(() {
+        _posts = posts ?? [];
+        _appointments = merged;
+        _loading = false;
+      });
+      return;
+    }
     try {
       final from = _dayStart.toUtc().toIso8601String();
       final to = _dayStart.add(const Duration(days: 1)).toUtc().toIso8601String();
@@ -54,18 +81,63 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
         _dio.get('/api/schedule/appointments', queryParameters: {'from': from, 'to': to}),
       ]);
       if (!mounted) return;
+      final posts = (results[0].data as List)
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+      final appointments = (results[1].data as List)
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+      await OfflineQueue().writeList('posts', posts);
+      await OfflineQueue().writeList(_dayKey, appointments);
+      final merged = await _withPending(appointments);
+      if (!mounted) return;
       setState(() {
-        _posts = (results[0].data as List).cast<Map<String, dynamic>>();
-        _appointments = (results[1].data as List).cast<Map<String, dynamic>>();
+        _posts = posts;
+        _appointments = merged;
         _loading = false;
       });
     } catch (e) {
+      final posts = await OfflineQueue().readList('posts');
+      final appointments = await OfflineQueue().readList(_dayKey);
+      if (!mounted) return;
+      if (posts == null && appointments == null) {
+        setState(() {
+          _error = userFacingApiMessage(e);
+          _loading = false;
+        });
+        return;
+      }
+      final merged = await _withPending(appointments ?? []);
       if (!mounted) return;
       setState(() {
-        _error = userFacingApiMessage(e);
+        _posts = posts ?? [];
+        _appointments = merged;
         _loading = false;
       });
     }
+  }
+
+  Future<List<Map<String, dynamic>>> _withPending(
+    List<Map<String, dynamic>> appointments,
+  ) async {
+    final merged = List<Map<String, dynamic>>.of(appointments);
+    for (final snapshot in await OfflineQueue().snapshots('appointment')) {
+      final starts = DateTime.tryParse(snapshot['startsAt']?.toString() ?? '')?.toLocal();
+      if (starts == null) continue;
+      final sameDay = starts.year == _dayStart.year &&
+          starts.month == _dayStart.month &&
+          starts.day == _dayStart.day;
+      if (!sameDay) continue;
+      final index = merged.indexWhere((item) => item['id'].toString() == snapshot['id'].toString());
+      if (index >= 0) {
+        merged[index] = snapshot;
+      } else {
+        merged.add(snapshot);
+      }
+    }
+    return merged;
   }
 
   Future<void> _add() async {
@@ -96,9 +168,51 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     if (changed == true) _load();
   }
 
+  int? _movingId;
+
+  static const _columns = <(String, String, String?)>[
+    ('scheduled', 'Записан', 'Приехал'),
+    ('arrived', 'Приехал', 'В работу'),
+    ('in_progress', 'В работе', 'Готово'),
+    ('done', 'Готово', null),
+  ];
+
+  String get _dayLabel {
+    const days = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'];
+    return '${days[_dayStart.weekday - 1]}, ${DateFormat('dd.MM').format(_dayStart)}';
+  }
+
+  Future<void> _move(Map<String, dynamic> item, String status) async {
+    final id = item['id'];
+    setState(() => _movingId = id is int ? id : int.tryParse('$id'));
+    try {
+      final result = await OfflineQueue().send(
+        method: 'PATCH',
+        path: '/api/schedule/appointments/$id',
+        body: {'status': status},
+        entity: 'appointment',
+        localId: '$id',
+        snapshot: {...item, 'status': status},
+      );
+      if (!mounted) return;
+      if (result.queued) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text(offlineSavedMessage)),
+        );
+      }
+      await _load(silent: true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userFacingApiMessage(e))),
+      );
+    } finally {
+      if (mounted) setState(() => _movingId = null);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final dateLabel = DateFormat('dd.MM.yyyy').format(_dayStart);
     return Column(
       children: [
         Padding(
@@ -114,9 +228,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
               ),
               Expanded(
                 child: Text(
-                  dateLabel,
+                  _dayLabel,
                   textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.titleMedium,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
               IconButton(
@@ -151,47 +267,220 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                         ],
                       ),
                     )
-                  : ListView(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                      children: _posts.map(_buildPost).toList(),
-                    ),
+                  : _buildBoard(),
         ),
       ],
     );
   }
 
-  Widget _buildPost(Map<String, dynamic> post) {
+  Color _stageColor(String status) {
+    switch (status) {
+      case 'arrived':
+        return AppTheme.accentColor;
+      case 'in_progress':
+        return AppTheme.textPrimary;
+      case 'done':
+        return AppTheme.secondaryColor;
+      default:
+        return AppTheme.primaryColor;
+    }
+  }
+
+  Widget _buildBoard() {
+    final wide = MediaQuery.sizeOf(context).width >= 960;
+    if (wide) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (var i = 0; i < _columns.length; i++) ...[
+              if (i > 0) const SizedBox(width: 12),
+              Expanded(child: _buildColumn(_columns[i], fill: true)),
+            ],
+          ],
+        ),
+      );
+    }
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      children: [
+        for (var i = 0; i < _columns.length; i++) ...[
+          if (i > 0) const SizedBox(height: 16),
+          _buildColumn(_columns[i], fill: false),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildColumn((String, String, String?) column, {required bool fill}) {
+    final status = column.$1;
+    final title = column.$2;
+    final nextLabel = column.$3;
+    final color = _stageColor(status);
+    final nextStatus = switch (status) {
+      'scheduled' => 'arrived',
+      'arrived' => 'in_progress',
+      'in_progress' => 'done',
+      _ => null,
+    };
     final items = _appointments
-        .where((item) => item['postId'] == post['id'] && item['status'] != 'cancelled')
+        .where((item) => (item['status']?.toString() ?? 'scheduled') == status)
         .toList();
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            post['name']?.toString() ?? 'Пост',
-            style: Theme.of(context).textTheme.titleSmall,
-          ),
-          const SizedBox(height: 8),
-          if (items.isEmpty)
-            const Text(
-              'Свободно',
-              style: TextStyle(color: AppTheme.textSecondary),
-            )
-          else
-            ...items.map(
-              (item) => Card(
-                margin: const EdgeInsets.only(bottom: 8),
-                child: ListTile(
-                  onTap: () => _open(item),
-                  title: Text(_title(item)),
-                  subtitle: Text(_subtitle(item)),
-                  trailing: Text(_time(item)),
+    final cards = items.isEmpty
+        ? const Padding(
+            padding: EdgeInsets.only(top: 4, bottom: 4),
+            child: Text(
+              'Нет записей',
+              style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+            ),
+          )
+        : Column(
+            children: [
+              for (var i = 0; i < items.length; i++) ...[
+                if (i > 0) const SizedBox(height: 8),
+                _buildCard(
+                  items[i],
+                  color: color,
+                  nextStatus: nextStatus,
+                  nextLabel: nextLabel,
+                ),
+              ],
+            ],
+          );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Row(
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 15,
+                  color: AppTheme.textPrimary,
                 ),
               ),
-            ),
-        ],
+              const SizedBox(width: 8),
+              Text(
+                '${items.length}',
+                style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+              ),
+            ],
+          ),
+        ),
+        if (fill) Expanded(child: SingleChildScrollView(child: cards)) else cards,
+      ],
+    );
+  }
+
+  Widget _buildCard(
+    Map<String, dynamic> item, {
+    required Color color,
+    required String? nextStatus,
+    required String? nextLabel,
+  }) {
+    final id = item['id'];
+    final itemId = id is int ? id : int.tryParse('$id');
+    final moving = _movingId != null && _movingId == itemId;
+    final nextColor = nextStatus == null ? color : _stageColor(nextStatus);
+    final time = _time(item);
+    return Material(
+      color: AppTheme.surfaceColor,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: AppTheme.borderColor),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => _open(item),
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                width: 3,
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: const BorderRadius.horizontal(left: Radius.circular(12)),
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (time.isNotEmpty)
+                        Text(
+                          time,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.textPrimary,
+                          ),
+                        ),
+                      Text(
+                        _title(item),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                          height: 1.3,
+                        ),
+                      ),
+                      if (_subtitle(item).isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          _subtitle(item),
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: AppTheme.textSecondary,
+                          ),
+                        ),
+                      ],
+                      if (_canEdit && nextStatus != null && nextLabel != null)
+                        TextButton(
+                          style: TextButton.styleFrom(
+                            foregroundColor: AppTheme.textPrimary,
+                            minimumSize: const Size(44, 44),
+                            padding: EdgeInsets.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            alignment: Alignment.centerLeft,
+                          ),
+                          onPressed: moving ? null : () => _move(item, nextStatus),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 8,
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  color: nextColor,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(moving ? 'Сохранение' : nextLabel),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -203,16 +492,15 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
   String _subtitle(Map<String, dynamic> item) {
     final vehicle = item['vehicle'] as Map<String, dynamic>?;
-    final master = item['master'] as Map<String, dynamic>?;
+    final post = item['post'] as Map<String, dynamic>?;
     final car = vehicle == null
         ? null
         : '${vehicle['brand'] ?? ''} ${vehicle['model'] ?? ''} ${vehicle['plateNumber'] ?? ''}'
             .trim();
     return [
       if (car != null && car.isNotEmpty) car,
-      if (master?['name'] != null) master!['name'].toString(),
-      _statusLabel(item['status']?.toString()),
-    ].join(' · ');
+      if (post?['name'] != null) post!['name'].toString(),
+    ].where((part) => part.isNotEmpty).join(' · ');
   }
 
   String _time(Map<String, dynamic> item) {
@@ -223,20 +511,6 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     return '${format.format(start)}–${format.format(end)}';
   }
 
-  String _statusLabel(String? status) {
-    switch (status) {
-      case 'arrived':
-        return 'Приехал';
-      case 'in_progress':
-        return 'В работе';
-      case 'done':
-        return 'Готово';
-      case 'cancelled':
-        return 'Отменена';
-      default:
-        return 'Записан';
-    }
-  }
 }
 
 class _AppointmentDialog extends StatefulWidget {
@@ -276,13 +550,40 @@ class _AppointmentDialogState extends State<_AppointmentDialog> {
         _dio.get('/api/schedule/masters'),
       ]);
       if (!mounted) return;
+      final customers = (results[0].data as List)
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+      final masters = (results[1].data as List)
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+      await OfflineQueue().writeList('customers', customers);
+      await OfflineQueue().writeList('scheduleMasters', masters);
       setState(() {
-        _customers = (results[0].data as List)
-            .map((item) => CustomerModel.fromJson(item as Map<String, dynamic>))
-            .toList();
-        _masters = (results[1].data as List).cast<Map<String, dynamic>>();
+        _customers = customers.map(CustomerModel.fromJson).toList();
+        _masters = masters;
       });
-    } catch (_) {}
+    } catch (_) {
+      final cachedCustomers = await OfflineQueue().readList('customers');
+      final cachedMasters = await OfflineQueue().readList('scheduleMasters');
+      if (!mounted) return;
+      final customers = <CustomerModel>[];
+      for (final json in cachedCustomers ?? []) {
+        try {
+          customers.add(CustomerModel.fromJson(json));
+        } catch (_) {}
+      }
+      if (customers.isEmpty && ServiceLocator().isInitialized) {
+        try {
+          customers.addAll(await ServiceLocator().customersRepository.getCustomers());
+        } catch (_) {}
+      }
+      setState(() {
+        _customers = customers;
+        _masters = cachedMasters ?? [];
+      });
+    }
   }
 
   CustomerModel? get _customer {
@@ -307,17 +608,59 @@ class _AppointmentDialogState extends State<_AppointmentDialog> {
       _time.minute,
     );
     setState(() => _saving = true);
+    final notes = _notes.text.trim().isEmpty ? null : _notes.text.trim();
+    final ends = starts.add(Duration(minutes: _duration));
+    final localId = OfflineQueue.newLocalIntId();
+    Map<String, dynamic>? post;
+    for (final item in widget.posts) {
+      if (item['id'] == _postId) post = item;
+    }
+    final customer = _customer;
+    VehicleModel? vehicle;
+    if (customer != null && _vehicleId != null) {
+      for (final item in customer.vehicles) {
+        if (item.id == _vehicleId) vehicle = item;
+      }
+    }
     try {
-      await _dio.post('/api/schedule/appointments', data: {
-        'postId': _postId,
-        'customerId': _customerId,
-        'vehicleId': _vehicleId,
-        'masterId': _masterId,
-        'startsAt': starts.toUtc().toIso8601String(),
-        'durationMinutes': _duration,
-        'notes': _notes.text.trim().isEmpty ? null : _notes.text.trim(),
-      });
-      if (mounted) Navigator.pop(context, true);
+      final result = await OfflineQueue().send(
+        method: 'POST',
+        path: '/api/schedule/appointments',
+        body: {
+          'postId': _postId,
+          'customerId': _customerId,
+          'vehicleId': _vehicleId,
+          'masterId': _masterId,
+          'startsAt': starts.toUtc().toIso8601String(),
+          'durationMinutes': _duration,
+          'notes': notes,
+        },
+        entity: 'appointment',
+        localId: '$localId',
+        snapshot: {
+          'id': localId,
+          'status': 'scheduled',
+          'startsAt': starts.toIso8601String(),
+          'endsAt': ends.toIso8601String(),
+          'notes': notes,
+          'post': post == null ? null : {'id': post['id'], 'name': post['name']},
+          'customer': customer == null ? null : {'id': customer.id, 'name': customer.name},
+          'vehicle': vehicle == null
+              ? null
+              : {
+                  'brand': vehicle.brand,
+                  'model': vehicle.model,
+                  'plateNumber': vehicle.plateNumber,
+                },
+        },
+      );
+      if (!mounted) return;
+      if (result.queued) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text(offlineSavedMessage)),
+        );
+      }
+      Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);
@@ -442,7 +785,7 @@ class _AppointmentDialogState extends State<_AppointmentDialog> {
                   initialValue: _masterId,
                   isExpanded: true,
                   decoration: const InputDecoration(
-                    labelText: 'Мастер',
+                    labelText: 'СТО',
                     border: OutlineInputBorder(),
                   ),
                   items: [
@@ -450,7 +793,7 @@ class _AppointmentDialogState extends State<_AppointmentDialog> {
                     ..._masters.map(
                       (master) => DropdownMenuItem(
                         value: master['id']?.toString(),
-                        child: Text(master['name']?.toString() ?? 'Мастер'),
+                        child: Text(master['name']?.toString() ?? 'СТО'),
                       ),
                     ),
                   ],
@@ -508,10 +851,21 @@ class _AppointmentSheetState extends State<_AppointmentSheet> {
   Future<void> _setStatus(String status) async {
     setState(() => _busy = true);
     try {
-      await _dio.patch('/api/schedule/appointments/${widget.appointment['id']}', data: {
-        'status': status,
-      });
-      if (mounted) Navigator.pop(context, true);
+      final result = await OfflineQueue().send(
+        method: 'PATCH',
+        path: '/api/schedule/appointments/${widget.appointment['id']}',
+        body: {'status': status},
+        entity: 'appointment',
+        localId: '${widget.appointment['id']}',
+        snapshot: {...widget.appointment, 'status': status},
+      );
+      if (!mounted) return;
+      if (result.queued) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text(offlineSavedMessage)),
+        );
+      }
+      Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);
@@ -524,8 +878,20 @@ class _AppointmentSheetState extends State<_AppointmentSheet> {
   Future<void> _createOrder() async {
     setState(() => _busy = true);
     try {
-      await _dio.post('/api/schedule/appointments/${widget.appointment['id']}/order');
-      if (mounted) Navigator.pop(context, true);
+      final result = await OfflineQueue().send(
+        method: 'POST',
+        path: '/api/schedule/appointments/${widget.appointment['id']}/order',
+        entity: 'appointmentOrder',
+        localId: '${widget.appointment['id']}',
+        snapshot: {'appointmentId': widget.appointment['id']},
+      );
+      if (!mounted) return;
+      if (result.queued) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text(offlineSavedMessage)),
+        );
+      }
+      Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);
@@ -620,6 +986,56 @@ class _PostsDialogState extends State<_PostsDialog> {
     _posts = List.of(widget.posts);
   }
 
+  Future<void> _rename(Map<String, dynamic> post) async {
+    final controller = TextEditingController(text: post['name']?.toString() ?? '');
+    final name = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Имя поста'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: const InputDecoration(
+            labelText: 'Название',
+            border: OutlineInputBorder(),
+          ),
+          onSubmitted: (value) => Navigator.pop(dialogContext, value.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, controller.text.trim()),
+            child: const Text('Сохранить'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (name == null || name.isEmpty || !mounted) return;
+    try {
+      final response = await _dio.patch(
+        '/api/schedule/posts/${post['id']}',
+        data: {'name': name},
+      );
+      if (!mounted) return;
+      setState(() {
+        final index = _posts.indexWhere((item) => item['id'] == post['id']);
+        if (index >= 0) {
+          _posts[index] = Map<String, dynamic>.from(response.data as Map);
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userFacingApiMessage(e))),
+      );
+    }
+  }
+
   Future<void> _add() async {
     final name = _name.text.trim();
     if (name.isEmpty) return;
@@ -656,6 +1072,11 @@ class _PostsDialogState extends State<_PostsDialog> {
               (post) => ListTile(
                 contentPadding: EdgeInsets.zero,
                 title: Text(post['name']?.toString() ?? ''),
+                trailing: IconButton(
+                  tooltip: 'Изменить имя',
+                  onPressed: () => _rename(post),
+                  icon: const Icon(Icons.edit_outlined),
+                ),
               ),
             ),
             const SizedBox(height: 8),

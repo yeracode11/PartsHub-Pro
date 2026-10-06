@@ -194,6 +194,9 @@ class _MainScreenState extends State<MainScreen> {
           _warehouseSubMenuIndex = 0; // Товары
         }
         if (_userRole == 'UserRole.worker' && _selectedIndex == 0) {
+          _selectedIndex = 9;
+        }
+        if (_userRole == 'UserRole.sto' && _selectedIndex == 0) {
           _selectedIndex = 8;
         }
       });
@@ -225,7 +228,11 @@ class _MainScreenState extends State<MainScreen> {
     }
 
     if (_userRole == 'UserRole.worker') {
-      return section == 'schedule' || section == 'payroll';
+      return section == 'payroll';
+    }
+
+    if (_userRole == 'UserRole.sto') {
+      return section == 'schedule';
     }
 
     return true;
@@ -974,19 +981,13 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   Widget _buildBottomNavigationBar(AuthState authState) {
-    // Только основные разделы (остальные — в drawer), иначе не помещается на узких экранах
+    // Ежедневные разделы. Дашборд, CRM, аналитика и зарплата владельца — в меню.
     final allSections = [
       {
-        'index': 0,
-        'icon': Icons.dashboard,
-        'label': 'Дашборд',
-        'section': 'dashboard',
-      },
-      {
-        'index': 1,
-        'icon': Icons.inventory_2,
-        'label': 'Склад',
-        'section': 'warehouse',
+        'index': 8,
+        'icon': Icons.calendar_today,
+        'label': 'Запись',
+        'section': 'schedule',
       },
       {
         'index': 2,
@@ -995,16 +996,10 @@ class _MainScreenState extends State<MainScreen> {
         'section': 'sales',
       },
       {
-        'index': 3,
-        'icon': Icons.people,
-        'label': 'CRM',
-        'section': 'crm',
-      },
-      {
-        'index': 8,
-        'icon': Icons.calendar_today,
-        'label': 'Запись',
-        'section': 'schedule',
+        'index': 1,
+        'icon': Icons.inventory_2,
+        'label': 'Склад',
+        'section': 'warehouse',
       },
       if (_userRole == 'UserRole.worker')
         {
@@ -1027,12 +1022,17 @@ class _MainScreenState extends State<MainScreen> {
       return const SizedBox.shrink();
     }
 
+    final selectedPos = mainSections.indexWhere(
+      (section) => section['index'] == _selectedIndex,
+    );
+    final inBar = selectedPos >= 0;
+
     return BottomNavigationBar(
-      currentIndex: mainSections
-          .indexWhere((s) => s['index'] == _selectedIndex)
-          .clamp(0, mainSections.length - 1),
+      currentIndex: inBar ? selectedPos : 0,
       type: BottomNavigationBarType.fixed,
-      selectedItemColor: AppTheme.primaryColor,
+      selectedItemColor: inBar
+          ? AppTheme.primaryColor
+          : AppTheme.textSecondary,
       unselectedItemColor: AppTheme.textSecondary,
       backgroundColor: AppTheme.surfaceColor,
       elevation: 8,

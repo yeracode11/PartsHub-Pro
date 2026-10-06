@@ -43,7 +43,7 @@ export class ScheduleController {
   }
 
   @Post('posts')
-  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.STO)
   async createPost(@CurrentUser() user: any, @Body() body: PostNameBody) {
     const organizationId = await this.resolveOrganizationId(user);
     if (!organizationId) return { error: 'No active organization' };
@@ -51,7 +51,7 @@ export class ScheduleController {
   }
 
   @Patch('posts/:id')
-  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.STO)
   async renamePost(
     @Param('id') id: string,
     @CurrentUser() user: any,
@@ -63,7 +63,7 @@ export class ScheduleController {
   }
 
   @Delete('posts/:id')
-  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.STO)
   async removePost(@Param('id') id: string, @CurrentUser() user: any) {
     const organizationId = await this.resolveOrganizationId(user);
     if (!organizationId) return { success: false };
@@ -91,17 +91,12 @@ export class ScheduleController {
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
       return [];
     }
-    const masterId = user?.role === UserRole.WORKER ? user.id : undefined;
-    return this.scheduleService.listAppointments(
-      organizationId,
-      start,
-      end,
-      masterId,
-    );
+    if (user?.role === UserRole.WORKER) return [];
+    return this.scheduleService.listAppointments(organizationId, start, end);
   }
 
   @Post('appointments')
-  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.STO)
   async createAppointment(
     @CurrentUser() user: any,
     @Body() body: CreateAppointmentInput,
@@ -112,7 +107,7 @@ export class ScheduleController {
   }
 
   @Patch('appointments/:id')
-  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.STO)
   async updateAppointment(
     @Param('id') id: string,
     @CurrentUser() user: any,
@@ -124,7 +119,7 @@ export class ScheduleController {
   }
 
   @Post('appointments/:id/order')
-  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.STO)
   async createOrder(
     @Param('id') id: string,
     @CurrentUser() user: any,

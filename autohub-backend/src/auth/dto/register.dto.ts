@@ -1,4 +1,4 @@
-import { IsIn, IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsIn, IsNotEmpty, IsString, MinLength } from 'class-validator';
 
 export class RegisterDto {
   @IsString()
@@ -23,6 +23,6 @@ export class RegisterDto {
   role: 'owner';
 
   @IsString()
-  @IsOptional()
-  businessType?: string;
+  @IsIn(['service', 'parts'], { message: 'Выберите СТО или авторазбор' })
+  businessType: 'service' | 'parts';
 }

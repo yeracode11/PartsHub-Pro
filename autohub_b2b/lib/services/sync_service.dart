@@ -1,11 +1,14 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:dio/dio.dart';
 import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart';
 import 'package:autohub_b2b/services/database/database.dart';
 import 'package:autohub_b2b/services/api/api_client.dart';
 import 'package:autohub_b2b/services/auth/secure_storage_service.dart';
 import 'package:autohub_b2b/services/connectivity_service.dart';
+import 'package:autohub_b2b/services/offline_queue.dart';
+import 'package:autohub_b2b/widgets/offline_placeholder.dart';
 
 class SyncService {
   static final SyncService _instance = SyncService._internal();
@@ -70,6 +73,11 @@ class SyncService {
 
     for (final item in pending) {
       try {
+        if (item.operation == 'http') {
+          await _pushHttp(item);
+          continue;
+        }
+
         final data = jsonDecode(item.data) as Map<String, dynamic>;
         final path = _apiPath(item.syncTableName, item.recordId);
 
@@ -88,8 +96,41 @@ class SyncService {
         await _db.markSynced(item.id);
       } catch (e) {
         debugPrint('[Sync] Failed to push ${item.syncTableName}/${item.recordId}: $e');
+        if (isNetworkError(e)) break;
       }
     }
+  }
+
+  Future<void> _pushHttp(SyncQueueData item) async {
+    final decoded = jsonDecode(item.data);
+    if (decoded is! Map) {
+      await _db.markSynced(item.id);
+      return;
+    }
+    final envelope = await OfflineQueue().prepareEnvelope(
+      Map<String, dynamic>.from(decoded),
+    );
+    final encoded = jsonEncode(envelope);
+    if (encoded != item.data) {
+      await _db.updateSyncData(item.id, encoded);
+    }
+
+    final path = envelope['path']?.toString() ?? '';
+    if (path.isEmpty) {
+      debugPrint('[Sync] Skip queued request without path');
+      return;
+    }
+
+    final response = await _apiClient.dio.request(
+      path,
+      data: envelope['body'],
+      options: Options(method: envelope['method']?.toString() ?? 'POST'),
+    );
+    await OfflineQueue().rememberAlias(
+      envelope['localId']?.toString(),
+      response.data,
+    );
+    await _db.markSynced(item.id);
   }
 
   String _apiPath(String tableName, int recordId) {
@@ -151,7 +192,7 @@ class SyncService {
             OrdersCompanion.insert(
               id: Value(json['id'] is int ? json['id'] : int.tryParse(json['id'].toString()) ?? 0),
               customerId: Value(json['customerId'] as int?),
-              total: Value(json['total'] is num ? json['total'].toDouble() : 0.0),
+              total: Value(_asDouble(json['total'] ?? json['totalAmount'])),
               status: json['status'] ?? 'pending',
               paymentStatus: json['paymentStatus'] ?? 'unpaid',
               notes: Value(json['notes'] as String?),
@@ -196,6 +237,11 @@ class SyncService {
     } catch (e) {
       debugPrint('[Sync] Failed to pull customers: $e');
     }
+  }
+
+  double _asDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse(value?.toString() ?? '') ?? 0;
   }
 
   void dispose() {

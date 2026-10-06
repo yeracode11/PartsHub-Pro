@@ -103,6 +103,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (created == true) _loadMasters();
   }
 
+  String _staffSubtitle(Map<String, dynamic> master) {
+    final phone = master['phone']?.toString() ?? '';
+    final role = master['role'] == 'sto' ? 'СТО' : 'Мастер';
+    if (master['role'] == 'sto') return '$role · $phone';
+    return '$role · $phone · ${_payLabel(master)}';
+  }
+
   String _payLabel(Map<String, dynamic> master) {
     final rate = master['payRate'];
     final value = rate is num ? rate : num.tryParse('$rate') ?? 40;
@@ -217,12 +224,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
               children: [
                 const Expanded(
                   child: Text(
-                    'Мастера',
+                    'Сотрудники',
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                   ),
                 ),
                 IconButton(
-                  tooltip: 'Добавить мастера',
+                  tooltip: 'Добавить сотрудника',
                   onPressed: _addMaster,
                   icon: const Icon(Icons.person_add_outlined),
                 ),
@@ -231,7 +238,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const Padding(
               padding: EdgeInsets.only(right: 8, bottom: 8),
               child: Text(
-                'Мастер входит по телефону и паролю, которые вы зададите',
+                'СТО ведёт запись. Мастер выполняет работы.',
                 style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
               ),
             ),
@@ -250,10 +257,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 (master) => ListTile(
                   contentPadding: EdgeInsets.zero,
                   title: Text(master['name']?.toString() ?? ''),
-                  subtitle: Text(
-                    '${master['phone'] ?? ''} · ${_payLabel(master)}',
-                  ),
-                  onTap: () => _editPay(master),
+                  subtitle: Text(_staffSubtitle(master)),
+                  onTap: master['role'] == 'sto' ? null : () => _editPay(master),
                   trailing: IconButton(
                     tooltip: 'Удалить',
                     icon: const Icon(Icons.close),
@@ -665,6 +670,7 @@ class _AddMasterDialogState extends State<_AddMasterDialog> {
   final _phoneKey = GlobalKey<AuthPhoneFieldState>();
   final _rate = TextEditingController(text: '40');
   String _payType = 'percent';
+  String _role = 'worker';
   bool _saving = false;
   bool _obscure = true;
 
@@ -700,6 +706,7 @@ class _AddMasterDialogState extends State<_AddMasterDialog> {
         'password': password,
         'payType': _payType,
         'payRate': double.tryParse(_rate.text.trim().replaceAll(',', '.')) ?? 40,
+        'role': _role,
       });
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
@@ -714,7 +721,7 @@ class _AddMasterDialogState extends State<_AddMasterDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Новый мастер'),
+      title: const Text('Новый сотрудник'),
       content: SizedBox(
         width: 420,
         child: SingleChildScrollView(
@@ -753,6 +760,20 @@ class _AddMasterDialogState extends State<_AddMasterDialog> {
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
+              value: _role,
+              decoration: const InputDecoration(
+                labelText: 'Роль',
+                border: OutlineInputBorder(),
+              ),
+              items: const [
+                DropdownMenuItem(value: 'worker', child: Text('Мастер')),
+                DropdownMenuItem(value: 'sto', child: Text('СТО')),
+              ],
+              onChanged: (value) => setState(() => _role = value ?? 'worker'),
+            ),
+            if (_role == 'worker') ...[
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
               value: _payType,
               decoration: const InputDecoration(
                 labelText: 'Начисление',
@@ -773,6 +794,7 @@ class _AddMasterDialogState extends State<_AddMasterDialog> {
                 border: const OutlineInputBorder(),
               ),
             ),
+            ],
           ],
         ),
         ),

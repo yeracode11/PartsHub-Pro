@@ -30,6 +30,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   bool _agreedToTerms = false;
+  String _businessType = 'service';
   String? _errorMessage;
 
   @override
@@ -86,6 +87,34 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     }
                     return null;
                   },
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Деятельность',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: AuthDesign.textMuted,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _BusinessTypeButton(
+                        label: 'СТО',
+                        selected: _businessType == 'service',
+                        onPressed: () => setState(() => _businessType = 'service'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _BusinessTypeButton(
+                        label: 'Авторазбор',
+                        selected: _businessType == 'parts',
+                        onPressed: () => setState(() => _businessType = 'parts'),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 16),
                 AuthPhoneField(
@@ -194,6 +223,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             password: _passwordController.text,
             name: _nameController.text.trim(),
             organizationName: _organizationController.text.trim(),
+            businessType: _businessType,
           ),
         );
   }
@@ -304,6 +334,40 @@ class _TermsCheckbox extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+class _BusinessTypeButton extends StatelessWidget {
+  const _BusinessTypeButton({
+    required this.label,
+    required this.selected,
+    required this.onPressed,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = ButtonStyle(
+      minimumSize: const WidgetStatePropertyAll(Size.fromHeight(48)),
+      shape: const WidgetStatePropertyAll(
+        RoundedRectangleBorder(borderRadius: AuthDesign.fieldRadius),
+      ),
+    );
+    if (selected) {
+      return FilledButton(
+        style: style,
+        onPressed: onPressed,
+        child: Text(label),
+      );
+    }
+    return OutlinedButton(
+      style: style,
+      onPressed: onPressed,
+      child: Text(label),
     );
   }
 }

@@ -148,12 +148,18 @@ class AppDatabase extends _$AppDatabase {
 
   // Queries for SyncQueue
   Future<List<SyncQueueData>> getUnsyncedItems() =>
-      (select(syncQueue)..where((tbl) => tbl.synced.equals(false))).get();
+      (select(syncQueue)
+            ..where((tbl) => tbl.synced.equals(false))
+            ..orderBy([(tbl) => OrderingTerm.asc(tbl.createdAt)]))
+          .get();
   Future<int> insertSyncItem(SyncQueueCompanion item) =>
       into(syncQueue).insert(item);
   Future<int> markSynced(int id) => (update(syncQueue)
         ..where((tbl) => tbl.id.equals(id)))
       .write(const SyncQueueCompanion(synced: Value(true)));
+  Future<void> updateSyncData(int id, String data) =>
+      (update(syncQueue)..where((tbl) => tbl.id.equals(id)))
+          .write(SyncQueueCompanion(data: Value(data)));
 }
 
 LazyDatabase _openConnection() {

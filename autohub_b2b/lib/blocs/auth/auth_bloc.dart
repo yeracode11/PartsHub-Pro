@@ -187,6 +187,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         return UserRole.storekeeper;
       case 'worker':
         return UserRole.worker;
+      case 'sto':
+        return UserRole.sto;
       default:
         return UserRole.owner;
     }
@@ -225,6 +227,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         'name': event.name.trim(),
         'organizationName': event.organizationName.trim(),
         'role': 'owner',
+        'businessType': event.businessType,
       });
 
       final registerData = registerResponse.data;

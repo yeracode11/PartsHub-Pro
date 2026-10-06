@@ -45,14 +45,28 @@ export class OrdersService {
   ];
 
   async getRecentOrders(organizationId: string, limit: number) {
+    const safeLimit = Math.min(Math.max(Number(limit) || 5, 1), 20);
     const orders = await this.orderRepository.find({
       where: { organizationId },
       relations: ['customer'],
       order: { createdAt: 'DESC' },
-      take: limit,
+      take: safeLimit,
     });
 
-    return { orders };
+    return {
+      orders: orders.map((order) => ({
+        id: order.id,
+        orderNumber: order.orderNumber,
+        status: order.status,
+        paymentStatus: order.paymentStatus,
+        totalAmount: Number(order.totalAmount),
+        createdAt: order.createdAt,
+        updatedAt: order.updatedAt,
+        customer: order.customer
+          ? { id: order.customer.id, name: order.customer.name }
+          : null,
+      })),
+    };
   }
 
   // Получить только заказы из B2C магазина

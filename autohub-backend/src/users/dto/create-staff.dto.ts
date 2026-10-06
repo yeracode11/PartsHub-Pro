@@ -18,4 +18,7 @@ export class CreateStaffDto {
 
   /** Процент 0–100 или ставка за нормо-час. */
   payRate?: number;
+
+  /** worker — мастер, sto — СТО. По умолчанию мастер. */
+  role?: string;
 }

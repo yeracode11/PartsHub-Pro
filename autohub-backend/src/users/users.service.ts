@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { User } from './entities/user.entity';
 import { Organization } from '../organizations/entities/organization.entity';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -84,7 +84,11 @@ export class UsersService {
 
   async listMasters(organizationId: string) {
     const users = await this.userRepository.find({
-      where: { organizationId, role: UserRole.WORKER, isActive: true },
+      where: {
+        organizationId,
+        role: In([UserRole.WORKER, UserRole.STO]),
+        isActive: true,
+      },
       order: { name: 'ASC' },
     });
     return users.map((user) => this.toStaffView(user));
@@ -105,7 +109,7 @@ export class UsersService {
       password: hashedPassword,
       name,
       phone: phoneE164,
-      role: UserRole.WORKER,
+      role: dto.role === 'sto' ? UserRole.STO : UserRole.WORKER,
       organizationId,
       isActive: true,
       payType: pay.payType,
@@ -117,7 +121,11 @@ export class UsersService {
 
   async removeMaster(organizationId: string, userId: string) {
     const user = await this.userRepository.findOne({
-      where: { id: userId, organizationId, role: UserRole.WORKER },
+      where: {
+        id: userId,
+        organizationId,
+        role: In([UserRole.WORKER, UserRole.STO]),
+      },
     });
     if (!user) {
       throw new NotFoundException('Мастер не найден');
@@ -134,7 +142,12 @@ export class UsersService {
     payRate?: number,
   ) {
     const user = await this.userRepository.findOne({
-      where: { id: userId, organizationId, role: UserRole.WORKER, isActive: true },
+      where: {
+        id: userId,
+        organizationId,
+        role: UserRole.WORKER,
+        isActive: true,
+      },
     });
     if (!user) {
       throw new NotFoundException('Мастер не найден');

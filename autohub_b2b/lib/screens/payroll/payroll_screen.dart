@@ -8,6 +8,7 @@ import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/models/user_model.dart';
 import 'package:autohub_b2b/services/api/api_client.dart';
 import 'package:autohub_b2b/services/api/api_user_message.dart';
+import 'package:autohub_b2b/services/offline_queue.dart';
 
 /// Зарплата и выполненные работы за текущий месяц.
 class PayrollScreen extends StatefulWidget {
@@ -42,29 +43,130 @@ class _PayrollScreenState extends State<PayrollScreen> {
     final now = DateTime.now();
     final from = DateTime(now.year, now.month, 1).toUtc().toIso8601String();
     final to = DateTime(now.year, now.month + 1, 1).toUtc().toIso8601String();
+    if (!OfflineQueue().isOnline) {
+      final cached = await OfflineQueue().readMap('payroll');
+      if (!mounted) return;
+      if (cached == null) {
+        setState(() {
+          _error = 'Нет подключения и нет сохранённой копии';
+          _loading = false;
+        });
+        return;
+      }
+      final masters = await _mastersWithPending(cached);
+      if (!mounted) return;
+      setState(() {
+        _masters = masters;
+        _loading = false;
+      });
+      return;
+    }
     try {
       final response = await _dio.get(
         '/api/payroll',
         queryParameters: {'from': from, 'to': to},
       );
       if (!mounted) return;
-      final data = response.data as Map<String, dynamic>;
+      final data = Map<String, dynamic>.from(response.data as Map);
+      await OfflineQueue().writeMap('payroll', data);
+      final masters = await _mastersWithPending(data);
+      if (!mounted) return;
       setState(() {
-        _masters = (data['masters'] as List? ?? []).cast<Map<String, dynamic>>();
+        _masters = masters;
         _loading = false;
       });
     } catch (e) {
+      final cached = await OfflineQueue().readMap('payroll');
+      if (!mounted) return;
+      if (cached == null) {
+        setState(() {
+          _error = userFacingApiMessage(e);
+          _loading = false;
+        });
+        return;
+      }
+      final masters = await _mastersWithPending(cached);
       if (!mounted) return;
       setState(() {
-        _error = userFacingApiMessage(e);
+        _masters = masters;
         _loading = false;
       });
     }
   }
 
+  Future<List<Map<String, dynamic>>> _mastersWithPending(Map<String, dynamic> data) async {
+    final masters = (data['masters'] as List? ?? [])
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+    for (final master in masters) {
+      master['open'] = _lines(master['open']);
+      master['lines'] = _lines(master['lines']);
+    }
+    for (final patch in await OfflineQueue().snapshots('payroll')) {
+      final workId = patch['workId']?.toString();
+      final done = patch['done'] == true;
+      if (workId == null) continue;
+      for (final master in masters) {
+        final open = _lines(master['open']);
+        final lines = _lines(master['lines']);
+        Map<String, dynamic>? line;
+        open.removeWhere((item) {
+          if (item['workId']?.toString() == workId) {
+            line = item;
+            return true;
+          }
+          return false;
+        });
+        lines.removeWhere((item) {
+          if (item['workId']?.toString() == workId) {
+            line = item;
+            return true;
+          }
+          return false;
+        });
+        if (line == null) continue;
+        final amount = line!['amount'];
+        final value = amount is num ? amount.toDouble() : double.tryParse('$amount') ?? 0;
+        final totalRaw = master['total'];
+        var total = totalRaw is num ? totalRaw.toDouble() : double.tryParse('$totalRaw') ?? 0;
+        line!['done'] = done;
+        if (done) {
+          lines.insert(0, line!);
+          total += value;
+        } else {
+          open.insert(0, line!);
+          total -= value;
+        }
+        master['open'] = open;
+        master['lines'] = lines;
+        master['total'] = total;
+      }
+    }
+    return masters;
+  }
+
+  List<Map<String, dynamic>> _lines(dynamic raw) {
+    if (raw is! List) return [];
+    return raw.whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList();
+  }
+
   Future<void> _toggle(Map<String, dynamic> line, bool done) async {
     try {
-      await _dio.patch('/api/payroll/works/${line['workId']}', data: {'done': done});
+      final result = await OfflineQueue().send(
+        method: 'PATCH',
+        path: '/api/payroll/works/${line['workId']}',
+        body: {'done': done},
+        entity: 'payroll',
+        localId: '${line['workId']}',
+        snapshot: {'workId': line['workId'], 'done': done},
+      );
+      if (!mounted) return;
+      if (result.queued) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text(offlineSavedMessage)),
+        );
+      }
       await _load();
     } catch (e) {
       if (!mounted) return;

@@ -14,23 +14,38 @@ export class ItemsService {
   ) {}
 
   async getPopularItems(organizationId: string, limit: number) {
-    // Получаем товары отсортированные по количеству (как популярность)
-    const items = await this.itemRepository.find({
-      where: { organizationId },
-      order: { quantity: 'DESC' }, // Чем больше на складе, тем популярнее
-      take: limit,
-    });
+    const safeLimit = Math.min(Math.max(Number(limit) || 5, 1), 20);
+    const rows = await this.itemRepository.manager
+      .createQueryBuilder()
+      .select('item.id', 'id')
+      .addSelect('item.name', 'name')
+      .addSelect('item.price', 'price')
+      .addSelect('item."imageUrl"', 'imageUrl')
+      .addSelect('SUM(oi.quantity)', 'soldCount')
+      .from('order_items', 'oi')
+      .innerJoin('items', 'item', 'item.id = oi."itemId"')
+      .innerJoin('orders', 'ord', 'ord.id = oi."orderId"')
+      .where('item."organizationId" = :organizationId', { organizationId })
+      .andWhere('ord."organizationId" = :organizationId', { organizationId })
+      .andWhere(`ord.status <> 'cancelled'`)
+      .andWhere(`(ord.status = 'completed' OR ord."paymentStatus" = 'paid')`)
+      .groupBy('item.id')
+      .addGroupBy('item.name')
+      .addGroupBy('item.price')
+      .addGroupBy('item."imageUrl"')
+      .orderBy('SUM(oi.quantity)', 'DESC')
+      .limit(safeLimit)
+      .getRawMany();
 
-    // Форматируем для совместимости с Flutter API
-    const formattedItems = items.map((item) => ({
-      id: item.id,
-      name: item.name,
-      soldCount: item.quantity, // Используем quantity как soldCount для демо
-      price: Number(item.price),
-      imageUrl: item.imageUrl,
-    }));
-
-    return { items: formattedItems };
+    return {
+      items: rows.map((row) => ({
+        id: Number(row.id),
+        name: row.name,
+        soldCount: Number(row.soldCount) || 0,
+        price: Number(row.price) || 0,
+        imageUrl: row.imageUrl ?? null,
+      })),
+    };
   }
 
   // CRUD методы для управления товарами с фильтрацией

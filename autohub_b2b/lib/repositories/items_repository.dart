@@ -6,6 +6,7 @@ import 'package:autohub_b2b/models/label_product_model.dart';
 import 'package:autohub_b2b/services/api/api_client.dart';
 import 'package:autohub_b2b/services/connectivity_service.dart';
 import 'package:autohub_b2b/services/database/database.dart';
+import 'package:autohub_b2b/services/offline_queue.dart';
 
 class ItemsRepository {
   final AppDatabase _db;
@@ -24,15 +25,33 @@ class ItemsRepository {
         final List<dynamic> data = response.data;
         final items = data.map((j) => ItemModel.fromJson(j)).toList();
         await _cacheItems(items);
-        return items;
+        return _mergePending(items);
       } catch (e) {
         debugPrint('[ItemsRepo] API failed, falling back to cache: $e');
         final cached = await _getFromCache();
-        if (cached.isNotEmpty) return cached;
+        if (cached.isNotEmpty) return _mergePending(cached);
         rethrow;
       }
     }
-    return _getFromCache();
+    return _mergePending(await _getFromCache());
+  }
+
+  Future<List<ItemModel>> _mergePending(List<ItemModel> items) async {
+    final merged = List<ItemModel>.of(items);
+    for (final json in await OfflineQueue().snapshots('item')) {
+      try {
+        final pending = ItemModel.fromJson(json);
+        final index = merged.indexWhere((item) => item.id == pending.id);
+        if (index >= 0) {
+          merged[index] = pending;
+        } else {
+          merged.insert(0, pending);
+        }
+      } catch (e) {
+        debugPrint('[ItemsRepo] Skip pending item: $e');
+      }
+    }
+    return merged;
   }
 
   Future<ItemModel?> getItem(int id) async {

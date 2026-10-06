@@ -19,6 +19,7 @@ import 'package:autohub_b2b/utils/dialog_helper.dart';
 import 'package:autohub_b2b/utils/auth_guard.dart';
 import 'package:autohub_b2b/models/label_product_model.dart';
 import 'package:autohub_b2b/services/api/api_user_message.dart';
+import 'package:autohub_b2b/services/offline_queue.dart';
 import 'package:autohub_b2b/services/auth/secure_storage_service.dart';
 import 'package:autohub_b2b/widgets/orders/order_payment_section.dart';
 
@@ -142,13 +143,14 @@ class _SalesScreenState extends State<SalesScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'Продажи',
-                        style: Theme.of(context).textTheme.displayMedium
-                            ?.copyWith(fontSize: isMobile ? 24 : 28),
-                      ),
+                      if (!isMobile)
+                        Text(
+                          'Продажи',
+                          style: Theme.of(context).textTheme.displayMedium
+                              ?.copyWith(fontSize: 28),
+                        ),
                       if (_today != null) ...[
-                        const SizedBox(height: 4),
+                        if (!isMobile) const SizedBox(height: 4),
                         Text(
                           _todayLine(),
                           style: Theme.of(context).textTheme.bodyMedium
@@ -1260,6 +1262,10 @@ class _OrderDialogState extends State<_OrderDialog> {
       ),
       body: Column(
         children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: _buildCustomerVehicleFields(dense: true),
+          ),
           // Сканер / ввод кода — sticky сверху
           Container(
             color: Theme.of(context).cardColor,
@@ -1679,65 +1685,56 @@ class _OrderDialogState extends State<_OrderDialog> {
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
-
-              _buildCustomerVehicleFields(dense: true),
-              const SizedBox(height: 12),
-
-              // Статус + Оплата
-              Row(
-                children: [
-                  Expanded(
-                    child: DropdownButtonFormField<String>(
-                      value: selectedStatus,
-                      decoration: const InputDecoration(
-                        labelText: 'Статус',
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                        contentPadding: EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                      ),
-                      items: const [
-                        DropdownMenuItem(
-                          value: 'pending',
-                          child: Text('Ожидание'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'processing',
-                          child: Text('В работе'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'reserved',
-                          child: Text('Бронь'),
-                        ),
-                        DropdownMenuItem(value: 'ready', child: Text('Готов')),
-                        DropdownMenuItem(
-                          value: 'completed',
-                          child: Text('Завершен'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'cancelled',
-                          child: Text('Отменен'),
-                        ),
-                      ],
-                      onChanged: (value) {
-                        setState(() {
-                          selectedStatus = value!;
-                          if (selectedStatus == 'reserved') {
-                            reserveEnabled = true;
-                            _setReserveUntilFromDays();
-                          } else {
-                            reserveEnabled = false;
-                            reserveUntil = null;
-                          }
-                        });
-                      },
+              if (widget.isEdit) ...[
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  value: selectedStatus,
+                  decoration: const InputDecoration(
+                    labelText: 'Статус',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
                     ),
                   ),
-                ],
-              ),
+                  items: const [
+                    DropdownMenuItem(
+                      value: 'pending',
+                      child: Text('Ожидание'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'processing',
+                      child: Text('В работе'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'reserved',
+                      child: Text('Бронь'),
+                    ),
+                    DropdownMenuItem(value: 'ready', child: Text('Готов')),
+                    DropdownMenuItem(
+                      value: 'completed',
+                      child: Text('Завершен'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'cancelled',
+                      child: Text('Отменен'),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    setState(() {
+                      selectedStatus = value!;
+                      if (selectedStatus == 'reserved') {
+                        reserveEnabled = true;
+                        _setReserveUntilFromDays();
+                      } else {
+                        reserveEnabled = false;
+                        reserveUntil = null;
+                      }
+                    });
+                  },
+                ),
+              ],
               if (widget.isEdit && widget.order?.id != null) ...[
                 const SizedBox(height: 16),
                 OrderPaymentSection(
@@ -1754,12 +1751,6 @@ class _OrderDialogState extends State<_OrderDialog> {
                           ? widget.order!.dueAmount
                           : widget.order!.total),
                   onChanged: widget.onPaymentsChanged,
-                ),
-              ] else ...[
-                const SizedBox(height: 8),
-                const Text(
-                  'Оплату можно принять после создания заказа',
-                  style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
                 ),
               ],
             ],
@@ -2032,93 +2023,83 @@ class _OrderDialogState extends State<_OrderDialog> {
                 const SizedBox(height: 16),
                 _buildWorksSection(),
               ],
-              const SizedBox(height: 16),
-              _buildReserveSection(),
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  Expanded(
-                    child: DropdownButtonFormField<String>(
-                      value: selectedStatus,
-                      decoration: const InputDecoration(
-                        labelText: 'Статус',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: const [
-                        DropdownMenuItem(
-                          value: 'pending',
-                          child: Text('Ожидание'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'processing',
-                          child: Text('В работе'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'reserved',
-                          child: Text('Забронирован'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'ready',
-                          child: Text('Готов к выдаче'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'completed',
-                          child: Text('Завершен'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'cancelled',
-                          child: Text('Отменен'),
-                        ),
-                      ],
-                      onChanged: (value) {
-                        setState(() {
-                          selectedStatus = value!;
-                          if (selectedStatus == 'reserved') {
-                            reserveEnabled = true;
-                            _setReserveUntilFromDays();
-                          } else {
-                            reserveEnabled = false;
-                            reserveUntil = null;
-                          }
-                        });
-                      },
+              if (widget.isEdit) ...[
+                const SizedBox(height: 16),
+                _buildReserveSection(),
+                const SizedBox(height: 24),
+                DropdownButtonFormField<String>(
+                  value: selectedStatus,
+                  decoration: const InputDecoration(
+                    labelText: 'Статус',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: const [
+                    DropdownMenuItem(
+                      value: 'pending',
+                      child: Text('Ожидание'),
                     ),
+                    DropdownMenuItem(
+                      value: 'processing',
+                      child: Text('В работе'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'reserved',
+                      child: Text('Забронирован'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'ready',
+                      child: Text('Готов к выдаче'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'completed',
+                      child: Text('Завершен'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'cancelled',
+                      child: Text('Отменен'),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    setState(() {
+                      selectedStatus = value!;
+                      if (selectedStatus == 'reserved') {
+                        reserveEnabled = true;
+                        _setReserveUntilFromDays();
+                      } else {
+                        reserveEnabled = false;
+                        reserveUntil = null;
+                      }
+                    });
+                  },
+                ),
+                if (widget.order?.id != null) ...[
+                  const SizedBox(height: 16),
+                  OrderPaymentSection(
+                    dio: widget.dio,
+                    orderId: widget.order!.id!,
+                    total: widget.order!.total,
+                    payments: widget.order!.payments,
+                    paidAmount: widget.order!.paidAmount,
+                    dueAmount: widget.order!.payments.isNotEmpty ||
+                            widget.order!.paidAmount > 0 ||
+                            widget.order!.paymentStatus == 'paid'
+                        ? widget.order!.dueAmount
+                        : (widget.order!.dueAmount > 0
+                            ? widget.order!.dueAmount
+                            : widget.order!.total),
+                    onChanged: widget.onPaymentsChanged,
                   ),
                 ],
-              ),
-              if (widget.isEdit && widget.order?.id != null) ...[
                 const SizedBox(height: 16),
-                OrderPaymentSection(
-                  dio: widget.dio,
-                  orderId: widget.order!.id!,
-                  total: widget.order!.total,
-                  payments: widget.order!.payments,
-                  paidAmount: widget.order!.paidAmount,
-                  dueAmount: widget.order!.payments.isNotEmpty ||
-                          widget.order!.paidAmount > 0 ||
-                          widget.order!.paymentStatus == 'paid'
-                      ? widget.order!.dueAmount
-                      : (widget.order!.dueAmount > 0
-                          ? widget.order!.dueAmount
-                          : widget.order!.total),
-                  onChanged: widget.onPaymentsChanged,
-                ),
-              ] else ...[
-                const SizedBox(height: 8),
-                const Text(
-                  'Оплату можно принять после создания заказа',
-                  style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+                TextField(
+                  controller: notesController,
+                  decoration: const InputDecoration(
+                    labelText: 'Примечания',
+                    border: OutlineInputBorder(),
+                  ),
+                  maxLines: 2,
                 ),
               ],
-              const SizedBox(height: 16),
-              TextField(
-                controller: notesController,
-                decoration: const InputDecoration(
-                  labelText: 'Примечания',
-                  border: OutlineInputBorder(),
-                ),
-                maxLines: 2,
-              ),
             ],
           ),
         ),
@@ -2204,19 +2185,96 @@ class _OrderDialogState extends State<_OrderDialog> {
             .toList(),
     };
 
-    try {
-      if (widget.isEdit) {
-        await widget.dio.put('/api/orders/${widget.order!.id}', data: data);
-      } else {
-        await widget.dio.post('/api/orders', data: data);
+    final now = DateTime.now().toIso8601String();
+    final localId = widget.isEdit
+        ? widget.order!.id ?? OfflineQueue.newLocalIntId()
+        : OfflineQueue.newLocalIntId();
+    CustomerModel? customer;
+    for (final item in _customers) {
+      if (item.id == _customerId) customer = item;
+    }
+    VehicleModel? vehicle;
+    if (customer != null && _vehicleId != null) {
+      for (final item in customer.vehicles) {
+        if (item.id == _vehicleId) vehicle = item;
       }
+    }
+    final snapshot = <String, dynamic>{
+      'id': localId,
+      'orderNumber': widget.order?.orderNumber ?? 'Офлайн',
+      'customerId': _customerId,
+      'vehicleId': _vehicleId,
+      'status': data['status'],
+      'paymentStatus': widget.order?.paymentStatus ?? 'unpaid',
+      'notes': data['notes'],
+      'total': totalAmount,
+      'paidAmount': widget.order?.paidAmount ?? 0,
+      'dueAmount': totalAmount - (widget.order?.paidAmount ?? 0),
+      'customer': customer == null ? widget.order?.customer : {'id': customer.id, 'name': customer.name},
+      'vehicle': vehicle == null
+          ? widget.order?.vehicle
+          : {'brand': vehicle.brand, 'model': vehicle.model, 'plateNumber': vehicle.plateNumber},
+      'items': [
+        for (var i = 0; i < selectedItems.length; i++)
+          {
+            'id': -(i + 1),
+            'itemId': selectedItems[i]['id'],
+            'quantity': selectedItems[i]['quantity'],
+            'priceAtTime': selectedItems[i]['price'],
+            'subtotal': (double.tryParse('${selectedItems[i]['price']}') ?? 0) *
+                ((selectedItems[i]['quantity'] as num?)?.toInt() ?? 0),
+            'item': {'name': selectedItems[i]['name']},
+          },
+      ],
+      'works': [
+        for (var i = 0; i < selectedWorks.length; i++)
+          {
+            'id': -(i + 1),
+            'name': selectedWorks[i]['name'],
+            'normHours': selectedWorks[i]['normHours'],
+            'pricePerHour': selectedWorks[i]['pricePerHour'],
+            'subtotal': ((selectedWorks[i]['normHours'] as num?)?.toDouble() ?? 0) *
+                ((selectedWorks[i]['pricePerHour'] as num?)?.toDouble() ?? 0),
+            'performerId': selectedWorks[i]['performerId'],
+            'performer': {'name': selectedWorks[i]['performerName']},
+            'done': selectedWorks[i]['done'] == true,
+          },
+      ],
+      'payments': widget.order?.payments
+              .map((payment) => {
+                    'id': payment.id,
+                    'amount': payment.amount,
+                    'method': payment.method,
+                    'createdAt': payment.createdAt?.toIso8601String(),
+                  })
+              .toList() ??
+          [],
+      'createdAt': widget.order?.createdAt.toIso8601String() ?? now,
+      'updatedAt': now,
+    };
+
+    try {
+      final result = await OfflineQueue().send(
+        method: widget.isEdit ? 'PUT' : 'POST',
+        path: widget.isEdit ? '/api/orders/${widget.order!.id}' : '/api/orders',
+        body: data,
+        entity: 'order',
+        snapshot: snapshot,
+        localId: '$localId',
+      );
 
       if (mounted) {
         Navigator.pop(context);
         widget.onSuccess();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(widget.isEdit ? 'Заказ обновлен' : 'Заказ создан'),
+            content: Text(
+              result.queued
+                  ? offlineSavedMessage
+                  : widget.isEdit
+                      ? 'Заказ обновлен'
+                      : 'Заказ создан',
+            ),
             backgroundColor: Colors.green,
           ),
         );

@@ -23,6 +23,7 @@ import 'package:autohub_b2b/services/service_locator.dart';
 import 'package:autohub_b2b/utils/dialog_helper.dart';
 import 'package:autohub_b2b/utils/auth_guard.dart';
 import 'package:autohub_b2b/services/api/api_user_message.dart';
+import 'package:autohub_b2b/services/offline_queue.dart';
 
 class WarehouseScreen extends StatefulWidget {
   const WarehouseScreen({super.key});
@@ -51,6 +52,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
 
   // Выбранные товары для массовой печати
   Set<int> selectedItemIds = {};
+  bool _selecting = false;
 
   static const Map<String, String> _headerAliases = {
     'name': 'name',
@@ -640,19 +642,6 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Container(
-              padding: const EdgeInsets.all(32),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: AppTheme.primaryColor.withOpacity(0.1),
-              ),
-              child: const Icon(
-                Icons.inventory_2_outlined,
-                size: 64,
-                color: AppTheme.primaryColor,
-              ),
-            ),
-            const SizedBox(height: 24),
             Text(
               items.isEmpty ? 'Склад пуст' : 'Ничего не найдено',
               style: Theme.of(context).textTheme.headlineSmall,
@@ -688,15 +677,44 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
   Widget _buildItemsCards(BuildContext context, List<ItemModel> items) {
     final numberFormat = NumberFormat('#,###', 'ru_RU');
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 88),
       itemCount: items.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 8),
       itemBuilder: (context, index) {
         final item = items[index];
-        return Card(
-          margin: const EdgeInsets.only(bottom: 12),
+        final meta = [
+          if (item.sku != null && item.sku!.isNotEmpty) item.sku!,
+          if (item.category != null && item.category!.isNotEmpty) item.category!,
+        ].join(' · ');
+        final outOfStock = item.quantity <= 0;
+        return Material(
+          color: AppTheme.surfaceColor,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: const BorderSide(color: AppTheme.borderColor),
+          ),
           child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onLongPress: () {
+              if (item.id == null) return;
+              setState(() {
+                _selecting = true;
+                selectedItemIds.add(item.id!);
+              });
+            },
             onTap: () {
+              if (_selecting) {
+                if (item.id == null) return;
+                setState(() {
+                  if (selectedItemIds.contains(item.id)) {
+                    selectedItemIds.remove(item.id);
+                  } else {
+                    selectedItemIds.add(item.id!);
+                  }
+                });
+                return;
+              }
               Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (context) => ItemEditScreen(item: item),
@@ -704,169 +722,139 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
               );
             },
             child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
+              padding: const EdgeInsets.fromLTRB(4, 4, 4, 12),
+              child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      // Чекбокс для выбора товара
-                      Checkbox(
-                        value: selectedItemIds.contains(item.id),
-                        onChanged: (bool? value) {
-                          setState(() {
-                            if (value == true) {
-                              selectedItemIds.add(item.id!);
-                            } else {
-                              selectedItemIds.remove(item.id);
-                            }
-                          });
-                        },
-                        activeColor: AppTheme.primaryColor,
+                  if (_selecting)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 10, 8, 0),
+                      child: Icon(
+                        selectedItemIds.contains(item.id)
+                            ? Icons.check_box
+                            : Icons.check_box_outline_blank,
+                        color: selectedItemIds.contains(item.id)
+                            ? AppTheme.primaryColor
+                            : AppTheme.textSecondary,
                       ),
-                      Expanded(
-                        child: Text(
-                          item.name ?? 'Без названия',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      PopupMenuButton(
-                        itemBuilder: (context) => [
-                          const PopupMenuItem(
-                            value: 'edit',
-                            child: Row(
-                              children: [
-                                Icon(Icons.edit, size: 20),
-                                SizedBox(width: 8),
-                                Text('Редактировать'),
-                              ],
-                            ),
-                          ),
-                          const PopupMenuItem(
-                            value: 'print',
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.picture_as_pdf_outlined,
-                                  size: 20,
-                                  color: Colors.blue,
-                                ),
-                                SizedBox(width: 8),
-                                Text(
-                                  'Этикетка PDF',
-                                  style: TextStyle(color: Colors.blue),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const PopupMenuItem(
-                            value: 'delete',
-                            child: Row(
-                              children: [
-                                Icon(Icons.delete, size: 20, color: Colors.red),
-                                SizedBox(width: 8),
-                                Text(
-                                  'Удалить',
-                                  style: TextStyle(color: Colors.red),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                        onSelected: (value) {
-                          if (value == 'edit') {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (context) =>
-                                    ItemEditScreen(item: item),
-                              ),
-                            );
-                          } else if (value == 'print') {
-                            _printLabel(context, item);
-                          } else if (value == 'delete') {
-                            _showDeleteDialog(context, item);
-                          }
-                        },
-                      ),
-                    ],
-                  ),
-                  if (item.sku != null && item.sku!.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      'Артикул: ${item.sku}',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppTheme.textSecondary,
-                      ),
-                    ),
-                  ],
-                  if (item.category != null && item.category!.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      'Категория: ${item.category}',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppTheme.textSecondary,
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
+                    )
+                  else
+                    const SizedBox(width: 12),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'Количество',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: AppTheme.textSecondary,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
                           Text(
-                            '${item.quantity}',
+                            item.name.isEmpty ? 'Без названия' : item.name,
                             style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
+                              height: 1.3,
                             ),
                           ),
-                        ],
-                      ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          const Text(
-                            'Цена',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: AppTheme.textSecondary,
+                          if (meta.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              meta,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: AppTheme.textSecondary,
+                              ),
                             ),
-                          ),
+                          ],
                           const SizedBox(height: 4),
                           Text(
-                            '${numberFormat.format(item.price)} ₸',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: AppTheme.primaryColor,
+                            outOfStock ? 'Нет на складе' : '${item.quantity} шт',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: outOfStock
+                                  ? AppTheme.errorColor
+                                  : AppTheme.textSecondary,
                             ),
                           ),
                         ],
                       ),
-                    ],
+                    ),
                   ),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      '${numberFormat.format(item.price)} ₸',
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  if (!_selecting)
+                    PopupMenuButton<String>(
+                      icon: const Icon(Icons.more_horiz),
+                      itemBuilder: (context) => [
+                        const PopupMenuItem(value: 'edit', child: Text('Редактировать')),
+                        const PopupMenuItem(value: 'print', child: Text('Этикетка')),
+                        const PopupMenuItem(
+                          value: 'delete',
+                          child: Text(
+                            'Удалить',
+                            style: TextStyle(color: AppTheme.errorColor),
+                          ),
+                        ),
+                      ],
+                      onSelected: (value) {
+                        if (value == 'edit') {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => ItemEditScreen(item: item),
+                            ),
+                          );
+                        } else if (value == 'print') {
+                          _printLabel(context, item);
+                        } else if (value == 'delete') {
+                          _showDeleteDialog(context, item);
+                        }
+                      },
+                    )
+                  else
+                    const SizedBox(width: 12),
                 ],
               ),
             ),
           ),
         );
       },
+    );
+  }
+
+  Widget _searchField({required bool compact}) {
+    return TextField(
+      controller: _searchController,
+      decoration: InputDecoration(
+        hintText: 'Название или артикул',
+        prefixIcon: const Icon(Icons.search),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        filled: true,
+        fillColor: AppTheme.backgroundColor,
+        isDense: compact,
+        contentPadding: EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: compact ? 12 : 16,
+        ),
+      ),
+      onChanged: _filterItems,
+    );
+  }
+
+  Widget _filterButton() {
+    return IconButton(
+      tooltip: 'Фильтры',
+      onPressed: _showFiltersDialog,
+      icon: Badge(
+        isLabelVisible: activeFiltersCount > 0,
+        label: Text('$activeFiltersCount'),
+        child: const Icon(Icons.filter_list),
+      ),
     );
   }
 
@@ -901,27 +889,60 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (isMobile && _selecting)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Выбрано ${selectedItemIds.length}',
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: filteredItems.isEmpty
+                              ? null
+                              : () {
+                                  setState(() {
+                                    final allSelected = selectedItemIds.length ==
+                                        filteredItems.where((item) => item.id != null).length;
+                                    selectedItemIds.clear();
+                                    if (!allSelected) {
+                                      for (final item in filteredItems) {
+                                        if (item.id != null) selectedItemIds.add(item.id!);
+                                      }
+                                    }
+                                  });
+                                },
+                          child: Text(
+                            selectedItemIds.length ==
+                                    filteredItems.where((item) => item.id != null).length
+                                ? 'Снять'
+                                : 'Все',
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            setState(() {
+                              _selecting = false;
+                              selectedItemIds.clear();
+                            });
+                          },
+                          child: const Text('Готово'),
+                        ),
+                      ],
+                    ),
+                  ),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
+                    if (!isMobile)
                     Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Товары',
-                            style: Theme.of(context).textTheme.displayMedium
-                                ?.copyWith(fontSize: isMobile ? 24 : 28),
-                          ),
-                          if (!isMobile) ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              'Управление товарами и запчастями',
-                              style: Theme.of(context).textTheme.bodyMedium
-                                  ?.copyWith(color: AppTheme.textSecondary),
-                            ),
-                          ],
-                        ],
+                      child: Text(
+                        'Товары',
+                        style: Theme.of(context).textTheme.displayMedium
+                            ?.copyWith(fontSize: 28),
                       ),
                     ),
                     if (!isMobile)
@@ -962,35 +983,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                                     : 'Выбрано: ${selectedItemIds.length}',
                               ),
                             ),
-                          IconButton(
-                            icon: Stack(
-                              children: [
-                                const Icon(Icons.filter_list),
-                                if (activeFiltersCount > 0)
-                                  Positioned(
-                                    right: 0,
-                                    top: 0,
-                                    child: Container(
-                                      padding: const EdgeInsets.all(4),
-                                      decoration: const BoxDecoration(
-                                        color: Colors.red,
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: Text(
-                                        activeFiltersCount.toString(),
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                            onPressed: _showFiltersDialog,
-                            tooltip: 'Фильтры',
-                          ),
+                          _filterButton(),
                           IconButton(
                             icon: const Icon(Icons.print),
                             onPressed: () {
@@ -1017,88 +1010,43 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                           ),
                         ],
                       )
-                    else
-                      Row(
-                        children: [
-                          IconButton(
-                            icon: Stack(
-                              children: [
-                                const Icon(Icons.filter_list),
-                                if (activeFiltersCount > 0)
-                                  Positioned(
-                                    right: 0,
-                                    top: 0,
-                                    child: Container(
-                                      padding: const EdgeInsets.all(4),
-                                      decoration: const BoxDecoration(
-                                        color: Colors.red,
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: Text(
-                                        activeFiltersCount.toString(),
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                            onPressed: _showFiltersDialog,
-                            tooltip: 'Фильтры',
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.print),
-                            onPressed: () {
-                              Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (context) =>
-                                      const PrinterSettingsScreen(),
-                                ),
-                              );
-                            },
-                            tooltip: 'Настройки принтера',
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.upload_file),
-                            onPressed: _importFromExcel,
-                            tooltip: 'Импорт Excel',
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.add),
-                            onPressed: () => _showItemDialog(context),
-                            tooltip: 'Добавить товар',
-                          ),
+                    else ...[
+                      Expanded(child: _searchField(compact: true)),
+                      _filterButton(),
+                      PopupMenuButton<String>(
+                        tooltip: 'Ещё',
+                        icon: const Icon(Icons.more_horiz),
+                        itemBuilder: (context) => const [
+                          PopupMenuItem(value: 'import', child: Text('Импорт Excel')),
+                          PopupMenuItem(value: 'printer', child: Text('Принтер')),
+                          PopupMenuItem(value: 'select', child: Text('Выбрать для печати')),
                         ],
+                        onSelected: (value) {
+                          if (value == 'import') {
+                            _importFromExcel();
+                          } else if (value == 'printer') {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (context) => const PrinterSettingsScreen(),
+                              ),
+                            );
+                          } else if (value == 'select') {
+                            setState(() => _selecting = true);
+                          }
+                        },
                       ),
+                      IconButton(
+                        icon: const Icon(Icons.add),
+                        onPressed: () => _showItemDialog(context),
+                        tooltip: 'Добавить товар',
+                      ),
+                    ],
                   ],
                 ),
-                SizedBox(height: isMobile ? 16 : 24),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _searchController,
-                        decoration: InputDecoration(
-                          hintText: 'Поиск по названию или артикулу...',
-                          prefixIcon: const Icon(Icons.search),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          filled: true,
-                          fillColor: AppTheme.backgroundColor,
-                          contentPadding: EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: isMobile ? 12 : 16,
-                          ),
-                        ),
-                        onChanged: _filterItems,
-                      ),
-                    ),
-                  ],
-                ),
+                if (!isMobile) ...[
+                  const SizedBox(height: 16),
+                  _searchField(compact: false),
+                ],
                 // Активные фильтры
                 if (activeFiltersCount > 0) ...[
                   const SizedBox(height: 12),
@@ -1555,6 +1503,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
 
         setState(() {
           selectedItemIds.clear();
+          _selecting = false;
         });
 
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1710,18 +1659,33 @@ class _ItemFormDialogState extends State<_ItemFormDialog> {
           : _warehouseCellController.text.trim(),
       'condition': 'new',
     };
+    final isEdit = widget.item != null;
+    final localId = widget.item?.id ?? OfflineQueue.newLocalIntId();
+    final now = DateTime.now().toIso8601String();
     try {
-      if (widget.item != null) {
-        await widget.dio.put('/api/items/${widget.item!.id}', data: data);
-      } else {
-        await widget.dio.post('/api/items', data: data);
-      }
+      final result = await OfflineQueue().send(
+        method: isEdit ? 'PUT' : 'POST',
+        path: isEdit ? '/api/items/${widget.item!.id}' : '/api/items',
+        body: data,
+        entity: 'item',
+        localId: '$localId',
+        snapshot: {
+          ...data,
+          'id': localId,
+          'createdAt': widget.item?.createdAt.toIso8601String() ?? now,
+          'updatedAt': now,
+        },
+      );
       if (mounted) {
         widget.onSuccess();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              widget.item != null ? 'Товар обновлен' : 'Товар добавлен',
+              result.queued
+                  ? offlineSavedMessage
+                  : isEdit
+                      ? 'Товар обновлен'
+                      : 'Товар добавлен',
             ),
           ),
         );

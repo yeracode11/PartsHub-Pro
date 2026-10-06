@@ -98,7 +98,7 @@ export class ScheduleService {
 
   async listMasters(organizationId: string) {
     const users = await this.userRepository.find({
-      where: { organizationId, role: UserRole.WORKER, isActive: true },
+      where: { organizationId, role: UserRole.STO, isActive: true },
       order: { name: 'ASC' },
     });
     return users.map((user) => ({ id: user.id, name: user.name }));
@@ -371,12 +371,12 @@ export class ScheduleService {
         where: {
           id: masterId,
           organizationId,
-          role: UserRole.WORKER,
+          role: UserRole.STO,
           isActive: true,
         },
       });
       if (count === 0) {
-        throw new BadRequestException('Мастер не найден');
+        throw new BadRequestException('СТО не найден');
       }
       resolvedMasterId = masterId;
     }

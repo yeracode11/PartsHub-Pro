@@ -47,54 +47,39 @@ class _ServiceRemindersWidgetState extends State<ServiceRemindersWidget> {
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
-      return const Card(
-        child: Center(
-          child: Padding(
-            padding: EdgeInsets.all(24.0),
-            child: CircularProgressIndicator(),
-          ),
-        ),
+      return const _ReminderSurface(
+        child: Center(child: CircularProgressIndicator()),
       );
     }
 
     if (upcomingService.isEmpty) {
-      return const Card(
-        child: Padding(
-          padding: EdgeInsets.all(24.0),
-          child: Column(
-            children: [
-              Icon(
-                Icons.check_circle_outline,
-                size: 48,
-                color: Colors.green,
+      return const _ReminderSurface(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Все автомобили обслужены',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.textPrimary,
               ),
-              SizedBox(height: 16),
-              Text(
-                'Все автомобили обслужены!',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.green,
-                ),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Нет автомобилей, требующих ТО',
+              style: TextStyle(
+                fontSize: 14,
+                color: AppTheme.textSecondary,
               ),
-              SizedBox(height: 8),
-              Text(
-                'Нет автомобилей, требующих ТО',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: AppTheme.textSecondary,
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       );
     }
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
+    return _ReminderSurface(
+      child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
@@ -138,7 +123,6 @@ class _ServiceRemindersWidgetState extends State<ServiceRemindersWidget> {
             ...upcomingService.map((vehicle) => _buildReminderItem(vehicle)),
           ],
         ),
-      ),
     );
   }
 
@@ -229,6 +213,26 @@ class _ServiceRemindersWidgetState extends State<ServiceRemindersWidget> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _ReminderSurface extends StatelessWidget {
+  final Widget child;
+
+  const _ReminderSurface({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.borderColor),
+      ),
+      child: child,
     );
   }
 }

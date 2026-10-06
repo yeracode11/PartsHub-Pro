@@ -9,6 +9,7 @@ import 'package:autohub_b2b/services/warehouse_service.dart';
 import 'package:autohub_b2b/widgets/image_upload_widget.dart';
 import 'package:flutter/services.dart';
 import 'package:autohub_b2b/services/api/api_user_message.dart';
+import 'package:autohub_b2b/services/offline_queue.dart';
 
 class ItemEditScreen extends StatefulWidget {
   final ItemModel item;
@@ -528,39 +529,41 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
         'images': _currentImages,
       };
 
-      if (widget.item.id == null) {
-        // Создание нового товара
-        final response = await _apiClient.dio.post('/api/items', data: itemData);
-        final newItem = ItemModel.fromJson(response.data);
-        
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Товар успешно создан'),
-              backgroundColor: Colors.green,
+      final isCreate = widget.item.id == null;
+      final localId = widget.item.id ?? OfflineQueue.newLocalIntId();
+      final now = DateTime.now().toIso8601String();
+      final snapshot = <String, dynamic>{
+        ...itemData,
+        'id': localId,
+        'createdAt': widget.item.createdAt.toIso8601String(),
+        'updatedAt': now,
+      };
+      final result = await OfflineQueue().send(
+        method: isCreate ? 'POST' : 'PUT',
+        path: isCreate ? '/api/items' : '/api/items/${widget.item.id}',
+        body: itemData,
+        entity: 'item',
+        snapshot: snapshot,
+        localId: '$localId',
+      );
+      final saved = ItemModel.fromJson(
+        Map<String, dynamic>.from(result.queued ? snapshot : result.data as Map),
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              result.queued
+                  ? offlineSavedMessage
+                  : isCreate
+                      ? 'Товар успешно создан'
+                      : 'Товар успешно обновлен',
             ),
-          );
-          
-          Navigator.of(context).pop(newItem);
-        }
-      } else {
-        // Обновление существующего товара
-        final response = await _apiClient.dio.put(
-          '/api/items/${widget.item.id}',
-          data: itemData,
+            backgroundColor: Colors.green,
+          ),
         );
-        final updatedItem = ItemModel.fromJson(response.data);
-        
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Товар успешно обновлен'),
-              backgroundColor: Colors.green,
-            ),
-          );
-          
-          Navigator.of(context).pop(updatedItem);
-        }
+        Navigator.of(context).pop(saved);
       }
     } catch (e) {
       if (mounted) {

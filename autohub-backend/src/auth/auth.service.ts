@@ -150,8 +150,10 @@ export class AuthService {
       throw new BadRequestException('Укажите имя и название организации');
     }
 
-    const businessType =
-      (registerDto.businessType as BusinessType) || BusinessType.SERVICE;
+    const businessType = registerDto.businessType as BusinessType;
+    if (businessType !== BusinessType.SERVICE && businessType !== BusinessType.PARTS) {
+      throw new BadRequestException('Выберите СТО или авторазбор');
+    }
 
     const organization = await this.organizationsService.create({
       name: organizationName,

@@ -4,5 +4,6 @@ export enum UserRole {
   MANAGER = 'manager', // Менеджер - заказы, клиенты
   STOREKEEPER = 'storekeeper', // Кладовщик - склад
   WORKER = 'worker', // Мастер/Мойщик - выполнение работ
+  STO = 'sto', // СТО - запись клиентов
 }
 

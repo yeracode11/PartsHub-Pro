@@ -28,6 +28,8 @@ class AuthSignUpRequested extends AuthEvent {
   final String password;
   final String name;
   final String organizationName;
+  /// service — СТО, parts — авторазбор.
+  final String businessType;
   /// Регистрация создаёт владельца. Мастера добавляет владелец в профиле.
   final String role;
 
@@ -36,11 +38,13 @@ class AuthSignUpRequested extends AuthEvent {
     required this.password,
     required this.name,
     required this.organizationName,
+    required this.businessType,
     this.role = 'owner',
   });
 
   @override
-  List<Object?> get props => [phone, password, name, organizationName, role];
+  List<Object?> get props =>
+      [phone, password, name, organizationName, businessType, role];
 }
 
 class AuthSignOutRequested extends AuthEvent {}

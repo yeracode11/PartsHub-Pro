@@ -4,7 +4,8 @@ enum UserRole {
   owner,
   manager,
   storekeeper,
-  worker;
+  worker,
+  sto;
 
   String get displayName {
     switch (this) {
@@ -16,6 +17,8 @@ enum UserRole {
         return 'Кладовщик';
       case UserRole.worker:
         return 'Мастер';
+      case UserRole.sto:
+        return 'СТО';
     }
   }
 }
@@ -30,7 +33,7 @@ enum BusinessType {
       case BusinessType.dismantler:
         return 'Авторазбор';
       case BusinessType.service:
-        return 'Автосервис';
+        return 'СТО';
       case BusinessType.carwash:
         return 'Автомойка';
     }

@@ -63,6 +63,8 @@ class UserApiService {
         return UserRole.storekeeper;
       case 'worker':
         return UserRole.worker;
+      case 'sto':
+        return UserRole.sto;
       default:
         return UserRole.owner;
     }
