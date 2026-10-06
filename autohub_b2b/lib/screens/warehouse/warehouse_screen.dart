@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:autohub_b2b/core/theme.dart';
@@ -42,6 +44,11 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
   List<ItemModel> filteredItems = [];
   List<Warehouse> warehouses = [];
   bool isLoading = true;
+  bool _loadingMore = false;
+  int _total = 0;
+  int _loadToken = 0;
+  static const _pageSize = 50;
+  Timer? _searchDebounce;
   String? error;
   bool isForbidden = false;
   String? forbiddenMessage;
@@ -118,12 +125,18 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
     }
   }
 
-  Future<void> _loadItems() async {
+  Future<void> _loadItems({bool more = false}) async {
     if (!mounted) return;
+    if (more && (_loadingMore || items.length >= _total)) return;
 
+    final token = ++_loadToken;
     setState(() {
-      isLoading = true;
-      error = null;
+      if (more) {
+        _loadingMore = true;
+      } else {
+        isLoading = true;
+        error = null;
+      }
     });
 
     try {
@@ -134,19 +147,24 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
         }
       });
 
-      final loadedItems = await _itemsRepo.getItems(
+      final page = await _itemsRepo.searchItems(
+        query: _searchController.text,
         filters: queryParams.isNotEmpty ? queryParams : null,
+        offset: more ? items.length : 0,
+        limit: _pageSize,
       );
 
-      if (!mounted) return;
+      if (!mounted || token != _loadToken) return;
 
       setState(() {
-        items = loadedItems;
+        items = more ? [...items, ...page.items] : page.items;
         filteredItems = items;
+        _total = page.total;
         isLoading = false;
+        _loadingMore = false;
       });
     } on DioException catch (e) {
-      if (!mounted) return;
+      if (!mounted || token != _loadToken) return;
 
       if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
         setState(() {
@@ -157,36 +175,29 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                   : null) ??
               'У вас нет доступа к модулю "Склад". Войдите под владельцем или менеджером.';
           isLoading = false;
+          _loadingMore = false;
         });
       } else {
         setState(() {
           error = userFacingApiMessage(e);
           isLoading = false;
+          _loadingMore = false;
         });
       }
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || token != _loadToken) return;
 
       setState(() {
         error = userFacingApiMessage(e);
         isLoading = false;
+        _loadingMore = false;
       });
     }
   }
 
   void _filterItems(String query) {
-    setState(() {
-      if (query.isEmpty) {
-        filteredItems = items;
-      } else {
-        filteredItems = items.where((item) {
-          return (item.name ?? '').toLowerCase().contains(
-                query.toLowerCase(),
-              ) ||
-              (item.sku?.toLowerCase().contains(query.toLowerCase()) ?? false);
-        }).toList();
-      }
-    });
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 300), _loadItems);
   }
 
   void _showFiltersDialog() {
@@ -311,9 +322,11 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка импорта'))));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(userFacingApiMessage(e, prefix: 'Ошибка импорта')),
+          ),
+        );
       }
     }
   }
@@ -638,24 +651,26 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
     }
 
     if (filteredItems.isEmpty) {
+      final searching =
+          _searchController.text.trim().isNotEmpty || activeFiltersCount > 0;
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
-              items.isEmpty ? 'Склад пуст' : 'Ничего не найдено',
+              searching ? 'Ничего не найдено' : 'Склад пуст',
               style: Theme.of(context).textTheme.headlineSmall,
             ),
             const SizedBox(height: 8),
             Text(
-              items.isEmpty
-                  ? 'Начните с добавления первого товара'
-                  : 'Попробуйте изменить запрос',
+              searching
+                  ? 'Попробуйте изменить запрос'
+                  : 'Начните с добавления первого товара',
               style: Theme.of(
                 context,
               ).textTheme.bodyMedium?.copyWith(color: AppTheme.textSecondary),
             ),
-            if (items.isEmpty) ...[
+            if (!searching) ...[
               const SizedBox(height: 24),
               FilledButton.icon(
                 onPressed: () => _showItemDialog(context),
@@ -669,9 +684,22 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
     }
 
     if (isMobile) {
-      return _buildItemsCards(context, filteredItems);
+      return _withLoadMore(_buildItemsCards(context, filteredItems));
     }
-    return _buildItemsTable(context, filteredItems);
+    return _withLoadMore(_buildItemsTable(context, filteredItems));
+  }
+
+  Widget _withLoadMore(Widget child) {
+    return NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        if (notification.metrics.pixels >=
+            notification.metrics.maxScrollExtent - 400) {
+          _loadItems(more: true);
+        }
+        return false;
+      },
+      child: child,
+    );
   }
 
   Widget _buildItemsCards(BuildContext context, List<ItemModel> items) {
@@ -684,8 +712,10 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
       itemBuilder: (context, index) {
         final item = items[index];
         final meta = [
+          if (item.oem != null) item.oem!,
           if (item.sku != null && item.sku!.isNotEmpty) item.sku!,
-          if (item.category != null && item.category!.isNotEmpty) item.category!,
+          if (item.category != null && item.category!.isNotEmpty)
+            item.category!,
         ].join(' · ');
         final outOfStock = item.quantity <= 0;
         return Material(
@@ -766,7 +796,9 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                           ],
                           const SizedBox(height: 4),
                           Text(
-                            outOfStock ? 'Нет на складе' : '${item.quantity} шт',
+                            outOfStock
+                                ? 'Нет на складе'
+                                : '${item.quantity} шт',
                             style: TextStyle(
                               fontSize: 13,
                               color: outOfStock
@@ -792,8 +824,14 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                     PopupMenuButton<String>(
                       icon: const Icon(Icons.more_horiz),
                       itemBuilder: (context) => [
-                        const PopupMenuItem(value: 'edit', child: Text('Редактировать')),
-                        const PopupMenuItem(value: 'print', child: Text('Этикетка')),
+                        const PopupMenuItem(
+                          value: 'edit',
+                          child: Text('Редактировать'),
+                        ),
+                        const PopupMenuItem(
+                          value: 'print',
+                          child: Text('Этикетка'),
+                        ),
                         const PopupMenuItem(
                           value: 'delete',
                           child: Text(
@@ -831,7 +869,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
     return TextField(
       controller: _searchController,
       decoration: InputDecoration(
-        hintText: 'Название или артикул',
+        hintText: 'Название, OEM или штрихкод',
         prefixIcon: const Icon(Icons.search),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         filled: true,
@@ -905,19 +943,25 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                               ? null
                               : () {
                                   setState(() {
-                                    final allSelected = selectedItemIds.length ==
-                                        filteredItems.where((item) => item.id != null).length;
+                                    final allSelected =
+                                        selectedItemIds.length ==
+                                        filteredItems
+                                            .where((item) => item.id != null)
+                                            .length;
                                     selectedItemIds.clear();
                                     if (!allSelected) {
                                       for (final item in filteredItems) {
-                                        if (item.id != null) selectedItemIds.add(item.id!);
+                                        if (item.id != null)
+                                          selectedItemIds.add(item.id!);
                                       }
                                     }
                                   });
                                 },
                           child: Text(
                             selectedItemIds.length ==
-                                    filteredItems.where((item) => item.id != null).length
+                                    filteredItems
+                                        .where((item) => item.id != null)
+                                        .length
                                 ? 'Снять'
                                 : 'Все',
                           ),
@@ -938,13 +982,14 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     if (!isMobile)
-                    Expanded(
-                      child: Text(
-                        'Товары',
-                        style: Theme.of(context).textTheme.displayMedium
-                            ?.copyWith(fontSize: 28),
+                      Expanded(
+                        child: Text(
+                          'Товары',
+                          style: Theme.of(
+                            context,
+                          ).textTheme.displayMedium?.copyWith(fontSize: 28),
+                        ),
                       ),
-                    ),
                     if (!isMobile)
                       Row(
                         children: [
@@ -1017,9 +1062,18 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                         tooltip: 'Ещё',
                         icon: const Icon(Icons.more_horiz),
                         itemBuilder: (context) => const [
-                          PopupMenuItem(value: 'import', child: Text('Импорт Excel')),
-                          PopupMenuItem(value: 'printer', child: Text('Принтер')),
-                          PopupMenuItem(value: 'select', child: Text('Выбрать для печати')),
+                          PopupMenuItem(
+                            value: 'import',
+                            child: Text('Импорт Excel'),
+                          ),
+                          PopupMenuItem(
+                            value: 'printer',
+                            child: Text('Принтер'),
+                          ),
+                          PopupMenuItem(
+                            value: 'select',
+                            child: Text('Выбрать для печати'),
+                          ),
                         ],
                         onSelected: (value) {
                           if (value == 'import') {
@@ -1027,7 +1081,8 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                           } else if (value == 'printer') {
                             Navigator.of(context).push(
                               MaterialPageRoute(
-                                builder: (context) => const PrinterSettingsScreen(),
+                                builder: (context) =>
+                                    const PrinterSettingsScreen(),
                               ),
                             );
                           } else if (value == 'select') {
@@ -1516,7 +1571,10 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
       if (context.mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка')), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text(userFacingApiMessage(e, prefix: 'Ошибка')),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
@@ -1564,6 +1622,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -1684,17 +1743,17 @@ class _ItemFormDialogState extends State<_ItemFormDialog> {
               result.queued
                   ? offlineSavedMessage
                   : isEdit
-                      ? 'Товар обновлен'
-                      : 'Товар добавлен',
+                  ? 'Товар обновлен'
+                  : 'Товар добавлен',
             ),
           ),
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка'))));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка'))),
+        );
       }
     }
   }

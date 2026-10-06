@@ -98,9 +98,9 @@ class _DonorDetailScreenState extends State<DonorDetailScreen> {
   }
 
   void _showError(Object e, String prefix) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(userFacingApiMessage(e, prefix: prefix))));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(userFacingApiMessage(e, prefix: prefix))),
+    );
   }
 
   Future<void> _edit() async {
@@ -111,15 +111,15 @@ class _DonorDetailScreenState extends State<DonorDetailScreen> {
   }
 
   Future<void> _changeStatus(DonorStatus status) async {
-    if (status == DonorStatus.closed) {
+    if (status == DonorStatus.archived) {
       final confirm = await DialogHelper.showConfirmSimple(
         context: context,
-        title: 'Закрыть учёт?',
+        title: 'Перенести в архив?',
         message:
             'Детали останутся на складе и продолжат продаваться, но снимать '
             'новые с этой машины будет нельзя. Если сдали кузов на металл — '
             'внесите сумму в «Доход вне склада».',
-        confirmText: 'Закрыть',
+        confirmText: 'В архив',
       );
       if (confirm != true) return;
     }
@@ -155,10 +155,7 @@ class _DonorDetailScreenState extends State<DonorDetailScreen> {
     if (!mounted || _donor == null) return;
     final added = await showDialog<int>(
       context: context,
-      builder: (_) => _AddPartDialog(
-        service: _service,
-        donor: _donor!,
-      ),
+      builder: (_) => _AddPartDialog(service: _service, donor: _donor!),
     );
     if (added != null && added > 0 && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -166,6 +163,19 @@ class _DonorDetailScreenState extends State<DonorDetailScreen> {
       );
       _load();
     }
+  }
+
+  void _showHistory() {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * 0.8,
+      ),
+      builder: (_) =>
+          _DonorHistorySheet(history: _service.getHistory(widget.donorId)),
+    );
   }
 
   @override
@@ -188,20 +198,19 @@ class _DonorDetailScreenState extends State<DonorDetailScreen> {
                   ? _delete()
                   : _changeStatus(DonorStatus.fromValue(value)),
               itemBuilder: (_) => [
-                for (final status in DonorStatus.values)
-                  if (status != donor.status && status != DonorStatus.awaiting)
-                    PopupMenuItem(
-                      value: status.value,
-                      child: Text(switch (status) {
-                        DonorStatus.dismantling =>
-                          donor.status == DonorStatus.awaiting
-                              ? 'Начать разбор'
-                              : 'Вернуть в разбор',
-                        DonorStatus.dismantled => 'Разобран полностью',
-                        DonorStatus.closed => 'Закрыть учёт',
-                        DonorStatus.awaiting => status.label,
-                      }),
+                for (final status in donor.allowedStatuses)
+                  PopupMenuItem(
+                    value: status.value,
+                    child: Text(
+                      status == DonorStatus.dismantling &&
+                              donor.dismantlingStartDate != null
+                          ? 'Вернуть в разбор'
+                          : status == DonorStatus.fullyDismantled &&
+                                donor.isArchived
+                          ? 'Вернуть из архива'
+                          : status.actionLabel,
                     ),
+                  ),
                 if (donor.partsCount == 0)
                   const PopupMenuItem(value: 'delete', child: Text('Удалить')),
               ],
@@ -209,7 +218,7 @@ class _DonorDetailScreenState extends State<DonorDetailScreen> {
           ],
         ],
       ),
-      floatingActionButton: donor != null && !donor.isClosed
+      floatingActionButton: donor != null && !donor.isArchived
           ? FloatingActionButton.extended(
               onPressed: _addParts,
               icon: const Icon(Icons.add),
@@ -227,7 +236,10 @@ class _DonorDetailScreenState extends State<DonorDetailScreen> {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: Text(userFacingApiMessage(_error!), textAlign: TextAlign.center),
+          child: Text(
+            userFacingApiMessage(_error!),
+            textAlign: TextAlign.center,
+          ),
         ),
       );
     }
@@ -253,7 +265,10 @@ class _DonorDetailScreenState extends State<DonorDetailScreen> {
                   ),
                   if (donor.economics != null) ...[
                     const SizedBox(height: 24),
-                    _EconomicsSection(donor: donor),
+                    _EconomicsSection(
+                      donor: donor,
+                      onShowHistory: _showHistory,
+                    ),
                   ],
                   const SizedBox(height: 24),
                   _buildParts(donor),
@@ -268,15 +283,25 @@ class _DonorDetailScreenState extends State<DonorDetailScreen> {
 
   Widget _buildInfo(DonorModel donor) {
     final theme = Theme.of(context);
+    final date = DateFormat('dd.MM.yyyy');
     final facts = [
       donor.status.label,
       if (donor.vin != null) donor.vin!,
-      if (donor.engine != null) donor.engine!,
+      if (donor.engineLabel != null) donor.engineLabel!,
+      if (donor.transmission != null) donor.transmission!.label,
+      if (donor.drivetrain != null)
+        '${donor.drivetrain!.label.toLowerCase()} привод',
+      if (donor.body != null) donor.body!,
       if (donor.mileage != null)
         '${NumberFormat.decimalPattern('ru_RU').format(donor.mileage)} км',
       if (donor.color != null) donor.color!,
       if (donor.purchaseDate != null)
-        'куплен ${DateFormat('dd.MM.yyyy').format(donor.purchaseDate!)}',
+        'куплен ${date.format(donor.purchaseDate!)}',
+      if (donor.dismantlingStartDate != null)
+        donor.dismantlingEndDate != null
+            ? 'разбор ${date.format(donor.dismantlingStartDate!)} – '
+                  '${date.format(donor.dismantlingEndDate!)}'
+            : 'в разборе с ${date.format(donor.dismantlingStartDate!)}',
       if (donor.source != null) donor.source!,
     ];
     return Column(
@@ -312,7 +337,7 @@ class _DonorDetailScreenState extends State<DonorDetailScreen> {
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 24),
             child: Text(
-              donor.isClosed
+              donor.isArchived
                   ? 'С этой машины ничего не снимали.'
                   : 'Снимайте детали по одной — каждая сразу появится на складе '
                         'с пометкой, с какой машины она снята.',
@@ -331,10 +356,19 @@ class _DonorDetailScreenState extends State<DonorDetailScreen> {
   }
 }
 
+String _formatPercent(double value) {
+  final text = value.toStringAsFixed(value == value.roundToDouble() ? 0 : 1);
+  return value > 0 ? '+$text%' : '$text%';
+}
+
+String _formatSigned(double value) =>
+    value > 0 ? '+${formatMoney(value)}' : formatMoney(value);
+
 class _EconomicsSection extends StatelessWidget {
   final DonorModel donor;
+  final VoidCallback onShowHistory;
 
-  const _EconomicsSection({required this.donor});
+  const _EconomicsSection({required this.donor, required this.onShowHistory});
 
   @override
   Widget build(BuildContext context) {
@@ -343,13 +377,16 @@ class _EconomicsSection extends StatelessWidget {
     final muted = theme.textTheme.bodySmall?.copyWith(
       color: AppTheme.textSecondary,
     );
-
-    final String headline;
-    if (e.isPaidBack) {
-      headline = 'Окупился, прибыль ${formatMoney(e.profit)}';
-    } else {
-      headline = 'Осталось вернуть ${formatMoney(-e.profit)}';
-    }
+    final headline = e.isPaidBack
+        ? 'Окупился, прибыль ${formatMoney(e.realizedProfit)}'
+        : 'Осталось вернуть ${formatMoney(-e.realizedProfit)}';
+    final units = [
+      'получено ${e.unitsReceived}',
+      'продано ${donor.unitsSold}',
+      if (e.unitsReserved > 0) 'в резерве ${e.unitsReserved}',
+      'на складе ${donor.unitsInStock}',
+      if (e.unitsWrittenOff > 0) 'списано ${e.unitsWrittenOff}',
+    ].join(' · ');
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -370,43 +407,79 @@ class _EconomicsSection extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'Окупаемость ${e.paybackPercent?.toStringAsFixed(0) ?? '—'}%',
+            [
+              'Окупаемость ${e.paybackPercent?.toStringAsFixed(0) ?? '—'}%',
+              if (e.roi != null) 'ROI ${_formatPercent(e.roi!)}',
+            ].join(' · '),
             style: muted,
           ),
           const SizedBox(height: 12),
           DonorPaybackBar(economics: e),
-          const SizedBox(height: 16),
-          _line(context, 'Покупка', donor.purchasePrice ?? 0),
-          _line(context, 'Доп. расходы', donor.extraCosts ?? 0),
-          _line(context, 'Вложено всего', e.totalCost, bold: true),
           const SizedBox(height: 8),
-          _line(
-            context,
-            'Продано деталей · ${donor.unitsSold} шт.',
-            e.soldRevenue,
-          ),
+          Text('Детали: $units', style: muted),
+          _group(context, 'Вложения'),
+          _line(context, 'Покупка', donor.purchasePrice ?? 0),
+          if ((donor.deliveryCost ?? 0) > 0)
+            _line(context, 'Доставка', donor.deliveryCost!),
+          if ((donor.dismantlingCost ?? 0) > 0)
+            _line(context, 'Разборка', donor.dismantlingCost!),
+          if ((donor.otherCosts ?? 0) > 0)
+            _line(context, 'Прочие расходы', donor.otherCosts!),
+          _line(context, 'Себестоимость машины', e.totalCost, bold: true),
+          _group(context, 'Получено'),
+          _line(context, 'Продажи деталей', e.soldRevenue),
+          if (e.refunds > 0) _line(context, 'Возвраты', -e.refunds),
           if (e.scrapIncome > 0)
             _line(context, 'Доход вне склада', e.scrapIncome),
-          _line(context, 'Вернулось всего', e.income, bold: true),
-          const Divider(height: 24),
+          _line(context, 'Фактическая выручка', e.income, bold: true),
           _line(
             context,
-            'На складе · ${donor.unitsInStock} шт.',
-            e.stockValue,
-          ),
-          if (e.pendingRevenue > 0)
-            _line(context, 'В открытых заказах', e.pendingRevenue),
-          _line(
-            context,
-            'Если продать остатки по текущим ценам',
-            e.forecastProfit,
+            'Фактическая прибыль',
+            e.realizedProfit,
             bold: true,
             signed: true,
+          ),
+          _group(context, 'Если продать остаток по текущим ценам'),
+          _line(context, 'На складе · ${donor.unitsInStock} шт.', e.stockValue),
+          if (e.unitsReserved > 0)
+            _line(
+              context,
+              'В резерве · ${e.unitsReserved} шт.',
+              e.pendingRevenue,
+            ),
+          _line(context, 'Стоимость остатка', e.remainingValue),
+          _line(context, 'Ожидаемая выручка', e.expectedRevenue, bold: true),
+          _line(
+            context,
+            e.expectedRoi == null
+                ? 'Потенциальная прибыль'
+                : 'Потенциальная прибыль · ROI ${_formatPercent(e.expectedRoi!)}',
+            e.expectedProfit,
+            bold: true,
+            signed: true,
+          ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              onPressed: onShowHistory,
+              child: const Text('История изменений'),
+            ),
           ),
         ],
       ),
     );
   }
+
+  Widget _group(BuildContext context, String title) => Padding(
+    padding: const EdgeInsets.only(top: 16, bottom: 4),
+    child: Text(
+      title,
+      style: Theme.of(
+        context,
+      ).textTheme.labelLarge?.copyWith(color: AppTheme.textSecondary),
+    ),
+  );
 
   Widget _line(
     BuildContext context,
@@ -415,20 +488,138 @@ class _EconomicsSection extends StatelessWidget {
     bool bold = false,
     bool signed = false,
   }) {
-    final style = Theme.of(context).textTheme.bodyMedium?.copyWith(
-      fontWeight: bold ? FontWeight.w600 : null,
-    );
-    final text = signed && value > 0
-        ? '+${formatMoney(value)}'
-        : formatMoney(value);
+    final style = Theme.of(
+      context,
+    ).textTheme.bodyMedium?.copyWith(fontWeight: bold ? FontWeight.w600 : null);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
           Expanded(child: Text(label, style: style)),
           const SizedBox(width: 16),
-          Text(text, style: style),
+          Text(
+            signed ? _formatSigned(value) : formatMoney(value),
+            style: style,
+          ),
         ],
+      ),
+    );
+  }
+}
+
+const _historyFieldLabels = {
+  'purchasePrice': 'Покупка',
+  'deliveryCost': 'Доставка',
+  'dismantlingCost': 'Разборка',
+  'otherCosts': 'Прочие расходы',
+  'scrapIncome': 'Доход вне склада',
+  'status': 'Статус',
+};
+
+/// Журнал изменений денег и статуса донора: кто, когда, было → стало.
+class _DonorHistorySheet extends StatelessWidget {
+  final Future<List<DonorHistoryEntry>> history;
+
+  const _DonorHistorySheet({required this.history});
+
+  String _value(String field, Object? value) {
+    if (value == null) return '—';
+    if (field == 'status') {
+      return DonorStatus.tryParse(value.toString())?.label ?? value.toString();
+    }
+    final number = num.tryParse(value.toString());
+    return number == null ? value.toString() : formatMoney(number.toDouble());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.textTheme.bodySmall?.copyWith(
+      color: AppTheme.textSecondary,
+    );
+    final date = DateFormat('dd.MM.yyyy HH:mm');
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'История изменений',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Flexible(
+              child: FutureBuilder<List<DonorHistoryEntry>>(
+                future: history,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState != ConnectionState.done) {
+                    return const Padding(
+                      padding: EdgeInsets.all(24),
+                      child: Center(child: CircularProgressIndicator()),
+                    );
+                  }
+                  if (snapshot.hasError) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 24),
+                      child: Text(
+                        userFacingApiMessage(snapshot.error!),
+                        style: muted,
+                      ),
+                    );
+                  }
+                  final entries = snapshot.data!;
+                  if (entries.isEmpty) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 24),
+                      child: Text(
+                        'Расходы и статус ещё не менялись.',
+                        style: muted,
+                      ),
+                    );
+                  }
+                  return ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: entries.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final entry = entries[index];
+                      final header = [
+                        date.format(entry.createdAt),
+                        if (entry.userName != null) entry.userName!,
+                        if (entry.action == 'create') 'создание',
+                      ].join(' · ');
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(header, style: muted),
+                            const SizedBox(height: 4),
+                            for (final change in entry.changes.entries)
+                              Text(
+                                entry.action == 'create'
+                                    ? '${_historyFieldLabels[change.key] ?? change.key}: '
+                                          '${_value(change.key, change.value.to)}'
+                                    : '${_historyFieldLabels[change.key] ?? change.key}: '
+                                          '${_value(change.key, change.value.from)} → '
+                                          '${_value(change.key, change.value.to)}',
+                                style: theme.textTheme.bodyMedium,
+                              ),
+                          ],
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -506,6 +697,7 @@ class _AddPartDialogState extends State<_AddPartDialog> {
   final _quantity = TextEditingController(text: '1');
   final _cell = TextEditingController();
   final _category = TextEditingController();
+  final _oem = TextEditingController();
   // Поле названия принадлежит Autocomplete; держим ссылки, чтобы очищать его и возвращать фокус.
   TextEditingController? _name;
   FocusNode? _nameFocus;
@@ -518,6 +710,7 @@ class _AddPartDialogState extends State<_AddPartDialog> {
     _quantity.dispose();
     _cell.dispose();
     _category.dispose();
+    _oem.dispose();
     super.dispose();
   }
 
@@ -543,6 +736,7 @@ class _AddPartDialogState extends State<_AddPartDialog> {
           if (_cell.text.trim().isNotEmpty) 'warehouseCell': _cell.text.trim(),
           if (_category.text.trim().isNotEmpty)
             'category': _category.text.trim(),
+          if (_oem.text.trim().isNotEmpty) 'oem': _oem.text.trim(),
         },
       ]);
       _added++;
@@ -555,6 +749,7 @@ class _AddPartDialogState extends State<_AddPartDialog> {
       _name!.clear();
       _price.clear();
       _quantity.text = '1';
+      _oem.clear();
       _nameFocus?.requestFocus();
     } catch (e) {
       if (!mounted) return;
@@ -603,10 +798,21 @@ class _AddPartDialogState extends State<_AddPartDialog> {
                         labelText: 'Название *',
                         border: OutlineInputBorder(),
                       ),
-                      validator: (v) =>
-                          (v == null || v.trim().isEmpty) ? 'Обязательно' : null,
+                      validator: (v) => (v == null || v.trim().isEmpty)
+                          ? 'Обязательно'
+                          : null,
                     );
                   },
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _oem,
+                  textCapitalization: TextCapitalization.characters,
+                  decoration: const InputDecoration(
+                    labelText: 'OEM',
+                    hintText: '81150-33A10',
+                    border: OutlineInputBorder(),
+                  ),
                 ),
                 const SizedBox(height: 16),
                 Row(
@@ -625,9 +831,8 @@ class _AddPartDialogState extends State<_AddPartDialog> {
                           suffixText: '₸',
                           border: OutlineInputBorder(),
                         ),
-                        validator: (v) => (v == null || v.isEmpty)
-                            ? 'Укажите цену'
-                            : null,
+                        validator: (v) =>
+                            (v == null || v.isEmpty) ? 'Укажите цену' : null,
                       ),
                     ),
                     const SizedBox(width: 16),
@@ -642,9 +847,8 @@ class _AddPartDialogState extends State<_AddPartDialog> {
                           labelText: 'Кол-во',
                           border: OutlineInputBorder(),
                         ),
-                        validator: (v) => (int.tryParse(v ?? '') ?? 0) < 1
-                            ? 'Мин. 1'
-                            : null,
+                        validator: (v) =>
+                            (int.tryParse(v ?? '') ?? 0) < 1 ? 'Мин. 1' : null,
                       ),
                     ),
                   ],

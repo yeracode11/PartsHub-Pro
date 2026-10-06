@@ -26,6 +26,7 @@ class _BlePrinterScanScreenState extends State<BlePrinterScanScreen> {
   StreamSubscription<OnConnectionStateChangedEvent>? _connSub;
   bool _scanning = false;
   String? _error;
+
   /// Показывать только периферию с непустым именем (GAP / platform), без «голого» MAC/UUID.
   bool _onlyNamedDevices = false;
 
@@ -137,7 +138,10 @@ class _BlePrinterScanScreenState extends State<BlePrinterScanScreen> {
       await FlutterBluePlus.stopScan();
     }
     final p = await SharedPreferences.getInstance();
-    await p.setString(BleThermalPrintCoordinator.prefsKeyLastDeviceId, dev.remoteId.str);
+    await p.setString(
+      BleThermalPrintCoordinator.prefsKeyLastDeviceId,
+      dev.remoteId.str,
+    );
     if (!mounted) return;
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
@@ -150,8 +154,9 @@ class _BlePrinterScanScreenState extends State<BlePrinterScanScreen> {
   Widget build(BuildContext context) {
     final connected = [...FlutterBluePlus.connectedDevices];
     connected.sort(
-      (a, b) =>
-          _connectedTileTitle(a).toLowerCase().compareTo(_connectedTileTitle(b).toLowerCase()),
+      (a, b) => _connectedTileTitle(
+        a,
+      ).toLowerCase().compareTo(_connectedTileTitle(b).toLowerCase()),
     );
 
     final connectedIds = connected.map((d) => d.remoteId).toSet();
@@ -159,8 +164,9 @@ class _BlePrinterScanScreenState extends State<BlePrinterScanScreen> {
     final all = _results.values.toList()
       ..sort((a, b) => _displayName(a).compareTo(_displayName(b)));
 
-    final nameFiltered =
-        _onlyNamedDevices ? all.where(_hasName).toList(growable: false) : all;
+    final nameFiltered = _onlyNamedDevices
+        ? all.where(_hasName).toList(growable: false)
+        : all;
 
     final scanOnly = nameFiltered
         .where((r) => !connectedIds.contains(r.device.remoteId))
@@ -242,122 +248,118 @@ class _BlePrinterScanScreenState extends State<BlePrinterScanScreen> {
                     ),
                   )
                 : nothingFound && _scanning
-                    ? const Center(
-                        child: Text(
-                          'Поиск устройств…',
-                          style: TextStyle(color: AppTheme.textSecondary),
+                ? const Center(
+                    child: Text(
+                      'Поиск устройств…',
+                      style: TextStyle(color: AppTheme.textSecondary),
+                    ),
+                  )
+                : CustomScrollView(
+                    slivers: [
+                      if (scanOnly.isNotEmpty)
+                        const SliverToBoxAdapter(
+                          child: Padding(
+                            padding: EdgeInsets.fromLTRB(16, 4, 16, 4),
+                            child: Text(
+                              'В эфире',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13,
+                                color: AppTheme.textSecondary,
+                              ),
+                            ),
+                          ),
                         ),
-                      )
-                    : CustomScrollView(
-                        slivers: [
-                          if (scanOnly.isNotEmpty)
-                            const SliverToBoxAdapter(
-                              child: Padding(
-                                padding: EdgeInsets.fromLTRB(16, 4, 16, 4),
-                                child: Text(
-                                  'В эфире',
+                      if (scanOnly.isEmpty &&
+                          !_scanning &&
+                          connected.isNotEmpty)
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                            child: Text(
+                              'В текущем сканировании принтер не виден, но уже есть активное подключение — см. ниже.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                height: 1.35,
+                                color: Colors.grey.shade800,
+                              ),
+                            ),
+                          ),
+                        ),
+                      SliverList(
+                        delegate: SliverChildBuilderDelegate((context, i) {
+                          final r = scanOnly[i];
+                          final name = _displayName(r);
+                          return Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (i > 0) const Divider(height: 1),
+                              ListTile(
+                                leading: const Icon(
+                                  Icons.print_outlined,
+                                  color: AppTheme.primaryColor,
+                                ),
+                                title: Text(name),
+                                subtitle: Text(
+                                  '${r.device.remoteId.str} · RSSI ${r.rssi}',
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                                onTap: () => _openPrinter(r.device),
+                              ),
+                            ],
+                          );
+                        }, childCount: scanOnly.length),
+                      ),
+                      if (connected.isNotEmpty) ...[
+                        const SliverToBoxAdapter(
+                          child: Padding(
+                            padding: EdgeInsets.fromLTRB(16, 20, 16, 4),
+                            child: Row(
+                              children: [
+                                Icon(Icons.link, color: Colors.green, size: 22),
+                                SizedBox(width: 8),
+                                Text(
+                                  'Подключены к приложению',
                                   style: TextStyle(
                                     fontWeight: FontWeight.w700,
                                     fontSize: 13,
-                                    color: AppTheme.textSecondary,
                                   ),
                                 ),
-                              ),
-                            ),
-                          if (scanOnly.isEmpty && !_scanning && connected.isNotEmpty)
-                            SliverToBoxAdapter(
-                              child: Padding(
-                                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                                child: Text(
-                                  'В текущем сканировании принтер не виден, но уже есть активное подключение — см. ниже.',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    height: 1.35,
-                                    color: Colors.grey.shade800,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          SliverList(
-                            delegate: SliverChildBuilderDelegate(
-                              (context, i) {
-                                final r = scanOnly[i];
-                                final name = _displayName(r);
-                                return Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    if (i > 0) const Divider(height: 1),
-                                    ListTile(
-                                      leading: const Icon(
-                                        Icons.print_outlined,
-                                        color: AppTheme.primaryColor,
-                                      ),
-                                      title: Text(name),
-                                      subtitle: Text(
-                                        '${r.device.remoteId.str} · RSSI ${r.rssi}',
-                                        style: const TextStyle(fontSize: 12),
-                                      ),
-                                      onTap: () => _openPrinter(r.device),
-                                    ),
-                                  ],
-                                );
-                              },
-                              childCount: scanOnly.length,
+                              ],
                             ),
                           ),
-                          if (connected.isNotEmpty) ...[
-                            const SliverToBoxAdapter(
-                              child: Padding(
-                                padding: EdgeInsets.fromLTRB(16, 20, 16, 4),
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.link, color: Colors.green, size: 22),
-                                    SizedBox(width: 8),
-                                    Text(
-                                      'Подключены к приложению',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 13,
-                                      ),
-                                    ),
-                                  ],
+                        ),
+                        SliverList(
+                          delegate: SliverChildBuilderDelegate((context, i) {
+                            final d = connected[i];
+                            return Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (i > 0) const Divider(height: 1),
+                                ListTile(
+                                  leading: const Icon(
+                                    Icons.bluetooth_connected,
+                                    color: Colors.green,
+                                  ),
+                                  title: Text(_connectedTileTitle(d)),
+                                  subtitle: Text(
+                                    _connectedTileSubtitle(d),
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                  trailing: const Icon(
+                                    Icons.check_circle,
+                                    color: Colors.green,
+                                    size: 22,
+                                  ),
+                                  onTap: () => _openPrinter(d),
                                 ),
-                              ),
-                            ),
-                            SliverList(
-                              delegate: SliverChildBuilderDelegate(
-                                (context, i) {
-                                  final d = connected[i];
-                                  return Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      if (i > 0) const Divider(height: 1),
-                                      ListTile(
-                                        leading: const Icon(
-                                          Icons.bluetooth_connected,
-                                          color: Colors.green,
-                                        ),
-                                        title: Text(_connectedTileTitle(d)),
-                                        subtitle: Text(
-                                          _connectedTileSubtitle(d),
-                                          style: const TextStyle(fontSize: 12),
-                                        ),
-                                        trailing: const Icon(
-                                          Icons.check_circle,
-                                          color: Colors.green,
-                                          size: 22,
-                                        ),
-                                        onTap: () => _openPrinter(d),
-                                      ),
-                                    ],
-                                  );
-                                },
-                                childCount: connected.length,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
+                              ],
+                            );
+                          }, childCount: connected.length),
+                        ),
+                      ],
+                    ],
+                  ),
           ),
         ],
       ),

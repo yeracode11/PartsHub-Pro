@@ -11,23 +11,26 @@ import {
   UseInterceptors,
   UploadedFiles,
   BadRequestException,
-  Logger,
+  ParseIntPipe,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { ItemsService } from './items.service';
-import { FilterItemsDto } from './dto/filter-items.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '../common/enums/user-role.enum';
 import { FileUploadService } from '../common/services/file-upload.service';
+import { canSeeFinance } from '../common/finance-access';
+
+const writeOptions = (user: any) => ({
+  includeFinance: canSeeFinance(user),
+  actorId: user?.id ?? null,
+});
 
 @Controller('api/items')
 @UseGuards(JwtAuthGuard, RolesGuard) // Все методы требуют авторизации
 export class ItemsController {
-  private readonly logger = new Logger(ItemsController.name);
-
   constructor(private readonly itemsService: ItemsService) {}
 
   @Get('popular')
@@ -36,28 +39,29 @@ export class ItemsController {
     @CurrentUser() user: any,
   ) {
     // Автоматически используем organizationId из JWT
-    return this.itemsService.getPopularItems(user.organizationId, parseInt(limit));
+    return this.itemsService.getPopularItems(
+      user.organizationId,
+      parseInt(limit),
+    );
   }
 
+  /**
+   * search — название, артикул, бренд, OEM и аналоги; code — точный штрихкод, артикул,
+   * внутренний код или OEM (для сканера); limit/offset — постраничный ответ.
+   */
   @Get()
-  async findAll(@CurrentUser() user: any, @Query() filters: FilterItemsDto) {
-    try {
-      if (!user || !user.organizationId) {
-        this.logger.error('No organizationId in user');
-        return [];
-      }
-      return await this.itemsService.findAll(user.organizationId, filters);
-    } catch (error) {
-      this.logger.error('Error in findAll controller', error.stack);
-      // Возвращаем пустой массив только если это не критическая ошибка
-      // Но логируем детали для отладки
-      return [];
-    }
+  findAll(@CurrentUser() user: any, @Query() query: Record<string, unknown>) {
+    if (!user?.organizationId) return [];
+    return this.itemsService.findAll(user.organizationId, query, {
+      includeFinance: canSeeFinance(user),
+    });
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string, @CurrentUser() user: any) {
-    return this.itemsService.findOne(+id, user.organizationId);
+  findOne(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: any) {
+    return this.itemsService.findOne(id, user.organizationId, {
+      includeFinance: canSeeFinance(user),
+    });
   }
 
   @Post(':id/sync-to-b2c')
@@ -74,18 +78,27 @@ export class ItemsController {
 
   @Post()
   @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.STOREKEEPER) // Только эти роли могут создавать
-  create(@CurrentUser() user: any, @Body() data: any) {
-    return this.itemsService.create(user.organizationId, data);
+  create(@CurrentUser() user: any, @Body() data: unknown) {
+    return this.itemsService.create(
+      user.organizationId,
+      data,
+      writeOptions(user),
+    );
   }
 
   @Put(':id')
   @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.STOREKEEPER)
   update(
-    @Param('id') id: string,
+    @Param('id', ParseIntPipe) id: number,
     @CurrentUser() user: any,
-    @Body() data: any,
+    @Body() data: unknown,
   ) {
-    return this.itemsService.update(+id, user.organizationId, data);
+    return this.itemsService.update(
+      id,
+      user.organizationId,
+      data,
+      writeOptions(user),
+    );
   }
 
   @Delete(':id')
@@ -97,7 +110,9 @@ export class ItemsController {
   // Загрузка изображений для товара
   @Post(':id/images')
   @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.STOREKEEPER)
-  @UseInterceptors(FilesInterceptor('images', 10, FileUploadService.getMulterConfig()))
+  @UseInterceptors(
+    FilesInterceptor('images', 10, FileUploadService.getMulterConfig()),
+  )
   async uploadImages(
     @Param('id') id: string,
     @UploadedFiles() files: Express.Multer.File[],
@@ -108,10 +123,16 @@ export class ItemsController {
     }
 
     // Генерируем URLs для загруженных файлов
-    const imageUrls = files.map(file => FileUploadService.generateFileUrl(file.filename));
+    const imageUrls = files.map((file) =>
+      FileUploadService.generateFileUrl(file.filename),
+    );
 
     // Обновляем товар с новыми изображениями
-    const result = await this.itemsService.addImages(+id, user.organizationId, imageUrls);
+    const result = await this.itemsService.addImages(
+      +id,
+      user.organizationId,
+      imageUrls,
+    );
 
     return result;
   }
@@ -130,7 +151,10 @@ export class ItemsController {
     @Body() body: { imageUrl: string },
     @CurrentUser() user: any,
   ) {
-    return this.itemsService.removeImage(+id, user.organizationId, body.imageUrl);
+    return this.itemsService.removeImage(
+      +id,
+      user.organizationId,
+      body.imageUrl,
+    );
   }
 }
-

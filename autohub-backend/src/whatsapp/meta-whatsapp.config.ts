@@ -42,6 +42,11 @@ export class MetaWhatsAppConfig {
     return { value: '', envKey: null };
   }
 
+  /** App Secret приложения Meta: им подписываются входящие webhook. */
+  get appSecret(): string {
+    return this.configService.get<string>('META_APP_SECRET')?.trim() || '';
+  }
+
   /** Fallback для dev/single-tenant, пока нет строки в whatsapp_connections. */
   get fallbackAccessToken(): string {
     return (

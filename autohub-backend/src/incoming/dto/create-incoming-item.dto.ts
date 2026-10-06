@@ -1,4 +1,12 @@
-import { IsString, IsOptional, IsNumber, IsInt, Min, IsArray } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsNumber,
+  IsInt,
+  Min,
+  IsArray,
+  MaxLength,
+} from 'class-validator';
 
 export class CreateIncomingItemDto {
   @IsOptional()
@@ -37,6 +45,21 @@ export class CreateIncomingItemDto {
   purchasePrice: number;
 
   @IsOptional()
+  @IsNumber()
+  @Min(0)
+  salePrice?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  oem?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  barcode?: string;
+
+  @IsOptional()
   @IsString()
   warehouseCell?: string;
 
@@ -49,4 +72,3 @@ export class CreateIncomingItemDto {
   @IsString()
   sku?: string;
 }
-

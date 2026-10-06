@@ -63,9 +63,11 @@ class _WarehouseTransfersScreenState extends State<WarehouseTransfersScreen> {
       } else {
         setState(() => _isLoading = false);
         if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка загрузки'))));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(userFacingApiMessage(e, prefix: 'Ошибка загрузки')),
+            ),
+          );
         }
       }
     } catch (e) {
@@ -77,9 +79,11 @@ class _WarehouseTransfersScreenState extends State<WarehouseTransfersScreen> {
       } else {
         setState(() => _isLoading = false);
         if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка загрузки'))));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(userFacingApiMessage(e, prefix: 'Ошибка загрузки')),
+            ),
+          );
         }
       }
     }
@@ -114,9 +118,13 @@ class _WarehouseTransfersScreenState extends State<WarehouseTransfersScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка загрузки данных'))));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              userFacingApiMessage(e, prefix: 'Ошибка загрузки данных'),
+            ),
+          ),
+        );
       }
     }
   }
@@ -130,9 +138,11 @@ class _WarehouseTransfersScreenState extends State<WarehouseTransfersScreen> {
       _loadTransfers();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка обновления'))));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(userFacingApiMessage(e, prefix: 'Ошибка обновления')),
+          ),
+        );
       }
     }
   }
@@ -357,9 +367,9 @@ class _TransferFormDialogState extends State<_TransferFormDialog> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка'))));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка'))),
+        );
       }
     }
   }

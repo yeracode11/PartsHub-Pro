@@ -164,12 +164,19 @@ export class OrdersService {
             : null
         : null,
     });
-    const savedOrder = await this.orderRepository.save(order);
-
-    // Если есть товары - добавляем их
-    if (data.items && data.items.length > 0) {
-      await this.orderItemsService.createOrderItems(savedOrder.id, data.items, options);
-    }
+    const savedOrder = await this.orderRepository.manager.transaction(async (manager) => {
+      const saved = await manager.getRepository(Order).save(order);
+      if (data.items && data.items.length > 0) {
+        await this.orderItemsService.createOrderItems(
+          saved.id,
+          organizationId,
+          data.items,
+          options,
+          manager,
+        );
+      }
+      return saved;
+    });
 
     if (data.works && data.works.length > 0) {
       await this.worksService.replaceOrderWorks(
@@ -274,11 +281,16 @@ export class OrdersService {
 
     // Если передали новые items, обновляем их
     if (items && items.length > 0) {
-      // Удаляем старые items
-      await this.orderItemsService.deleteOrderItems(id);
-
-      // Добавляем новые
-      await this.orderItemsService.createOrderItems(id, items);
+      await this.orderRepository.manager.transaction(async (manager) => {
+        await this.orderItemsService.deleteOrderItems(id, manager);
+        await this.orderItemsService.createOrderItems(
+          id,
+          organizationId,
+          items,
+          undefined,
+          manager,
+        );
+      });
     }
 
     if (Array.isArray(works)) {

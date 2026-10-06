@@ -1,8 +1,12 @@
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
-import { IncomingService } from './incoming.service';
-import { IncomingDoc, IncomingDocType, IncomingDocStatus } from './entities/incoming-doc.entity';
+import { averagePurchaseCost, IncomingService } from './incoming.service';
+import {
+  IncomingDoc,
+  IncomingDocType,
+  IncomingDocStatus,
+} from './entities/incoming-doc.entity';
 import { IncomingItem } from './entities/incoming-item.entity';
 import { Item } from '../items/entities/item.entity';
 
@@ -34,10 +38,12 @@ describe('IncomingService', () => {
       createQueryBuilder: jest.fn().mockReturnValue({
         select: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
-        getRawMany: jest.fn().mockResolvedValue([
-          { docNumber: `ПН-${currentYear}-000005` },
-          { docNumber: `ПН-${currentYear}-000010` },
-        ]),
+        getRawMany: jest
+          .fn()
+          .mockResolvedValue([
+            { docNumber: `ПН-${currentYear}-000005` },
+            { docNumber: `ПН-${currentYear}-000010` },
+          ]),
       }),
       findOne: jest.fn().mockImplementation(({ where }) => {
         if (where?.id === 'new-doc-id') {
@@ -88,10 +94,7 @@ describe('IncomingService', () => {
     expect(doc).toBeDefined();
     expect(queryRunner.query).toHaveBeenCalledWith(
       expect.stringContaining('INSERT INTO "incoming_docs"'),
-      expect.arrayContaining([
-        'org-1',
-        `ПН-${currentYear}-000011`,
-      ]),
+      expect.arrayContaining(['org-1', `ПН-${currentYear}-000011`]),
     );
   });
 
@@ -100,7 +103,9 @@ describe('IncomingService', () => {
     queryRunner.query = jest.fn().mockImplementation(() => {
       callCount++;
       if (callCount === 1) {
-        const err: any = new Error('duplicate key value violates unique constraint');
+        const err: any = new Error(
+          'duplicate key value violates unique constraint',
+        );
         err.code = '23505';
         return Promise.reject(err);
       }
@@ -116,5 +121,132 @@ describe('IncomingService', () => {
     expect(callCount).toBe(2);
     expect(queryRunner.rollbackTransaction).toHaveBeenCalledTimes(1);
     expect(queryRunner.commitTransaction).toHaveBeenCalledTimes(1);
+  });
+  describe('проведение', () => {
+    let manager: any;
+    let lockedItem: any;
+    let claimResult: { affected: number };
+
+    const draftDoc = (items: any[]) => ({
+      id: 'doc-1',
+      organizationId: 'org-1',
+      status: IncomingDocStatus.DRAFT,
+      items,
+    });
+
+    const line = (overrides: any = {}) => ({
+      name: 'Фара',
+      quantity: 2,
+      purchasePrice: '30000.00',
+      salePrice: null,
+      warehouseCell: 'A-1',
+      oem: null,
+      barcode: null,
+      ...overrides,
+    });
+
+    beforeEach(() => {
+      claimResult = { affected: 1 };
+      lockedItem = {
+        id: 5,
+        quantity: 2,
+        price: '60000.00',
+        purchaseCost: '20000.00',
+        barcode: null,
+        oem: null,
+      };
+      const claimQb: any = {};
+      for (const m of ['update', 'set', 'where', 'andWhere']) {
+        claimQb[m] = jest.fn(() => claimQb);
+      }
+      claimQb.execute = jest.fn(async () => claimResult);
+      const itemQb: any = {};
+      for (const m of ['addSelect', 'where', 'andWhere', 'setLock']) {
+        itemQb[m] = jest.fn(() => itemQb);
+      }
+      itemQb.getOne = jest.fn(async () => lockedItem);
+      manager = {
+        createQueryBuilder: jest.fn((entity?: unknown) =>
+          entity ? itemQb : claimQb,
+        ),
+        update: jest.fn(),
+        save: jest.fn(),
+      };
+      dataSource.transaction = jest.fn(async (cb) => cb(manager));
+    });
+
+    it('пишет среднюю закупочную цену и не поднимает цену продажи', async () => {
+      jest
+        .spyOn(service, 'findOne')
+        .mockResolvedValue(draftDoc([line({ itemId: 5 })]) as any);
+
+      await service.processDocument('doc-1', 'org-1');
+
+      expect(manager.update).toHaveBeenCalledWith(
+        Item,
+        { id: 5, organizationId: 'org-1' },
+        { quantity: 4, purchaseCost: '25000.00', warehouseCell: 'A-1' },
+      );
+    });
+
+    it('новая деталь получает цену продажи из накладной и закупочную отдельно', async () => {
+      jest
+        .spyOn(service, 'findOne')
+        .mockResolvedValue(
+          draftDoc([
+            line({ salePrice: '45000.00', oem: '81150-33A10' }),
+          ]) as any,
+        );
+
+      await service.processDocument('doc-1', 'org-1');
+
+      expect(manager.save).toHaveBeenCalledWith(
+        Item,
+        expect.objectContaining({
+          organizationId: 'org-1',
+          price: 45000,
+          purchaseCost: '30000.00',
+          oemNormalized: '8115033A10',
+        }),
+      );
+    });
+
+    it('второе параллельное проведение не добавляет остаток повторно', async () => {
+      jest
+        .spyOn(service, 'findOne')
+        .mockResolvedValue(draftDoc([line({ itemId: 5 })]) as any);
+      claimResult = { affected: 0 };
+
+      await expect(service.processDocument('doc-1', 'org-1')).rejects.toThrow(
+        'Накладная уже проведена',
+      );
+      expect(manager.update).not.toHaveBeenCalled();
+    });
+  });
+});
+
+describe('averagePurchaseCost', () => {
+  it('усредняет старый остаток и новую партию', () => {
+    expect(
+      averagePurchaseCost(
+        { quantity: 3, cost: 100 },
+        { quantity: 1, cost: 200 },
+      ),
+    ).toBe('125.00');
+  });
+
+  it('без старой цены или остатка берёт цену партии', () => {
+    expect(
+      averagePurchaseCost(
+        { quantity: 3, cost: null },
+        { quantity: 1, cost: 200 },
+      ),
+    ).toBe('200.00');
+    expect(
+      averagePurchaseCost(
+        { quantity: -1, cost: 50 },
+        { quantity: 2, cost: 80 },
+      ),
+    ).toBe('80.00');
   });
 });

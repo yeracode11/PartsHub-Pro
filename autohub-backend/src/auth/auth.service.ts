@@ -50,12 +50,12 @@ export class AuthService {
       throw new UnauthorizedException('Пользователь деактивирован');
     }
 
-    // Проверяем пароль - обязательно должен быть
-    if (!user.password) {
+    const passwordHash = await this.loadPasswordHash(user.id);
+    if (!passwordHash) {
       throw new UnauthorizedException('Пароль не установлен. Обратитесь к администратору.');
     }
 
-    const isPasswordValid = await bcrypt.compare(loginDto.password, user.password);
+    const isPasswordValid = await bcrypt.compare(loginDto.password, passwordHash);
     if (!isPasswordValid) {
       throw new UnauthorizedException('Неверный телефон или пароль');
     }
@@ -227,6 +227,16 @@ export class AuthService {
     }
 
     return user;
+  }
+
+  private async loadPasswordHash(userId: string): Promise<string | null> {
+    const row = await this.userRepository
+      .createQueryBuilder('user')
+      .select('user.id')
+      .addSelect('user.password')
+      .where('user.id = :userId', { userId })
+      .getOne();
+    return row?.password ?? null;
   }
 
   /** Пользователь по личному телефону или телефону организации (владелец). */

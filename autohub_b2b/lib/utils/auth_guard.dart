@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:autohub_b2b/blocs/auth/auth_bloc.dart';
 import 'package:autohub_b2b/blocs/auth/auth_state.dart';
+import 'package:autohub_b2b/models/user_model.dart';
 import 'package:autohub_b2b/utils/auth_navigation.dart';
 
 /// Если пользователь не вошёл — открывает экран входа. Возвращает true, если после этого состояние авторизовано.
@@ -13,4 +14,12 @@ Future<bool> ensureAuthenticated(BuildContext context) async {
   await AuthNavigation.pushLoginOverlay(context);
   if (!context.mounted) return false;
   return context.read<AuthBloc>().state is AuthAuthenticated;
+}
+
+/// Закупочные цены, себестоимость и прибыль видят владелец и менеджер.
+bool canSeeFinance(BuildContext context) {
+  final state = context.read<AuthBloc>().state;
+  if (state is! AuthAuthenticated) return false;
+  return state.user.role == UserRole.owner ||
+      state.user.role == UserRole.manager;
 }

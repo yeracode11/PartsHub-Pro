@@ -1,5 +1,14 @@
-import { IsString, IsOptional, IsEnum, IsDateString, IsUUID } from 'class-validator';
-import { IncomingDocStatus, IncomingDocType } from '../entities/incoming-doc.entity';
+import {
+  IsString,
+  IsOptional,
+  IsEnum,
+  IsDateString,
+  IsUUID,
+} from 'class-validator';
+import {
+  IncomingDocStatus,
+  IncomingDocType,
+} from '../entities/incoming-doc.entity';
 
 export class UpdateIncomingDocDto {
   @IsOptional()
@@ -34,4 +43,3 @@ export class UpdateIncomingDocDto {
   @IsEnum(IncomingDocStatus)
   status?: IncomingDocStatus;
 }
-

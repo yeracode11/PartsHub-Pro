@@ -7,8 +7,11 @@ import {
   Post,
   Req,
   Res,
+  UnauthorizedException,
 } from '@nestjs/common';
+import type { RawBodyRequest } from '@nestjs/common';
 import type { Request, Response } from 'express';
+import { isValidMetaSignature } from './meta-webhook-signature.util';
 import { MetaWhatsAppConfig } from './meta-whatsapp.config';
 import { WhatsAppInboundService } from './whatsapp-inbound.service';
 import type { MetaWebhookPayload } from './dto/meta-webhook.types';
@@ -21,6 +24,7 @@ import { parseMetaHubVerifyQuery } from './meta-webhook-verify.util';
 @Controller('webhooks/whatsapp')
 export class WhatsAppMetaWebhookController {
   private readonly logger = new Logger(WhatsAppMetaWebhookController.name);
+  private unsignedWarningLogged = false;
 
   constructor(
     private readonly metaConfig: MetaWhatsAppConfig,
@@ -64,7 +68,30 @@ export class WhatsAppMetaWebhookController {
 
   @Post()
   @HttpCode(200)
-  async receiveWebhook(@Body() body: MetaWebhookPayload) {
+  async receiveWebhook(
+    @Body() body: MetaWebhookPayload,
+    @Req() req?: RawBodyRequest<Request>,
+  ) {
+    const appSecret = this.metaConfig.appSecret;
+    if (appSecret) {
+      const signature = req?.headers?.['x-hub-signature-256'];
+      if (
+        !isValidMetaSignature(
+          req?.rawBody,
+          typeof signature === 'string' ? signature : undefined,
+          appSecret,
+        )
+      ) {
+        this.logger.warn('Meta webhook rejected: invalid X-Hub-Signature-256');
+        throw new UnauthorizedException();
+      }
+    } else if (!this.unsignedWarningLogged) {
+      this.unsignedWarningLogged = true;
+      this.logger.warn(
+        'META_APP_SECRET is not set — Meta webhook signatures are not verified',
+      );
+    }
+
     this.logger.log(
       `META POST RECEIVED: ${JSON.stringify(body ?? {}).slice(0, 5000)}`,
     );

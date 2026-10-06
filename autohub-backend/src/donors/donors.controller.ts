@@ -26,22 +26,19 @@ import {
   UpdateDonorDto,
 } from './dto/donor.dto';
 import { FileUploadService } from '../common/services/file-upload.service';
-import { DonorStatus } from './entities/donor-vehicle.entity';
+import { parseDonorStatus } from './donor-status';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { UserRole } from '../common/enums/user-role.enum';
-
-/** Закупочные цены и прибыль видят только владелец и менеджер. */
-const FINANCE_ROLES: string[] = [UserRole.OWNER, UserRole.MANAGER, UserRole.SUPERADMIN];
-const canSeeFinance = (user: any) => FINANCE_ROLES.includes(user?.role);
+import { canSeeFinance } from '../common/finance-access';
 
 /** basename не даёт выйти за пределы каталога загрузок через ../ в URL. */
 const removeUploadedFile = (fileNameOrUrl: string) =>
-  unlink(join(process.cwd(), 'uploads', 'items', basename(fileNameOrUrl))).catch(
-    () => undefined,
-  );
+  unlink(
+    join(process.cwd(), 'uploads', 'items', basename(fileNameOrUrl)),
+  ).catch(() => undefined);
 
 @Controller('api/donors')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -52,25 +49,48 @@ export class DonorsController {
   @Get()
   @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.STOREKEEPER)
   findAll(@CurrentUser() user: any, @Query('status') status?: string) {
-    if (status && !Object.values(DonorStatus).includes(status as DonorStatus)) {
-      throw new BadRequestException('Неизвестный статус донора');
-    }
     return this.donorsService.findAll(user.organizationId, {
-      status: status as DonorStatus | undefined,
+      status: parseDonorStatus(status),
       includeFinance: canSeeFinance(user),
     });
+  }
+
+  /** Объявлен до ':id', чтобы «economics» не разбирался как id. */
+  @Get('economics')
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  economicsSummary(@CurrentUser() user: any, @Query('status') status?: string) {
+    return this.donorsService.getEconomicsSummary(
+      user.organizationId,
+      parseDonorStatus(status),
+    );
+  }
+
+  @Get(':id/economics')
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  economics(@CurrentUser() user: any, @Param('id', ParseIntPipe) id: number) {
+    return this.donorsService.getEconomics(id, user.organizationId);
+  }
+
+  @Get(':id/history')
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  history(@CurrentUser() user: any, @Param('id', ParseIntPipe) id: number) {
+    return this.donorsService.getHistory(id, user.organizationId);
   }
 
   @Get(':id')
   @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.STOREKEEPER)
   findOne(@CurrentUser() user: any, @Param('id', ParseIntPipe) id: number) {
-    return this.donorsService.findOne(id, user.organizationId, canSeeFinance(user));
+    return this.donorsService.findOne(
+      id,
+      user.organizationId,
+      canSeeFinance(user),
+    );
   }
 
   @Post()
   @Roles(UserRole.OWNER, UserRole.MANAGER)
   create(@CurrentUser() user: any, @Body() dto: CreateDonorDto) {
-    return this.donorsService.create(user.organizationId, dto);
+    return this.donorsService.create(user.organizationId, dto, user.id);
   }
 
   @Put(':id')
@@ -80,7 +100,7 @@ export class DonorsController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateDonorDto,
   ) {
-    return this.donorsService.update(id, user.organizationId, dto);
+    return this.donorsService.update(id, user.organizationId, dto, user.id);
   }
 
   @Delete(':id')
@@ -140,6 +160,6 @@ export class DonorsController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: AddDonorPartsDto,
   ) {
-    return this.donorsService.addParts(id, user.organizationId, dto);
+    return this.donorsService.addParts(id, user.organizationId, dto, user.id);
   }
 }

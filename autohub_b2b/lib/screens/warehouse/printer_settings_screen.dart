@@ -145,7 +145,11 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
 
   void _showSnack(String text, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(text), backgroundColor: color, duration: const Duration(seconds: 2)),
+      SnackBar(
+        content: Text(text),
+        backgroundColor: color,
+        duration: const Duration(seconds: 2),
+      ),
     );
   }
 
@@ -167,39 +171,39 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : Platform.isIOS
-              ? ListView(
-                  padding: const EdgeInsets.all(16),
-                  children: [
-                    _buildBleThermalSection(context),
+          ? ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                _buildBleThermalSection(context),
+                const SizedBox(height: 24),
+                _buildWifiSection(),
+                const SizedBox(height: 24),
+                _buildIosPdfReceiptSection(),
+                const SizedBox(height: 24),
+                _buildLabelPrintInfoCard(),
+              ],
+            )
+          : RefreshIndicator(
+              onRefresh: _refresh,
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  _buildBleThermalSection(context),
+                  const SizedBox(height: 24),
+                  _buildStatusCard(),
+                  const SizedBox(height: 24),
+                  _buildWifiSection(),
+                  const SizedBox(height: 24),
+                  _buildLabelPrintInfoCard(),
+                  const SizedBox(height: 24),
+                  if (_systemPrinters.isNotEmpty) ...[
+                    _buildSystemPrintersSection(),
                     const SizedBox(height: 24),
-                    _buildWifiSection(),
-                    const SizedBox(height: 24),
-                    _buildIosPdfReceiptSection(),
-                    const SizedBox(height: 24),
-                    _buildLabelPrintInfoCard(),
                   ],
-                )
-              : RefreshIndicator(
-                  onRefresh: _refresh,
-                  child: ListView(
-                    padding: const EdgeInsets.all(16),
-                    children: [
-                      _buildBleThermalSection(context),
-                      const SizedBox(height: 24),
-                      _buildStatusCard(),
-                      const SizedBox(height: 24),
-                      _buildWifiSection(),
-                      const SizedBox(height: 24),
-                      _buildLabelPrintInfoCard(),
-                      const SizedBox(height: 24),
-                      if (_systemPrinters.isNotEmpty) ...[
-                        _buildSystemPrintersSection(),
-                        const SizedBox(height: 24),
-                      ],
-                      if (_printer.isConnected) _buildTestButton(),
-                    ],
-                  ),
-                ),
+                  if (_printer.isConnected) _buildTestButton(),
+                ],
+              ),
+            ),
     );
   }
 
@@ -223,7 +227,10 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                     color: AppTheme.primaryColor.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Icons.bluetooth, color: AppTheme.primaryColor),
+                  child: const Icon(
+                    Icons.bluetooth,
+                    color: AppTheme.primaryColor,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 const Expanded(
@@ -238,7 +245,11 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
             const Text(
               'Поиск и подключение к принтеру с ESC/POS по BLE (частые китайские POS‑модули AiYin, Nordic UART '
               'и др.). После подключения доступна тестовая печать на экране устройства.',
-              style: TextStyle(fontSize: 13, color: AppTheme.textSecondary, height: 1.4),
+              style: TextStyle(
+                fontSize: 13,
+                color: AppTheme.textSecondary,
+                height: 1.4,
+              ),
             ),
             const SizedBox(height: 18),
             SizedBox(
@@ -278,7 +289,10 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                     color: AppTheme.primaryColor.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Icons.picture_as_pdf, color: AppTheme.primaryColor),
+                  child: const Icon(
+                    Icons.picture_as_pdf,
+                    color: AppTheme.primaryColor,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 const Expanded(
@@ -293,7 +307,11 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
             const Text(
               'На iPhone печать идёт как в маркетплейсах: формируется PDF, вы открываете предпросмотр, '
               'затем «Печать» (AirPrint — любой принтер в сети) или «Поделиться» (WhatsApp, Telegram, Файлы).',
-              style: TextStyle(fontSize: 13, color: AppTheme.textSecondary, height: 1.4),
+              style: TextStyle(
+                fontSize: 13,
+                color: AppTheme.textSecondary,
+                height: 1.4,
+              ),
             ),
             const SizedBox(height: 20),
             SizedBox(
@@ -329,7 +347,11 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(Icons.label_outline, color: AppTheme.primaryColor, size: 28),
+            const Icon(
+              Icons.label_outline,
+              color: AppTheme.primaryColor,
+              size: 28,
+            ),
             const SizedBox(width: 12),
             const Expanded(
               child: Text(
@@ -383,13 +405,21 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        connected ? 'Принтер подключён' : 'Принтер не подключён',
-                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                        connected
+                            ? 'Принтер подключён'
+                            : 'Принтер не подключён',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                       if (connected && name != null)
                         Text(
                           '$name$connectionLabel',
-                          style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: AppTheme.textSecondary,
+                          ),
                         ),
                     ],
                   ),
@@ -409,9 +439,12 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                   Platform.isIOS
                       ? 'Подключите принтер по WiFi (введите IP-адрес ниже).'
                       : Platform.isAndroid
-                          ? 'Подключитесь по WiFi (TCP) или печатайте этикетки PDF из карточки товара.'
-                          : 'Выберите принтер из списка ниже.',
-                  style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+                      ? 'Подключитесь по WiFi (TCP) или печатайте этикетки PDF из карточки товара.'
+                      : 'Выберите принтер из списка ниже.',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppTheme.textSecondary,
+                  ),
                 ),
               ),
           ],
@@ -467,7 +500,9 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                           isDense: true,
                           prefixIcon: Icon(Icons.router, size: 20),
                         ),
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
                         inputFormatters: [
                           FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
                         ],
@@ -485,7 +520,9 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                           isDense: true,
                         ),
                         keyboardType: TextInputType.number,
-                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                        ],
                         enabled: !isWifiConnected,
                       ),
                     ),
@@ -512,7 +549,11 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                   child: isWifiConnected
                       ? Row(
                           children: [
-                            const Icon(Icons.check_circle, color: Colors.green, size: 20),
+                            const Icon(
+                              Icons.check_circle,
+                              color: Colors.green,
+                              size: 20,
+                            ),
                             const SizedBox(width: 8),
                             const Expanded(
                               child: Text(
@@ -531,10 +572,16 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                               ? const SizedBox(
                                   width: 18,
                                   height: 18,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
                                 )
                               : const Icon(Icons.wifi),
-                          label: Text(_isConnectingWifi ? 'Подключение...' : 'Подключить по WiFi'),
+                          label: Text(
+                            _isConnectingWifi
+                                ? 'Подключение...'
+                                : 'Подключить по WiFi',
+                          ),
                         ),
                 ),
               ],
@@ -555,12 +602,16 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
           children: [
             Icon(Icons.usb, color: AppTheme.textSecondary, size: 20),
             SizedBox(width: 8),
-            Text('Системные принтеры', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            Text(
+              'Системные принтеры',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
           ],
         ),
         const SizedBox(height: 12),
         ..._systemPrinters.map((printer) {
-          final isCurrent = _printer.isConnected && _printer.printerName == printer['name'];
+          final isCurrent =
+              _printer.isConnected && _printer.printerName == printer['name'];
           final isConnecting = _connectingAddress == printer['name'];
 
           return Card(
@@ -573,7 +624,9 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
               ),
               title: Text(
                 printer['name'] ?? 'Принтер',
-                style: TextStyle(fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal),
+                style: TextStyle(
+                  fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                ),
               ),
               subtitle: Text(
                 isCurrent
@@ -587,17 +640,18 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
               trailing: isCurrent
                   ? const Icon(Icons.check, color: Colors.green)
                   : isConnecting
-                      ? const SizedBox(
-                          width: 24, height: 24,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : ElevatedButton(
-                          onPressed: () => _connectSystem(printer),
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                          ),
-                          child: const Text('Подключить'),
-                        ),
+                  ? const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : ElevatedButton(
+                      onPressed: () => _connectSystem(printer),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                      ),
+                      child: const Text('Подключить'),
+                    ),
             ),
           );
         }),
@@ -615,7 +669,8 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
         onPressed: _isPrinting ? null : _testPrint,
         icon: _isPrinting
             ? const SizedBox(
-                width: 18, height: 18,
+                width: 18,
+                height: 18,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
                   valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
@@ -623,7 +678,9 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
               )
             : const Icon(Icons.print),
         label: Text(_isPrinting ? 'Печать...' : 'Тестовая печать'),
-        style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
+        style: ElevatedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+        ),
       ),
     );
   }

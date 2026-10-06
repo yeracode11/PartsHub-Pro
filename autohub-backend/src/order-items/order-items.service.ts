@@ -1,8 +1,17 @@
-import { Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, MoreThanOrEqual, Repository } from 'typeorm';
 import { OrderItem } from './entities/order-item.entity';
 import { Item } from '../items/entities/item.entity';
+
+export const MAX_ORDER_LINES = 200;
+export const MAX_LINE_QUANTITY = 10000;
+
+export type OrderItemInput = { itemId: number; quantity: number };
 
 @Injectable()
 export class OrderItemsService {
@@ -14,114 +23,137 @@ export class OrderItemsService {
   ) {}
 
   /**
-   * Создать items для заказа и автоматически списать со склада
+   * Создать позиции заказа. Без skipQuantityCheck списывает остаток атомарно и не уходит в минус.
    */
   async createOrderItems(
     orderId: number,
-    items: Array<{ itemId: number; quantity: number }>,
+    organizationId: string,
+    items: OrderItemInput[],
     options?: { skipQuantityCheck?: boolean },
+    manager?: EntityManager,
   ): Promise<OrderItem[]> {
+    const lines = normalizeOrderItems(items);
+    const em = manager ?? this.itemRepository.manager;
+    const itemRepo = em.getRepository(Item);
+    const orderItemRepo = em.getRepository(OrderItem);
     const orderItems: OrderItem[] = [];
 
-    for (const itemData of items) {
-      // Получаем товар из склада
-      const item = await this.itemRepository.findOne({
-        where: { id: itemData.itemId },
+    for (const line of lines) {
+      const item = await itemRepo.findOne({
+        where: { id: line.itemId, organizationId },
       });
-
       if (!item) {
-        throw new Error(`Item with ID ${itemData.itemId} not found`);
+        throw new NotFoundException(`Товар #${line.itemId} не найден`);
       }
 
-      // Проверяем наличие на складе (если не пропущено)
       if (!options?.skipQuantityCheck) {
-        if (item.quantity < itemData.quantity) {
-          // Для B2C создаем заказ даже если товара нет на складе
-        }
-        
-        // Списываем со склада (если есть товар)
-        if (item.quantity > 0) {
-          item.quantity -= itemData.quantity;
-          await this.itemRepository.save(item);
+        const result = await itemRepo
+          .createQueryBuilder()
+          .update(Item)
+          .set({ quantity: () => 'quantity - :qty' })
+          .where({
+            id: item.id,
+            organizationId,
+            quantity: MoreThanOrEqual(line.quantity),
+          })
+          .setParameter('qty', line.quantity)
+          .execute();
+        if (!result.affected) {
+          throw new BadRequestException(
+            `Недостаточно на складе: «${item.name}», доступно ${item.quantity}`,
+          );
         }
       }
 
-      // Создаем запись order_item
       const priceAtTime = Number(item.price);
-      const subtotal = priceAtTime * itemData.quantity;
-
-      const orderItem = this.orderItemRepository.create({
+      const orderItem = orderItemRepo.create({
         orderId,
         itemId: item.id,
-        quantity: itemData.quantity,
+        quantity: line.quantity,
         priceAtTime,
-        subtotal,
+        subtotal: priceAtTime * line.quantity,
       });
-
-      const savedOrderItem = await this.orderItemRepository.save(orderItem);
-      orderItems.push(savedOrderItem);
+      orderItems.push(await orderItemRepo.save(orderItem));
     }
 
     return orderItems;
   }
 
-  /**
-   * Получить items заказа
-   */
-  async getOrderItems(orderId: number): Promise<OrderItem[]> {
-    return await this.orderItemRepository.find({
+  async getOrderItems(
+    orderId: number,
+    manager?: EntityManager,
+  ): Promise<OrderItem[]> {
+    const repo = manager
+      ? manager.getRepository(OrderItem)
+      : this.orderItemRepository;
+    return await repo.find({
       where: { orderId },
       relations: ['item'],
     });
   }
 
   /**
-   * Удалить item из заказа и вернуть на склад
+   * Удалить все позиции заказа и вернуть остаток на склад.
    */
-  async removeOrderItem(orderItemId: number): Promise<void> {
-    const orderItem = await this.orderItemRepository.findOne({
-      where: { id: orderItemId },
-      relations: ['item'],
-    });
-
-    if (!orderItem) {
-      throw new Error(`OrderItem with ID ${orderItemId} not found`);
-    }
-
-    // Возвращаем на склад
-    const item = orderItem.item;
-    item.quantity += orderItem.quantity;
-    await this.itemRepository.save(item);
-
-    // Удаляем запись
-    await this.orderItemRepository.delete(orderItemId);
-  }
-
-  /**
-   * Удалить все items заказа и вернуть на склад
-   */
-  async deleteOrderItems(orderId: number): Promise<void> {
-    const orderItems = await this.getOrderItems(orderId);
+  async deleteOrderItems(
+    orderId: number,
+    manager?: EntityManager,
+  ): Promise<void> {
+    const em = manager ?? this.orderItemRepository.manager;
+    const orderItems = await this.getOrderItems(orderId, em);
 
     for (const orderItem of orderItems) {
-      // Возвращаем на склад
-      const item = orderItem.item;
-      if (item) {
-        item.quantity += orderItem.quantity;
-        await this.itemRepository.save(item);
+      if (orderItem.item) {
+        await em
+          .getRepository(Item)
+          .increment({ id: orderItem.item.id }, 'quantity', orderItem.quantity);
       }
     }
 
-    // Удаляем все записи order_items для этого заказа
-    await this.orderItemRepository.delete({ orderId });
+    await em.getRepository(OrderItem).delete({ orderId });
   }
 
-  /**
-   * Рассчитать общую сумму заказа
-   */
   async calculateOrderTotal(orderId: number): Promise<number> {
     const orderItems = await this.getOrderItems(orderId);
     return orderItems.reduce((sum, item) => sum + Number(item.subtotal), 0);
   }
 }
 
+/** Проверяет состав заказа из внешнего запроса и объединяет повторяющиеся товары. */
+export function normalizeOrderItems(items: unknown): OrderItemInput[] {
+  if (!Array.isArray(items)) {
+    throw new BadRequestException('Список товаров должен быть массивом');
+  }
+  if (items.length > MAX_ORDER_LINES) {
+    throw new BadRequestException(
+      `Не больше ${MAX_ORDER_LINES} позиций в заказе`,
+    );
+  }
+
+  const merged = new Map<number, number>();
+  for (const raw of items as Array<{
+    itemId?: unknown;
+    quantity?: unknown;
+  } | null>) {
+    const itemId = Number(raw?.itemId);
+    const quantity = Number(raw?.quantity);
+    if (!Number.isInteger(itemId) || itemId <= 0) {
+      throw new BadRequestException('Некорректный товар в заказе');
+    }
+    if (
+      !Number.isInteger(quantity) ||
+      quantity <= 0 ||
+      quantity > MAX_LINE_QUANTITY
+    ) {
+      throw new BadRequestException('Некорректное количество товара');
+    }
+    merged.set(itemId, (merged.get(itemId) ?? 0) + quantity);
+  }
+
+  return [...merged.entries()].map(([itemId, quantity]) => {
+    if (quantity > MAX_LINE_QUANTITY) {
+      throw new BadRequestException('Некорректное количество товара');
+    }
+    return { itemId, quantity };
+  });
+}

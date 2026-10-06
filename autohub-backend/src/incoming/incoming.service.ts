@@ -1,12 +1,49 @@
-import { Injectable, NotFoundException, BadRequestException, HttpException, HttpStatus } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ConflictException,
+  HttpException,
+  HttpStatus,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
-import { IncomingDoc, IncomingDocStatus, IncomingDocType } from './entities/incoming-doc.entity';
+import { Repository, DataSource, EntityManager } from 'typeorm';
+import {
+  IncomingDoc,
+  IncomingDocStatus,
+  IncomingDocType,
+} from './entities/incoming-doc.entity';
 import { IncomingItem } from './entities/incoming-item.entity';
 import { Item } from '../items/entities/item.entity';
 import { CreateIncomingDocDto } from './dto/create-incoming-doc.dto';
 import { CreateIncomingItemDto } from './dto/create-incoming-item.dto';
 import { UpdateIncomingDocDto } from './dto/update-incoming-doc.dto';
+import { normalizeOem } from '../items/oem';
+
+const optionalCode = (value: unknown) =>
+  typeof value === 'string' && value.trim() ? value.trim().slice(0, 100) : null;
+
+const optionalSalePrice = (value: unknown) => {
+  if (value === undefined || value === null || value === '') return null;
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount < 0) {
+    throw new BadRequestException('Неверная цена продажи');
+  }
+  return amount.toFixed(2);
+};
+
+/** Средняя закупочная цена после прихода: старый остаток по старой цене плюс новая партия. */
+export function averagePurchaseCost(
+  current: { quantity: number; cost: number | null },
+  incoming: { quantity: number; cost: number },
+): string {
+  const oldQuantity = Math.max(current.quantity, 0);
+  if (current.cost === null || oldQuantity === 0) {
+    return incoming.cost.toFixed(2);
+  }
+  const total = oldQuantity * current.cost + incoming.quantity * incoming.cost;
+  return (total / (oldQuantity + incoming.quantity)).toFixed(2);
+}
 
 @Injectable()
 export class IncomingService {
@@ -34,8 +71,10 @@ export class IncomingService {
 
     let maxSeq = 0;
     for (const row of rows) {
-      const val = row.docNumber || row.doc_docNumber || (Object.values(row)[0] as string);
-      const match = typeof val === 'string' ? val.match(/ПН-\d{4}-(\d+)/) : null;
+      const val =
+        row.docNumber || row.doc_docNumber || (Object.values(row)[0] as string);
+      const match =
+        typeof val === 'string' ? val.match(/ПН-\d{4}-(\d+)/) : null;
       if (match) {
         const num = parseInt(match[1], 10);
         if (!isNaN(num) && num > maxSeq) {
@@ -48,7 +87,11 @@ export class IncomingService {
     let candidate = `${prefix}${String(candidateSeq).padStart(6, '0')}`;
 
     // 2. Гарантируем уникальность: если номер уже существует в БД, инкрементируем
-    while (await this.incomingDocRepository.findOne({ where: { docNumber: candidate } })) {
+    while (
+      await this.incomingDocRepository.findOne({
+        where: { docNumber: candidate },
+      })
+    ) {
       candidateSeq++;
       candidate = `${prefix}${String(candidateSeq).padStart(6, '0')}`;
     }
@@ -57,11 +100,17 @@ export class IncomingService {
   }
 
   // Создание приходной накладной
-  async create(organizationId: string, userId: string, dto: CreateIncomingDocDto): Promise<IncomingDoc> {
+  async create(
+    organizationId: string,
+    userId: string,
+    dto: CreateIncomingDocDto,
+  ): Promise<IncomingDoc> {
     try {
       // Валидация типа
       if (!Object.values(IncomingDocType).includes(dto.type)) {
-        throw new Error(`Invalid type: ${dto.type}. Must be one of: ${Object.values(IncomingDocType).join(', ')}`);
+        throw new Error(
+          `Invalid type: ${dto.type}. Must be one of: ${Object.values(IncomingDocType).join(', ')}`,
+        );
       }
 
       // Валидация userId
@@ -77,7 +126,8 @@ export class IncomingService {
       }
 
       // Обработка supplierId - если пустая строка, то null
-      const supplierId = dto.supplierId && dto.supplierId.trim() !== '' ? dto.supplierId : null;
+      const supplierId =
+        dto.supplierId && dto.supplierId.trim() !== '' ? dto.supplierId : null;
 
       const MAX_RETRIES = 5;
       for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
@@ -150,7 +200,7 @@ export class IncomingService {
               doc.docPhotos ? JSON.stringify(doc.docPhotos) : null,
               doc.createdById, // Явно передаем как параметр
               doc.totalAmount,
-            ]
+            ],
           );
 
           await queryRunner.commitTransaction();
@@ -186,7 +236,10 @@ export class IncomingService {
         } catch (innerError) {
           await queryRunner.rollbackTransaction();
           // Если возникла коллизия уникального номера накладной (23505), пробуем следующий номер
-          if ((innerError as any)?.code === '23505' && attempt < MAX_RETRIES - 1) {
+          if (
+            (innerError as any)?.code === '23505' &&
+            attempt < MAX_RETRIES - 1
+          ) {
             continue;
           }
           throw innerError;
@@ -198,7 +251,8 @@ export class IncomingService {
       throw new HttpException(
         {
           statusCode: HttpStatus.CONFLICT,
-          message: 'Не удалось сгенерировать уникальный номер накладной. Попробуйте еще раз.',
+          message:
+            'Не удалось сгенерировать уникальный номер накладной. Попробуйте еще раз.',
           error: 'Conflict',
         },
         HttpStatus.CONFLICT,
@@ -221,7 +275,8 @@ export class IncomingService {
         throw new HttpException(
           {
             statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-            message: 'Таблица incoming_docs не существует в базе данных. Проверьте миграции.',
+            message:
+              'Таблица incoming_docs не существует в базе данных. Проверьте миграции.',
             error: 'Database Error',
           },
           HttpStatus.INTERNAL_SERVER_ERROR,
@@ -232,18 +287,19 @@ export class IncomingService {
         throw new HttpException(
           {
             statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-            message: 'Тип данных enum не существует. Проверьте миграции базы данных.',
+            message:
+              'Тип данных enum не существует. Проверьте миграции базы данных.',
             error: 'Database Error',
           },
           HttpStatus.INTERNAL_SERVER_ERROR,
         );
       }
-      
+
       // Если это уже HttpException, пробрасываем как есть
       if (error instanceof HttpException) {
         throw error;
       }
-      
+
       // Для остальных ошибок создаем HttpException
       throw new HttpException(
         {
@@ -258,11 +314,14 @@ export class IncomingService {
   }
 
   // Получение всех накладных организации
-  async findAll(organizationId: string, filters?: {
-    status?: IncomingDocStatus;
-    dateFrom?: Date;
-    dateTo?: Date;
-  }): Promise<IncomingDoc[]> {
+  async findAll(
+    organizationId: string,
+    filters?: {
+      status?: IncomingDocStatus;
+      dateFrom?: Date;
+      dateTo?: Date;
+    },
+  ): Promise<IncomingDoc[]> {
     const queryBuilder = this.incomingDocRepository
       .createQueryBuilder('doc')
       .leftJoinAndSelect('doc.supplier', 'supplier')
@@ -276,7 +335,9 @@ export class IncomingService {
     }
 
     if (filters?.dateFrom) {
-      queryBuilder.andWhere('doc.date >= :dateFrom', { dateFrom: filters.dateFrom });
+      queryBuilder.andWhere('doc.date >= :dateFrom', {
+        dateFrom: filters.dateFrom,
+      });
     }
 
     if (filters?.dateTo) {
@@ -324,7 +385,11 @@ export class IncomingService {
   }
 
   // Обновление накладной
-  async update(id: string, organizationId: string, dto: UpdateIncomingDocDto): Promise<IncomingDoc> {
+  async update(
+    id: string,
+    organizationId: string,
+    dto: UpdateIncomingDocDto,
+  ): Promise<IncomingDoc> {
     const doc = await this.findOne(id, organizationId);
 
     if (dto.date) {
@@ -353,7 +418,10 @@ export class IncomingService {
     }
 
     // Пересчитываем сумму при изменении статуса
-    if (dto.status === IncomingDocStatus.DONE && doc.status !== IncomingDocStatus.DONE) {
+    if (
+      dto.status === IncomingDocStatus.DONE &&
+      doc.status !== IncomingDocStatus.DONE
+    ) {
       await this.recalculateTotal(doc.id);
     }
 
@@ -361,7 +429,11 @@ export class IncomingService {
   }
 
   // Добавление позиции в накладную
-  async addItem(docId: string, organizationId: string, dto: CreateIncomingItemDto): Promise<IncomingItem> {
+  async addItem(
+    docId: string,
+    organizationId: string,
+    dto: CreateIncomingItemDto,
+  ): Promise<IncomingItem> {
     const doc = await this.findOne(docId, organizationId);
 
     if (doc.status === IncomingDocStatus.DONE) {
@@ -382,6 +454,9 @@ export class IncomingService {
       warehouseCell: dto.warehouseCell || null,
       photos: dto.photos || null,
       sku: dto.sku || null,
+      salePrice: optionalSalePrice(dto.salePrice),
+      oem: optionalCode(dto.oem),
+      barcode: optionalCode(dto.barcode),
     });
 
     const savedItem = await this.incomingItemRepository.save(item);
@@ -408,7 +483,9 @@ export class IncomingService {
     }
 
     if (item.doc.status === IncomingDocStatus.DONE) {
-      throw new BadRequestException('Cannot remove items from completed document');
+      throw new BadRequestException(
+        'Cannot remove items from completed document',
+      );
     }
 
     await this.incomingItemRepository.remove(item);
@@ -429,7 +506,10 @@ export class IncomingService {
   }
 
   // Проведение накладной (обновление остатков)
-  async processDocument(docId: string, organizationId: string): Promise<IncomingDoc> {
+  async processDocument(
+    docId: string,
+    organizationId: string,
+  ): Promise<IncomingDoc> {
     const doc = await this.findOne(docId, organizationId);
 
     if (doc.status === IncomingDocStatus.DONE) {
@@ -446,72 +526,108 @@ export class IncomingService {
         throw new BadRequestException(`Item "${item.name}" has invalid price`);
       }
       if (!item.warehouseCell) {
-        throw new BadRequestException(`Item "${item.name}" has no warehouse cell`);
+        throw new BadRequestException(
+          `Item "${item.name}" has no warehouse cell`,
+        );
       }
     }
-
-    // Используем транзакцию для атомарности
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
 
     try {
-      // Обновляем или создаем товары и увеличиваем остатки
-      for (const incomingItem of doc.items) {
-        if (incomingItem.itemId) {
-          // Обновляем существующий товар
-          const item = await queryRunner.manager.findOne(Item, {
-            where: { id: incomingItem.itemId, organizationId },
-          });
-
-          if (item) {
-            item.quantity += incomingItem.quantity;
-            // Обновляем цену, если она выше текущей (или можно использовать среднюю)
-            if (Number(incomingItem.purchasePrice) > Number(item.price)) {
-              item.price = incomingItem.purchasePrice;
-            }
-            // Обновляем ячейку склада, если она указана
-            if (incomingItem.warehouseCell) {
-              item.warehouseCell = incomingItem.warehouseCell;
-            }
-            await queryRunner.manager.save(item);
-          }
-        } else {
-          // Создаем новый товар для авторазбора
-          const newItem = new Item();
-          newItem.organizationId = organizationId;
-          newItem.name = incomingItem.name;
-          newItem.sku = incomingItem.sku || null;
-          newItem.category = incomingItem.category || 'Общее';
-          newItem.price = incomingItem.purchasePrice;
-          newItem.quantity = incomingItem.quantity;
-          newItem.condition = incomingItem.condition || 'used';
-          newItem.description = incomingItem.vin
-            ? `VIN: ${incomingItem.vin}${incomingItem.carBrand ? `, ${incomingItem.carBrand} ${incomingItem.carModel || ''}` : ''}`
-            : incomingItem.carBrand
-              ? `${incomingItem.carBrand} ${incomingItem.carModel || ''}`
-              : null;
-          newItem.images = incomingItem.photos || [];
-          newItem.warehouseCell = incomingItem.warehouseCell || null;
-          newItem.syncedToB2C = true; // Автоматически синхронизируем в B2C
-
-          await queryRunner.manager.save(Item, newItem);
+      await this.dataSource.transaction(async (manager) => {
+        // Статус меняется первым и условно: второй параллельный запрос не добавит остаток повторно.
+        const claimed = await manager
+          .createQueryBuilder()
+          .update(IncomingDoc)
+          .set({ status: IncomingDocStatus.DONE })
+          .where('id = :id', { id: doc.id })
+          .andWhere('"organizationId" = :organizationId', { organizationId })
+          .andWhere('status <> :done', { done: IncomingDocStatus.DONE })
+          .execute();
+        if (!claimed.affected) {
+          throw new BadRequestException('Накладная уже проведена');
         }
-      }
 
-      // Обновляем статус накладной
-      doc.status = IncomingDocStatus.DONE;
-      await queryRunner.manager.save(doc);
-
-      await queryRunner.commitTransaction();
-
-      return await this.findOne(doc.id, organizationId);
+        for (const incomingItem of doc.items) {
+          await this.receiveLine(manager, organizationId, incomingItem);
+        }
+      });
     } catch (error) {
-      await queryRunner.rollbackTransaction();
+      if ((error as { code?: string })?.code === '23505') {
+        throw new ConflictException(
+          'Штрихкод из накладной уже есть у другого товара',
+        );
+      }
       throw error;
-    } finally {
-      await queryRunner.release();
     }
+
+    return await this.findOne(doc.id, organizationId);
+  }
+
+  /**
+   * Закупочная цена пишется в purchaseCost (средняя по остатку), цена продажи
+   * меняется, только если её указали в накладной.
+   */
+  private async receiveLine(
+    manager: EntityManager,
+    organizationId: string,
+    line: IncomingItem,
+  ) {
+    const cost = Number(line.purchasePrice);
+    const oemNormalized = normalizeOem(line.oem);
+
+    if (line.itemId) {
+      const item = await manager
+        .createQueryBuilder(Item, 'item')
+        .addSelect('item.purchaseCost')
+        .where('item.id = :id', { id: line.itemId })
+        .andWhere('item.organizationId = :organizationId', { organizationId })
+        .setLock('pessimistic_write')
+        .getOne();
+      if (!item) return;
+
+      const patch: Partial<Item> = {
+        quantity: item.quantity + line.quantity,
+        purchaseCost: averagePurchaseCost(
+          {
+            quantity: item.quantity,
+            cost: item.purchaseCost === null ? null : Number(item.purchaseCost),
+          },
+          { quantity: line.quantity, cost },
+        ),
+      };
+      if (line.salePrice !== null) patch.price = Number(line.salePrice);
+      if (line.warehouseCell) patch.warehouseCell = line.warehouseCell;
+      if (line.barcode && !item.barcode) patch.barcode = line.barcode;
+      if (oemNormalized && !item.oem) {
+        patch.oem = line.oem;
+        patch.oemNormalized = oemNormalized;
+      }
+      await manager.update(Item, { id: item.id, organizationId }, patch);
+      return;
+    }
+
+    const newItem = new Item();
+    newItem.organizationId = organizationId;
+    newItem.name = line.name;
+    newItem.sku = line.sku || null;
+    newItem.category = line.category || 'Общее';
+    // Старые клиенты не передают цену продажи — тогда как раньше берём закупочную.
+    newItem.price = line.salePrice !== null ? Number(line.salePrice) : cost;
+    newItem.purchaseCost = cost.toFixed(2);
+    newItem.quantity = line.quantity;
+    newItem.condition = line.condition || 'used';
+    newItem.oem = oemNormalized ? line.oem : null;
+    newItem.oemNormalized = oemNormalized;
+    newItem.barcode = line.barcode;
+    newItem.description = line.vin
+      ? `VIN: ${line.vin}${line.carBrand ? `, ${line.carBrand} ${line.carModel || ''}` : ''}`
+      : line.carBrand
+        ? `${line.carBrand} ${line.carModel || ''}`
+        : null;
+    newItem.images = line.photos || [];
+    newItem.warehouseCell = line.warehouseCell || null;
+    newItem.syncedToB2C = true; // Автоматически синхронизируем в B2C
+    await manager.save(Item, newItem);
   }
 
   // Удаление накладной
@@ -525,4 +641,3 @@ export class IncomingService {
     await this.incomingDocRepository.remove(doc);
   }
 }
-

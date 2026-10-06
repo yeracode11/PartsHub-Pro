@@ -25,7 +25,8 @@ class BlePrinterConnectedScreen extends StatefulWidget {
   final BluetoothDevice device;
 
   @override
-  State<BlePrinterConnectedScreen> createState() => _BlePrinterConnectedScreenState();
+  State<BlePrinterConnectedScreen> createState() =>
+      _BlePrinterConnectedScreenState();
 }
 
 class _BlePrinterConnectedScreenState extends State<BlePrinterConnectedScreen> {
@@ -47,8 +48,9 @@ class _BlePrinterConnectedScreenState extends State<BlePrinterConnectedScreen> {
   String _statusDetailLine() {
     final mtu = widget.device.mtuNow;
     final u = _session.writeCharacteristic?.uuid.str ?? '—';
-    final chan =
-        _session.canCycleBleWriteProfile ? ' · ${_session.bleWriteProfileCaption}' : '';
+    final chan = _session.canCycleBleWriteProfile
+        ? ' · ${_session.bleWriteProfileCaption}'
+        : '';
     return 'MTU $mtu · $u$chan';
   }
 
@@ -60,7 +62,8 @@ class _BlePrinterConnectedScreenState extends State<BlePrinterConnectedScreen> {
     });
 
     try {
-      if (_session.device?.remoteId == widget.device.remoteId && _session.isReady) {
+      if (_session.device?.remoteId == widget.device.remoteId &&
+          _session.isReady) {
         setState(() {
           _phase = _Phase.ready;
           _phaseDetail = _statusDetailLine();
@@ -97,7 +100,9 @@ class _BlePrinterConnectedScreenState extends State<BlePrinterConnectedScreen> {
   Future<void> _printTest({required bool extended}) async {
     setState(() {
       _phase = _Phase.printing;
-      _phaseDetail = extended ? 'Отправка расширенного чека…' : 'Отправка тестового чека…';
+      _phaseDetail = extended
+          ? 'Отправка расширенного чека…'
+          : 'Отправка тестового чека…';
     });
     try {
       final bytes = extended
@@ -106,7 +111,10 @@ class _BlePrinterConnectedScreenState extends State<BlePrinterConnectedScreen> {
       await _session.writeEscPosBytes(bytes);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Тест отправлен'), backgroundColor: Colors.green),
+        const SnackBar(
+          content: Text('Тест отправлен'),
+          backgroundColor: Colors.green,
+        ),
       );
       setState(() {
         _phase = _Phase.ready;
@@ -124,7 +132,10 @@ class _BlePrinterConnectedScreenState extends State<BlePrinterConnectedScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userFacingApiMessage(e)), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text(userFacingApiMessage(e)),
+          backgroundColor: Colors.red,
+        ),
       );
       setState(() => _phase = _Phase.ready);
     }
@@ -142,7 +153,9 @@ class _BlePrinterConnectedScreenState extends State<BlePrinterConnectedScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('TSPL отправлен! Если лента напечатала «TSPL TEST» — всё работает.'),
+          content: Text(
+            'TSPL отправлен! Если лента напечатала «TSPL TEST» — всё работает.',
+          ),
           backgroundColor: Colors.green,
           duration: Duration(seconds: 5),
         ),
@@ -163,7 +176,10 @@ class _BlePrinterConnectedScreenState extends State<BlePrinterConnectedScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка')), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text(userFacingApiMessage(e, prefix: 'Ошибка')),
+          backgroundColor: Colors.red,
+        ),
       );
       setState(() => _phase = _Phase.ready);
     }
@@ -175,7 +191,9 @@ class _BlePrinterConnectedScreenState extends State<BlePrinterConnectedScreen> {
       _phaseDetail = 'ESC @ + LF (6 байт)…';
     });
     try {
-      await _session.writeEscPosBytes(BleEscPosSession.buildNakedLineFeedBytes());
+      await _session.writeEscPosBytes(
+        BleEscPosSession.buildNakedLineFeedBytes(),
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -199,7 +217,10 @@ class _BlePrinterConnectedScreenState extends State<BlePrinterConnectedScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userFacingApiMessage(e)), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text(userFacingApiMessage(e)),
+          backgroundColor: Colors.red,
+        ),
       );
       setState(() => _phase = _Phase.ready);
     }
@@ -211,7 +232,9 @@ class _BlePrinterConnectedScreenState extends State<BlePrinterConnectedScreen> {
       _phaseDetail = 'Команды протяжки…';
     });
     try {
-      await _session.writeEscPosBytes(BleEscPosSession.buildMinimalPaperFeedPulseBytes());
+      await _session.writeEscPosBytes(
+        BleEscPosSession.buildMinimalPaperFeedPulseBytes(),
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -235,7 +258,10 @@ class _BlePrinterConnectedScreenState extends State<BlePrinterConnectedScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userFacingApiMessage(e)), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text(userFacingApiMessage(e)),
+          backgroundColor: Colors.red,
+        ),
       );
       setState(() => _phase = _Phase.ready);
     }
@@ -273,7 +299,10 @@ class _BlePrinterConnectedScreenState extends State<BlePrinterConnectedScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userFacingApiMessage(e)), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text(userFacingApiMessage(e)),
+          backgroundColor: Colors.red,
+        ),
       );
       setState(() {
         _phase = _Phase.ready;
@@ -303,7 +332,8 @@ class _BlePrinterConnectedScreenState extends State<BlePrinterConnectedScreen> {
 
     for (var i = 0; i < pool.length; i++) {
       final chr = pool[i];
-      final label = '${chr.uuid.str.substring(0, 8)} [${chr.serviceUuid.str.substring(0, 8)}]';
+      final label =
+          '${chr.uuid.str.substring(0, 8)} [${chr.serviceUuid.str.substring(0, 8)}]';
 
       if (!mounted) break;
       setState(() => _phaseDetail = 'Профиль ${i + 1}/${pool.length}: $label');
@@ -329,7 +359,9 @@ class _BlePrinterConnectedScreenState extends State<BlePrinterConnectedScreen> {
 
       if (!mounted) break;
       setState(() {
-        _profileTestResults.add(_ProfileTestResult(label: label, status: status));
+        _profileTestResults.add(
+          _ProfileTestResult(label: label, status: status),
+        );
       });
 
       // Пауза: смотрим, зашевелилась ли лента.
@@ -351,10 +383,9 @@ class _BlePrinterConnectedScreenState extends State<BlePrinterConnectedScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final name =
-        widget.device.platformName.trim().isEmpty
-            ? widget.device.remoteId.str
-            : widget.device.platformName;
+    final name = widget.device.platformName.trim().isEmpty
+        ? widget.device.remoteId.str
+        : widget.device.platformName;
 
     final busy = _phase == _Phase.linking || _phase == _Phase.printing;
 
@@ -370,7 +401,10 @@ class _BlePrinterConnectedScreenState extends State<BlePrinterConnectedScreen> {
         padding: const EdgeInsets.all(20),
         children: [
           if (_phase == _Phase.error) ...[
-            Text(_lastError ?? 'Ошибка', style: const TextStyle(color: Colors.red)),
+            Text(
+              _lastError ?? 'Ошибка',
+              style: const TextStyle(color: Colors.red),
+            ),
             const SizedBox(height: 12),
             FilledButton(onPressed: _link, child: const Text('Повторить')),
             const SizedBox(height: 24),
@@ -384,9 +418,7 @@ class _BlePrinterConnectedScreenState extends State<BlePrinterConnectedScreen> {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 ),
                 const SizedBox(width: 12),
-                Expanded(
-                  child: Text(_phaseDetail ?? '…'),
-                ),
+                Expanded(child: Text(_phaseDetail ?? '…')),
               ],
             ),
           if (!busy || _phase == _Phase.ready) ...[
@@ -395,12 +427,17 @@ class _BlePrinterConnectedScreenState extends State<BlePrinterConnectedScreen> {
                 padding: const EdgeInsets.only(bottom: 16),
                 child: Text(
                   _phaseDetail!,
-                  style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppTheme.textSecondary,
+                  ),
                 ),
               ),
             // ── TSPL (правильный протокол для AiYin IP-802BT) ──
             FilledButton.icon(
-              style: FilledButton.styleFrom(backgroundColor: Colors.green.shade700),
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.green.shade700,
+              ),
               onPressed: (_phase == _Phase.ready) ? _printTsplTest : null,
               icon: const Icon(Icons.print_outlined),
               label: const Text('TSPL тест (AiYin IP-802BT)'),
@@ -411,7 +448,11 @@ class _BlePrinterConnectedScreenState extends State<BlePrinterConnectedScreen> {
               child: Text(
                 'Принтер AiYin IP-802BT использует TSPL, не ESC/POS.\n'
                 'Если эта кнопка печатает — всё работает.',
-                style: TextStyle(fontSize: 11, color: Colors.green.shade800, height: 1.4),
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.green.shade800,
+                  height: 1.4,
+                ),
               ),
             ),
             const Divider(),
@@ -424,7 +465,9 @@ class _BlePrinterConnectedScreenState extends State<BlePrinterConnectedScreen> {
             ),
             const SizedBox(height: 8),
             OutlinedButton.icon(
-              onPressed: (_phase == _Phase.ready) ? () => _printTest(extended: false) : null,
+              onPressed: (_phase == _Phase.ready)
+                  ? () => _printTest(extended: false)
+                  : null,
               icon: const Icon(Icons.receipt_long),
               label: const Text('ESC/POS тест (только текст)'),
             ),
@@ -438,8 +481,8 @@ class _BlePrinterConnectedScreenState extends State<BlePrinterConnectedScreen> {
             OutlinedButton.icon(
               onPressed:
                   (_phase == _Phase.ready && _session.canCycleBleWriteProfile)
-                      ? _cycleBleWriteProfile
-                      : null,
+                  ? _cycleBleWriteProfile
+                  : null,
               icon: const Icon(Icons.swap_horiz_rounded),
               label: const Text('Следующий канал записи (ручной)'),
             ),
@@ -469,7 +512,10 @@ class _BlePrinterConnectedScreenState extends State<BlePrinterConnectedScreen> {
                       Expanded(
                         child: Text(
                           r.label,
-                          style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontFamily: 'monospace',
+                          ),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -478,7 +524,9 @@ class _BlePrinterConnectedScreenState extends State<BlePrinterConnectedScreen> {
                           r.status,
                           style: TextStyle(
                             fontSize: 12,
-                            color: r.status.startsWith('✅') ? Colors.green : Colors.red,
+                            color: r.status.startsWith('✅')
+                                ? Colors.green
+                                : Colors.red,
                           ),
                         ),
                       ),
@@ -502,7 +550,11 @@ class _BlePrinterConnectedScreenState extends State<BlePrinterConnectedScreen> {
               Text(
                 'Профиль ✅ — байты приняты на уровне GATT. '
                 'Если при этом лента двигалась — он и есть нужный канал ESC/POS.',
-                style: TextStyle(fontSize: 11, color: Colors.grey.shade600, height: 1.4),
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.grey.shade600,
+                  height: 1.4,
+                ),
               ),
             ],
             const SizedBox(height: 12),
@@ -535,7 +587,11 @@ class _BlePrinterConnectedScreenState extends State<BlePrinterConnectedScreen> {
                     '4. Файл лога (btsnoop_hci.log) — через «Отчёты об ошибках» или /data/misc/bluetooth/ — '
                     'откройте в Wireshark: Filter → btle.data_header.length > 0.\n'
                     '5. Скопируйте первые пакеты Write на принтер — это и есть нужный UUID + протокол.',
-                    style: TextStyle(fontSize: 11, color: Colors.grey.shade800, height: 1.5),
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.grey.shade800,
+                      height: 1.5,
+                    ),
                   ),
                 ],
               ),

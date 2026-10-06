@@ -89,9 +89,11 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
         _isLoadingDoc = false;
       });
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка загрузки'))));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(userFacingApiMessage(e, prefix: 'Ошибка загрузки')),
+          ),
+        );
       }
     }
   }
@@ -691,9 +693,13 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
                       _loadDocument();
                     } catch (e) {
                       if (mounted) {
-                        ScaffoldMessenger.of(
-                          context,
-                        ).showSnackBar(SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка'))));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              userFacingApiMessage(e, prefix: 'Ошибка'),
+                            ),
+                          ),
+                        );
                       }
                     }
                   }

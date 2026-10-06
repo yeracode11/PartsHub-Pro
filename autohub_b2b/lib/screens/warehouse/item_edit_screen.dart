@@ -6,18 +6,19 @@ import 'package:autohub_b2b/services/api/api_client.dart';
 import 'package:autohub_b2b/services/image_upload_service.dart';
 import 'package:autohub_b2b/services/hardware/thermal_printer_service.dart';
 import 'package:autohub_b2b/services/warehouse_service.dart';
+import 'package:autohub_b2b/widgets/donor_origin_tile.dart';
 import 'package:autohub_b2b/widgets/image_upload_widget.dart';
+import 'package:autohub_b2b/widgets/item_catalog_editors.dart';
 import 'package:flutter/services.dart';
 import 'package:autohub_b2b/services/api/api_user_message.dart';
 import 'package:autohub_b2b/services/offline_queue.dart';
+import 'package:autohub_b2b/services/service_locator.dart';
+import 'package:autohub_b2b/utils/auth_guard.dart';
 
 class ItemEditScreen extends StatefulWidget {
   final ItemModel item;
 
-  const ItemEditScreen({
-    super.key,
-    required this.item,
-  });
+  const ItemEditScreen({super.key, required this.item});
 
   @override
   State<ItemEditScreen> createState() => _ItemEditScreenState();
@@ -27,24 +28,32 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _skuController = TextEditingController();
+  final _oemController = TextEditingController();
+  final _barcodeController = TextEditingController();
+  final _brandController = TextEditingController();
+  final _internalCodeController = TextEditingController();
   final _priceController = TextEditingController();
+  final _purchaseCostController = TextEditingController();
   final _quantityController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _warehouseCellController = TextEditingController();
-  
+
   late final ApiClient _apiClient;
   late final ImageUploadService _imageUploadService;
   final WarehouseService _warehouseService = WarehouseService();
-  
+
   String? _selectedCategory;
   String _selectedCondition = 'new';
   String? _selectedWarehouseId;
   bool _isLoading = false;
+  bool _archived = false;
   List<String> _currentImages = [];
   List<Warehouse> _warehouses = [];
+  List<ItemCrossReference> _crossReferences = [];
+  List<ItemCompatibility> _compatibility = [];
 
   final List<String> _conditions = ['new', 'used', 'refurbished'];
-  
+
   // Категории товаров (как в B2C, но без "Все")
   final List<String> _categories = [
     'Двигатель',
@@ -64,24 +73,48 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
     super.initState();
     _apiClient = ApiClient();
     _imageUploadService = ImageUploadService(_apiClient);
-    
-    // Инициализируем поля формы
-    _nameController.text = widget.item.name ?? '';
-    // Проверяем, что категория существует в списке, иначе устанавливаем null
-    final itemCategory = widget.item.category;
-    _selectedCategory = itemCategory != null && _categories.contains(itemCategory) 
-        ? itemCategory 
-        : null;
-    _skuController.text = widget.item.sku ?? '';
-    _priceController.text = widget.item.price.toString();
-    _quantityController.text = widget.item.quantity.toString();
-    _descriptionController.text = widget.item.description ?? '';
-    _warehouseCellController.text = widget.item.warehouseCell ?? '';
-    _selectedCondition = widget.item.condition ?? 'new';
-    _selectedWarehouseId = widget.item.warehouseId;
-    _currentImages = widget.item.images ?? [];
-    
+
+    _hydrate(widget.item);
     _loadWarehouses();
+    _loadFullItem();
+  }
+
+  void _hydrate(ItemModel item) {
+    _nameController.text = item.name;
+    final itemCategory = item.category;
+    _selectedCategory =
+        itemCategory != null && _categories.contains(itemCategory)
+        ? itemCategory
+        : null;
+    _skuController.text = item.sku ?? '';
+    _oemController.text = item.oem ?? '';
+    _barcodeController.text = item.barcode ?? '';
+    _brandController.text = item.brand ?? '';
+    _internalCodeController.text = item.internalCode ?? '';
+    _priceController.text = item.price.toString();
+    _purchaseCostController.text = item.purchaseCost?.toString() ?? '';
+    _quantityController.text = item.quantity.toString();
+    _descriptionController.text = item.description ?? '';
+    _warehouseCellController.text = item.warehouseCell ?? '';
+    _selectedCondition = item.condition;
+    _selectedWarehouseId = item.warehouseId;
+    _currentImages = item.images ?? [];
+    _archived = item.isArchived;
+    _crossReferences = List.of(item.crossReferences ?? const []);
+    _compatibility = List.of(item.compatibility ?? const []);
+  }
+
+  Future<void> _loadFullItem() async {
+    final id = widget.item.id;
+    if (id == null) return;
+    try {
+      final full = await ServiceLocator().itemsRepository.getItem(id);
+      if (full != null && mounted) {
+        setState(() => _hydrate(full));
+      }
+    } catch (_) {
+      // Список уже показал карточку; аналоги подгрузятся при следующем открытии.
+    }
   }
 
   Future<void> _loadWarehouses() async {
@@ -90,15 +123,19 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
       setState(() {
         _warehouses = warehouses;
       });
-    } catch (e) {
-    }
+    } catch (e) {}
   }
 
   @override
   void dispose() {
     _nameController.dispose();
     _skuController.dispose();
+    _oemController.dispose();
+    _barcodeController.dispose();
+    _brandController.dispose();
+    _internalCodeController.dispose();
     _priceController.dispose();
+    _purchaseCostController.dispose();
     _quantityController.dispose();
     _descriptionController.dispose();
     _warehouseCellController.dispose();
@@ -140,7 +177,9 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
                       children: [
                         Expanded(
                           child: OutlinedButton.icon(
-                            onPressed: _isLoading ? null : () => _showPrintLabelDialog(context),
+                            onPressed: _isLoading
+                                ? null
+                                : () => _showPrintLabelDialog(context),
                             icon: const Icon(Icons.print),
                             label: const Text('Печать этикетки'),
                           ),
@@ -156,10 +195,11 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
                       ],
                     ),
                     const SizedBox(height: 24),
+                    DonorOriginTile(item: widget.item),
                     // Основная информация
                     _buildSectionTitle('Основная информация'),
                     const SizedBox(height: 12),
-                    
+
                     TextFormField(
                       controller: _nameController,
                       decoration: const InputDecoration(
@@ -174,7 +214,7 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
                       },
                     ),
                     const SizedBox(height: 16),
-                    
+
                     Row(
                       children: [
                         Expanded(
@@ -215,7 +255,59 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    
+
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: _oemController,
+                            textCapitalization: TextCapitalization.characters,
+                            decoration: const InputDecoration(
+                              labelText: 'OEM',
+                              hintText: '04465-33450',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: TextFormField(
+                            controller: _barcodeController,
+                            decoration: const InputDecoration(
+                              labelText: 'Штрихкод',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: _brandController,
+                            decoration: const InputDecoration(
+                              labelText: 'Производитель',
+                              hintText: 'Toyota, Bosch…',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: TextFormField(
+                            controller: _internalCodeController,
+                            decoration: const InputDecoration(
+                              labelText: 'Внутренний код',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
                     // Цена и количество
                     Row(
                       children: [
@@ -260,8 +352,29 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
                         ),
                       ],
                     ),
+                    if (canSeeFinance(context)) ...[
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _purchaseCostController,
+                        decoration: const InputDecoration(
+                          labelText: 'Закупочная цена (₸)',
+                          border: OutlineInputBorder(),
+                        ),
+                        keyboardType: TextInputType.number,
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return null;
+                          }
+                          final amount = double.tryParse(value);
+                          if (amount == null || amount < 0) {
+                            return 'Введите сумму';
+                          }
+                          return null;
+                        },
+                      ),
+                    ],
                     const SizedBox(height: 16),
-                    
+
                     // Состояние товара
                     DropdownButtonFormField<String>(
                       value: _selectedCondition,
@@ -296,7 +409,7 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
                       },
                     ),
                     const SizedBox(height: 16),
-                    
+
                     // Описание
                     TextFormField(
                       controller: _descriptionController,
@@ -307,7 +420,7 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
                       maxLines: 3,
                     ),
                     const SizedBox(height: 16),
-                    
+
                     // Выбор склада
                     DropdownButtonFormField<String>(
                       value: _selectedWarehouseId,
@@ -334,7 +447,7 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
                       },
                     ),
                     const SizedBox(height: 16),
-                    
+
                     // Ячейка склада
                     TextFormField(
                       controller: _warehouseCellController,
@@ -345,8 +458,30 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
                         border: OutlineInputBorder(),
                       ),
                     ),
+                    const SizedBox(height: 8),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Снят с продажи'),
+                      subtitle: const Text(
+                        'Не показывается покупателям, на складе остаётся',
+                      ),
+                      value: _archived,
+                      onChanged: (value) => setState(() => _archived = value),
+                    ),
+                    const SizedBox(height: 16),
+                    CrossReferencesEditor(
+                      value: _crossReferences,
+                      onChanged: (value) =>
+                          setState(() => _crossReferences = value),
+                    ),
+                    const SizedBox(height: 16),
+                    CompatibilityEditor(
+                      value: _compatibility,
+                      onChanged: (value) =>
+                          setState(() => _compatibility = value),
+                    ),
                     const SizedBox(height: 24),
-                    
+
                     // Изображения
                     if (widget.item.id != null) ...[
                       ImageUploadWidget(
@@ -360,7 +495,7 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
                       ),
                       const SizedBox(height: 24),
                     ],
-                    
+
                     // Кнопки
                     Row(
                       children: [
@@ -384,7 +519,9 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
                                     width: 20,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2,
-                                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        Colors.white,
+                                      ),
                                     ),
                                   )
                                 : const Text('Сохранить'),
@@ -479,7 +616,8 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
 
     if (result == null) return;
 
-    final price = double.tryParse(_priceController.text.trim()) ??
+    final price =
+        double.tryParse(_priceController.text.trim()) ??
         (widget.item.price ?? 0);
 
     final printer = ThermalPrinterService();
@@ -501,7 +639,9 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          success ? 'Этикетка отправлена на печать' : 'Не удалось напечатать этикетку',
+          success
+              ? 'Этикетка отправлена на печать'
+              : 'Не удалось напечатать этикетку',
         ),
         backgroundColor: success ? Colors.green : Colors.red,
       ),
@@ -520,13 +660,36 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
         'name': _nameController.text,
         'category': _selectedCategory,
         'sku': _skuController.text.isEmpty ? null : _skuController.text,
+        'oem': _oemController.text.trim().isEmpty
+            ? null
+            : _oemController.text.trim(),
+        'barcode': _barcodeController.text.trim().isEmpty
+            ? null
+            : _barcodeController.text.trim(),
+        'brand': _brandController.text.trim().isEmpty
+            ? null
+            : _brandController.text.trim(),
+        'internalCode': _internalCodeController.text.trim().isEmpty
+            ? null
+            : _internalCodeController.text.trim(),
         'price': double.parse(_priceController.text),
+        if (canSeeFinance(context))
+          'purchaseCost': _purchaseCostController.text.trim().isEmpty
+              ? null
+              : double.parse(_purchaseCostController.text.trim()),
         'quantity': int.parse(_quantityController.text),
         'condition': _selectedCondition,
-        'description': _descriptionController.text.isEmpty ? null : _descriptionController.text,
-        'warehouseCell': _warehouseCellController.text.isEmpty ? null : _warehouseCellController.text.trim(),
+        'status': _archived ? 'archived' : 'active',
+        'description': _descriptionController.text.isEmpty
+            ? null
+            : _descriptionController.text,
+        'warehouseCell': _warehouseCellController.text.isEmpty
+            ? null
+            : _warehouseCellController.text.trim(),
         'warehouseId': _selectedWarehouseId,
         'images': _currentImages,
+        'crossReferences': _crossReferences.map((r) => r.toJson()).toList(),
+        'compatibility': _compatibility.map((c) => c.toJson()).toList(),
       };
 
       final isCreate = widget.item.id == null;
@@ -547,7 +710,9 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
         localId: '$localId',
       );
       final saved = ItemModel.fromJson(
-        Map<String, dynamic>.from(result.queued ? snapshot : result.data as Map),
+        Map<String, dynamic>.from(
+          result.queued ? snapshot : result.data as Map,
+        ),
       );
 
       if (mounted) {
@@ -557,8 +722,8 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
               result.queued
                   ? offlineSavedMessage
                   : isCreate
-                      ? 'Товар успешно создан'
-                      : 'Товар успешно обновлен',
+                  ? 'Товар успешно создан'
+                  : 'Товар успешно обновлен',
             ),
             backgroundColor: Colors.green,
           ),

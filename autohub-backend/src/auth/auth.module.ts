@@ -10,6 +10,7 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { User } from '../users/entities/user.entity';
 import { Organization } from '../organizations/entities/organization.entity';
 import { OrganizationsModule } from '../organizations/organizations.module';
+import { resolveJwtSecret } from './jwt-secret';
 
 @Module({
   imports: [
@@ -19,17 +20,8 @@ import { OrganizationsModule } from '../organizations/organizations.module';
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: (config: ConfigService) => {
-        const secret =
-          config.get<string>('JWT_SECRET')?.trim() ||
-          'Rtw+Dir1+3+AgjWFCOHJzQJng3FYhWXoNs5HUCkS23Q=';
-        if (!config.get<string>('JWT_SECRET')?.trim()) {
-          // eslint-disable-next-line no-console
-          console.warn(
-            '[AuthModule] JWT_SECRET is not set in .env — using dev fallback. Set JWT_SECRET in production.',
-          );
-        }
         return {
-          secret,
+          secret: resolveJwtSecret(config),
           signOptions: {
             algorithm: 'HS256' as const,
             expiresIn: '7d',

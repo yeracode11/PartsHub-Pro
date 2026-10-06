@@ -21,7 +21,7 @@ export class User {
   @Column({ type: 'varchar', length: 255 })
   email: string;
 
-  @Column({ type: 'varchar', length: 255, nullable: true })
+  @Column({ type: 'varchar', length: 255, nullable: true, select: false })
   password: string; // Хешированный пароль
 
   @Column({ type: 'varchar', length: 255 })

@@ -51,14 +51,11 @@ export class IncomingController {
   // Создание приходной накладной
   @Post()
   @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.STOREKEEPER)
-  async create(
-    @CurrentUser() user: any,
-    @Body() dto: CreateIncomingDocDto,
-  ) {
+  async create(@CurrentUser() user: any, @Body() dto: CreateIncomingDocDto) {
     try {
       // Проверяем разные варианты получения ID
       const userId = user?.id || user?.userId;
-      
+
       if (!userId) {
         throw new HttpException(
           {
@@ -69,13 +66,17 @@ export class IncomingController {
           HttpStatus.BAD_REQUEST,
         );
       }
-      
+
       const organizationId = await this.resolveOrganizationId(user);
       if (!organizationId) {
         throw new Error('No active organization');
       }
 
-      const result = await this.incomingService.create(organizationId, userId, dto);
+      const result = await this.incomingService.create(
+        organizationId,
+        userId,
+        dto,
+      );
       return result;
     } catch (error) {
       // Преобразуем ошибку в HttpException для правильной обработки
@@ -207,4 +208,3 @@ export class IncomingController {
     return { success: true };
   }
 }
-

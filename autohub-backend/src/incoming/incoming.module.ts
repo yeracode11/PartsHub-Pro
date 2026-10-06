@@ -17,4 +17,3 @@ import { OrganizationsModule } from '../organizations/organizations.module';
   exports: [IncomingService],
 })
 export class IncomingModule {}
-

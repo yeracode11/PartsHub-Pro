@@ -5,6 +5,8 @@ import { DataSource } from 'typeorm';
 import { DonorsService } from './donors.service';
 import { DonorStatus, DonorVehicle } from './entities/donor-vehicle.entity';
 import { Item } from '../items/entities/item.entity';
+import { AuditService } from '../audit/audit.service';
+import { PartCompatibility } from '../items/entities/part-compatibility.entity';
 
 const ORG = '11111111-1111-1111-1111-111111111111';
 
@@ -31,6 +33,7 @@ describe('DonorsService', () => {
   let itemRepo: any;
   let dataSource: any;
   let manager: any;
+  let audit: { record: jest.Mock; history: jest.Mock };
 
   const donor = (overrides: Partial<DonorVehicle> = {}): DonorVehicle =>
     ({
@@ -43,9 +46,13 @@ describe('DonorsService', () => {
       engine: '2AR-FE',
       mileage: 180000,
       purchasePrice: '900000.00',
-      extraCosts: '100000.00',
+      deliveryCost: '60000.00',
+      dismantlingCost: '40000.00',
+      otherCosts: '0.00',
       scrapIncome: '0.00',
-      status: DonorStatus.AWAITING,
+      status: DonorStatus.PURCHASED,
+      dismantlingStartDate: null,
+      dismantlingEndDate: null,
       ...overrides,
     }) as any;
 
@@ -63,19 +70,38 @@ describe('DonorsService', () => {
       count: jest.fn().mockResolvedValue(0),
       createQueryBuilder: jest.fn(() =>
         makeQueryBuilder([
-          { donorId: 7, partsCount: '3', unitsInStock: '2', stockValue: '150000' },
+          {
+            donorId: 7,
+            partsCount: '3',
+            unitsInStock: '2',
+            stockValue: '150000',
+          },
         ]),
       ),
     };
     manager = {
       create: jest.fn((_entity, data) => data),
-      save: jest.fn(async (_entity, data) => data),
+      save: jest.fn(async (_entity, data) =>
+        Array.isArray(data)
+          ? data.map((d, i) => ({ id: 100 + i, ...d }))
+          : { id: 7, ...data },
+      ),
       update: jest.fn(),
+      insert: jest.fn(),
+    };
+    audit = {
+      record: jest.fn(),
+      history: jest.fn().mockResolvedValue([]),
     };
     dataSource = {
       createQueryBuilder: jest.fn(() =>
         makeQueryBuilder([
-          { donorId: 7, soldRevenue: '400000', unitsSold: '1', pendingRevenue: '50000' },
+          {
+            donorId: 7,
+            soldRevenue: '400000',
+            unitsSold: '1',
+            pendingRevenue: '50000',
+          },
         ]),
       ),
       transaction: jest.fn(async (cb) => cb(manager)),
@@ -87,6 +113,7 @@ describe('DonorsService', () => {
         { provide: getRepositoryToken(DonorVehicle), useValue: donorRepo },
         { provide: getRepositoryToken(Item), useValue: itemRepo },
         { provide: DataSource, useValue: dataSource },
+        { provide: AuditService, useValue: audit },
       ],
     }).compile();
 
@@ -125,12 +152,17 @@ describe('DonorsService', () => {
     const [result] = await service.findAll(ORG, { includeFinance: false });
 
     expect(result).not.toHaveProperty('purchasePrice');
-    expect(result).not.toHaveProperty('extraCosts');
+    expect(result).not.toHaveProperty('deliveryCost');
+    expect(result).not.toHaveProperty('dismantlingCost');
+    expect(result).not.toHaveProperty('otherCosts');
     expect(result).not.toHaveProperty('economics');
     expect((result as any).stock).toEqual({
       partsCount: 3,
+      unitsReceived: 3,
       unitsInStock: 2,
       unitsSold: 1,
+      unitsReserved: 0,
+      unitsWrittenOff: 0,
     });
   });
 
@@ -138,28 +170,47 @@ describe('DonorsService', () => {
     donorRepo.findOne.mockResolvedValue(donor());
 
     const parts = await service.addParts(7, ORG, {
-      parts: [{ name: ' Фара левая ', price: 45000 }],
+      parts: [{ name: ' Фара левая ', price: 45000, oem: '81150-33A10' }],
     });
 
     expect(parts[0]).toMatchObject({
       organizationId: ORG,
       donorId: 7,
       name: 'Фара левая',
+      oem: '81150-33A10',
+      oemNormalized: '8115033A10',
       quantity: 1,
       condition: 'used',
       syncedToB2C: true,
     });
     expect(parts[0].description).toContain('Toyota Camry 2015');
     expect(parts[0].description).toContain('JTNBF3EK0F3000001');
+    expect(manager.insert).toHaveBeenCalledWith(PartCompatibility, [
+      expect.objectContaining({
+        organizationId: ORG,
+        itemId: 100,
+        make: 'Toyota',
+        model: 'Camry',
+        yearFrom: 2015,
+        yearTo: 2015,
+        engine: '2AR-FE',
+      }),
+    ]);
     expect(manager.update).toHaveBeenCalledWith(
       DonorVehicle,
       { id: 7, organizationId: ORG },
-      { status: DonorStatus.DISMANTLING },
+      {
+        status: DonorStatus.DISMANTLING,
+        dismantlingStartDate: expect.any(String),
+        dismantlingEndDate: null,
+      },
     );
   });
 
-  it('не принимает детали по закрытому донору', async () => {
-    donorRepo.findOne.mockResolvedValue(donor({ status: DonorStatus.CLOSED }));
+  it('не принимает детали по донору в архиве', async () => {
+    donorRepo.findOne.mockResolvedValue(
+      donor({ status: DonorStatus.ARCHIVED }),
+    );
 
     await expect(
       service.addParts(7, ORG, { parts: [{ name: 'Дверь', price: 1 }] }),
@@ -180,7 +231,11 @@ describe('DonorsService', () => {
   describe('себестоимость деталей', () => {
     beforeEach(() => {
       donorRepo.findOne.mockResolvedValue(
-        donor({ purchasePrice: '150000.00' as any, extraCosts: '50000.00' as any }),
+        donor({
+          purchasePrice: '150000.00' as any,
+          deliveryCost: '50000.00' as any,
+          dismantlingCost: '0.00' as any,
+        }),
       );
       itemRepo.find.mockResolvedValue([
         { id: 1, name: 'Двигатель', price: '300000.00', quantity: 0 },
@@ -189,14 +244,29 @@ describe('DonorsService', () => {
       dataSource.createQueryBuilder
         .mockReturnValueOnce(
           makeQueryBuilder([
-            { donorId: 7, soldRevenue: '280000', unitsSold: '1', pendingRevenue: '50000' },
+            {
+              donorId: 7,
+              soldRevenue: '280000',
+              unitsSold: '1',
+              pendingRevenue: '50000',
+            },
           ]),
         )
         .mockReturnValueOnce(
           makeQueryBuilder([
             // Двигатель продан со скидкой, одна фара в резерве
-            { itemId: 1, soldQuantity: '1', soldRevenue: '280000', pendingQuantity: '0' },
-            { itemId: 2, soldQuantity: '0', soldRevenue: '0', pendingQuantity: '1' },
+            {
+              itemId: 1,
+              soldQuantity: '1',
+              soldRevenue: '280000',
+              pendingQuantity: '0',
+            },
+            {
+              itemId: 2,
+              soldQuantity: '0',
+              soldRevenue: '0',
+              pendingQuantity: '1',
+            },
           ]),
         );
     });
@@ -222,17 +292,26 @@ describe('DonorsService', () => {
 
   it('ограничивает число фото донора', async () => {
     donorRepo.findOne.mockResolvedValue(
-      donor({ photos: Array.from({ length: 19 }, (_, i) => `/uploads/items/${i}.jpg`) }),
+      donor({
+        photos: Array.from({ length: 19 }, (_, i) => `/uploads/items/${i}.jpg`),
+      }),
     );
 
     await expect(
-      service.addPhotos(7, ORG, ['/uploads/items/a.jpg', '/uploads/items/b.jpg'], true),
+      service.addPhotos(
+        7,
+        ORG,
+        ['/uploads/items/a.jpg', '/uploads/items/b.jpg'],
+        true,
+      ),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(donorRepo.update).not.toHaveBeenCalled();
   });
 
   it('удаляет только фото, принадлежащее донору', async () => {
-    donorRepo.findOne.mockResolvedValue(donor({ photos: ['/uploads/items/a.jpg'] }));
+    donorRepo.findOne.mockResolvedValue(
+      donor({ photos: ['/uploads/items/a.jpg'] }),
+    );
 
     await expect(
       service.removePhoto(7, ORG, '/uploads/items/other.jpg', true),
@@ -240,7 +319,7 @@ describe('DonorsService', () => {
     expect(donorRepo.update).not.toHaveBeenCalled();
   });
 
-  it('нормализует VIN при создании и всегда начинает со статуса «ждёт разбора»', async () => {
+  it('нормализует VIN при создании и по умолчанию начинает со статуса «куплен»', async () => {
     donorRepo.findOne.mockResolvedValue(donor());
 
     await service.create(ORG, {
@@ -254,8 +333,260 @@ describe('DonorsService', () => {
       expect.objectContaining({
         organizationId: ORG,
         vin: 'JTNBF3EK0F3000001',
-        status: DonorStatus.AWAITING,
+        status: DonorStatus.PURCHASED,
       }),
     );
+  });
+
+  it('создаёт донора сразу на площадке, но не сразу в разборе', async () => {
+    donorRepo.findOne.mockResolvedValue(donor());
+    await service.create(ORG, {
+      brand: 'Toyota',
+      model: 'Camry',
+      purchasePrice: 1,
+      status: 'waiting_for_dismantling',
+    });
+    expect(donorRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({ status: DonorStatus.WAITING_FOR_DISMANTLING }),
+    );
+
+    await expect(
+      service.create(ORG, {
+        brand: 'Toyota',
+        model: 'Camry',
+        purchasePrice: 1,
+        status: 'fully_dismantled',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  describe('смена статуса', () => {
+    it('проставляет дату начала разбора и пишет только в свою организацию', async () => {
+      donorRepo.findOne.mockResolvedValue(donor());
+
+      await service.update(7, ORG, { status: 'dismantling' });
+
+      expect(manager.update).toHaveBeenCalledWith(
+        DonorVehicle,
+        { id: 7, organizationId: ORG },
+        {
+          status: DonorStatus.DISMANTLING,
+          dismantlingStartDate: expect.any(String),
+          dismantlingEndDate: null,
+        },
+      );
+    });
+
+    it('отклоняет недопустимый переход', async () => {
+      donorRepo.findOne.mockResolvedValue(donor());
+
+      await expect(
+        service.update(7, ORG, { status: 'fully_dismantled' }),
+      ).rejects.toThrow('Нельзя перевести из «Куплен» в «Разобран полностью»');
+      expect(manager.update).not.toHaveBeenCalled();
+    });
+
+    it('принимает статусы старой версии приложения', async () => {
+      donorRepo.findOne.mockResolvedValue(
+        donor({
+          status: DonorStatus.FULLY_DISMANTLED,
+          dismantlingEndDate: '2026-01-10',
+        }),
+      );
+
+      await service.update(7, ORG, { status: 'closed' });
+
+      expect(manager.update).toHaveBeenCalledWith(
+        DonorVehicle,
+        { id: 7, organizationId: ORG },
+        { status: DonorStatus.ARCHIVED },
+      );
+    });
+
+    it('не даёт закончить разбор раньше начала', async () => {
+      donorRepo.findOne.mockResolvedValue(
+        donor({
+          status: DonorStatus.DISMANTLING,
+          dismantlingStartDate: '2026-03-01',
+        }),
+      );
+
+      await expect(
+        service.update(7, ORG, { dismantlingEndDate: '2026-02-01' }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
+
+  it('не принимает организацию и статус в обход правил через поля карточки', async () => {
+    donorRepo.findOne.mockResolvedValue(donor());
+
+    await service.update(7, ORG, {
+      brand: 'Lexus',
+      organizationId: 'other-org',
+      id: 99,
+    } as any);
+
+    expect(manager.update).toHaveBeenCalledWith(
+      DonorVehicle,
+      { id: 7, organizationId: ORG },
+      { brand: 'Lexus' },
+    );
+  });
+
+  it('сообщает клиенту, куда можно перевести донора', async () => {
+    donorRepo.find.mockResolvedValue([donor()]);
+    const [result] = await service.findAll(ORG, { includeFinance: false });
+    expect(result.allowedStatuses).toEqual([
+      DonorStatus.WAITING_FOR_DISMANTLING,
+      DonorStatus.DISMANTLING,
+      DonorStatus.ARCHIVED,
+    ]);
+  });
+
+  it('связывает деталь с донором: детали донора ищутся по donorId и организации', async () => {
+    donorRepo.findOne.mockResolvedValue(donor());
+    await service.findOne(7, ORG, false);
+    expect(itemRepo.find).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { organizationId: ORG, donorId: 7 } }),
+    );
+  });
+
+  describe('аудит', () => {
+    it('пишет в журнал только изменённые деньги и статус, в той же транзакции', async () => {
+      donorRepo.findOne.mockResolvedValue(donor());
+
+      await service.update(
+        7,
+        ORG,
+        { purchasePrice: 950000, deliveryCost: 60000, brand: 'Lexus' },
+        'user-1',
+      );
+
+      expect(audit.record).toHaveBeenCalledWith(
+        {
+          organizationId: ORG,
+          userId: 'user-1',
+          entityType: 'donor_vehicle',
+          entityId: 7,
+          action: 'update',
+          changes: { purchasePrice: { from: 900000, to: 950000 } },
+        },
+        manager,
+      );
+    });
+
+    it('фиксирует начальные вложения при создании', async () => {
+      donorRepo.findOne.mockResolvedValue(donor());
+
+      await service.create(
+        ORG,
+        { brand: 'Toyota', model: 'Camry', purchasePrice: 900000 },
+        'user-1',
+      );
+
+      const [entry, usedManager] = audit.record.mock.calls[0];
+      expect(usedManager).toBe(manager);
+      expect(entry).toMatchObject({
+        organizationId: ORG,
+        action: 'create',
+        changes: {
+          purchasePrice: { from: null, to: 900000 },
+          status: { from: null, to: DonorStatus.PURCHASED },
+        },
+      });
+    });
+
+    it('записывает автоматический переход в разбор при снятии деталей', async () => {
+      donorRepo.findOne.mockResolvedValue(donor());
+
+      await service.addParts(
+        7,
+        ORG,
+        { parts: [{ name: 'Фара', price: 1 }] },
+        'user-1',
+      );
+
+      expect(audit.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          changes: {
+            status: {
+              from: DonorStatus.PURCHASED,
+              to: DonorStatus.DISMANTLING,
+            },
+          },
+        }),
+        manager,
+      );
+    });
+
+    it('не отдаёт историю чужого донора', async () => {
+      donorRepo.findOne.mockResolvedValue(null);
+
+      await expect(service.getHistory(7, 'other-org')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      expect(audit.history).not.toHaveBeenCalled();
+    });
+
+    it('читает историю только своей организации', async () => {
+      donorRepo.findOne.mockResolvedValue(donor());
+      await service.getHistory(7, ORG);
+      expect(audit.history).toHaveBeenCalledWith(ORG, 'donor_vehicle', 7);
+    });
+  });
+
+  describe('сводная экономика', () => {
+    it('считает по всем донорам организации одним запросом без списка id', async () => {
+      donorRepo.find.mockResolvedValue([donor(), donor({ id: 8 } as any)]);
+      const salesQb = makeQueryBuilder([
+        { donorId: 7, soldRevenue: '400000', unitsSold: '1' },
+      ]);
+      dataSource.createQueryBuilder.mockReturnValueOnce(salesQb);
+
+      const summary = await service.getEconomicsSummary(ORG);
+
+      expect(donorRepo.find).toHaveBeenCalledWith({
+        where: { organizationId: ORG },
+      });
+      expect(salesQb.andWhere).toHaveBeenCalledWith(
+        'o."organizationId" = :organizationId',
+        { organizationId: ORG },
+      );
+      expect(salesQb.andWhere).toHaveBeenCalledWith(
+        'i."donorId" IS NOT NULL',
+        expect.anything(),
+      );
+      expect(summary).toMatchObject({
+        donorsCount: 2,
+        totalCost: 2_000_000,
+        realizedRevenue: 400_000,
+        realizedProfit: -1_600_000,
+      });
+    });
+
+    it('с фильтром по статусу ограничивает выборку id этих доноров', async () => {
+      donorRepo.find.mockResolvedValue([donor()]);
+      const salesQb = makeQueryBuilder([]);
+      dataSource.createQueryBuilder.mockReturnValueOnce(salesQb);
+
+      await service.getEconomicsSummary(ORG, DonorStatus.DISMANTLING);
+
+      expect(donorRepo.find).toHaveBeenCalledWith({
+        where: { organizationId: ORG, status: DonorStatus.DISMANTLING },
+      });
+      expect(salesQb.andWhere).toHaveBeenCalledWith(
+        'i."donorId" IN (:...ids)',
+        {
+          ids: [7],
+        },
+      );
+    });
+
+    it('экономика одного донора недоступна из чужой организации', async () => {
+      donorRepo.findOne.mockResolvedValue(null);
+      await expect(service.getEconomics(7, 'other-org')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
   });
 });

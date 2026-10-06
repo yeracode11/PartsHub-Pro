@@ -130,9 +130,11 @@ class _WarehousesScreenState extends State<WarehousesScreen> {
         _loadWarehouses();
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка удаления'))));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(userFacingApiMessage(e, prefix: 'Ошибка удаления')),
+            ),
+          );
         }
       }
     }
@@ -386,9 +388,9 @@ class _WarehouseFormDialogState extends State<_WarehouseFormDialog> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка'))));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка'))),
+        );
       }
     }
   }

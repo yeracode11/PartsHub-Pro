@@ -6,21 +6,42 @@ import 'package:autohub_b2b/services/api/api_client.dart';
 import 'package:autohub_b2b/screens/warehouse/item_edit_screen.dart';
 import 'package:autohub_b2b/models/label_product_model.dart';
 import 'package:autohub_b2b/screens/warehouse/label_print_screen.dart';
+import 'package:autohub_b2b/widgets/donor_origin_tile.dart';
+import 'package:autohub_b2b/services/service_locator.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
-class ItemDetailScreen extends StatelessWidget {
+class ItemDetailScreen extends StatefulWidget {
   final ItemModel item;
 
-  const ItemDetailScreen({
-    super.key,
-    required this.item,
-  });
+  const ItemDetailScreen({super.key, required this.item});
+
+  @override
+  State<ItemDetailScreen> createState() => _ItemDetailScreenState();
+}
+
+class _ItemDetailScreenState extends State<ItemDetailScreen> {
+  late ItemModel item = widget.item;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFull();
+  }
+
+  Future<void> _loadFull() async {
+    final id = widget.item.id;
+    if (id == null) return;
+    try {
+      final full = await ServiceLocator().itemsRepository.getItem(id);
+      if (full != null && mounted) setState(() => item = full);
+    } catch (_) {}
+  }
 
   @override
   Widget build(BuildContext context) {
     final currencyFormat = NumberFormat('#,###', 'ru_RU');
-    
+
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
       appBar: AppBar(
@@ -37,18 +58,19 @@ class ItemDetailScreen extends StatelessWidget {
             // Изображение товара
             _buildImageSection(),
             const SizedBox(height: 24),
-            
+
             // Основная информация
             _buildMainInfoCard(context, currencyFormat),
             const SizedBox(height: 16),
 
             _buildQuickActions(context),
             const SizedBox(height: 16),
-            
+            DonorOriginTile(item: item),
+
             // Детали товара
             _buildDetailsCard(currencyFormat),
             const SizedBox(height: 16),
-            
+
             // Складская информация
             if (item.warehouseCell != null || item.warehouseId != null)
               _buildWarehouseCard(),
@@ -96,12 +118,15 @@ class ItemDetailScreen extends StatelessWidget {
                 maxHeightDiskCache: 1000,
                 memCacheWidth: 1000,
                 memCacheHeight: 1000,
-                placeholder: (context, url) => const Center(
-                  child: CircularProgressIndicator(),
-                ),
+                placeholder: (context, url) =>
+                    const Center(child: CircularProgressIndicator()),
                 errorWidget: (context, url, error) {
                   return const Center(
-                    child: Icon(Icons.image_not_supported, size: 64, color: Colors.grey),
+                    child: Icon(
+                      Icons.image_not_supported,
+                      size: 64,
+                      color: Colors.grey,
+                    ),
                   );
                 },
               ),
@@ -121,7 +146,11 @@ class ItemDetailScreen extends StatelessWidget {
           children: [
             Row(
               children: [
-                const Icon(Icons.inventory_2, size: 32, color: AppTheme.primaryColor),
+                const Icon(
+                  Icons.inventory_2,
+                  size: 32,
+                  color: AppTheme.primaryColor,
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -180,11 +209,7 @@ class ItemDetailScreen extends StatelessWidget {
                 ),
                 if (item.sku != null && item.sku!.isNotEmpty)
                   Expanded(
-                    child: _buildInfoItem(
-                      'Артикул',
-                      item.sku!,
-                      Icons.qr_code,
-                    ),
+                    child: _buildInfoItem('Артикул', item.sku!, Icons.qr_code),
                   ),
               ],
             ),
@@ -203,10 +228,7 @@ class ItemDetailScreen extends StatelessWidget {
           children: [
             const Text(
               'Быстрые действия',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
             Wrap(
@@ -282,10 +304,7 @@ class ItemDetailScreen extends StatelessWidget {
           children: [
             const Text(
               'Детали',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
             if (item.description != null && item.description!.isNotEmpty) ...[
@@ -305,8 +324,46 @@ class ItemDetailScreen extends StatelessWidget {
             _buildDetailRow('Состояние', _getConditionText(item.condition)),
             if (item.sku != null && item.sku!.isNotEmpty)
               _buildDetailRow('Артикул (SKU)', item.sku!),
+            if (item.oem != null) _buildDetailRow('OEM', item.oem!),
+            if (item.barcode != null)
+              _buildDetailRow('Штрихкод', item.barcode!),
+            if (item.brand != null)
+              _buildDetailRow('Производитель', item.brand!),
+            if (item.internalCode != null)
+              _buildDetailRow('Внутренний код', item.internalCode!),
+            if (item.purchaseCost != null)
+              _buildDetailRow(
+                'Закупка',
+                '${currencyFormat.format(item.purchaseCost)} ₸',
+              ),
+            if (item.isArchived) _buildDetailRow('Статус', 'Снят с продажи'),
             if (item.category != null)
               _buildDetailRow('Категория', item.category!),
+            if (item.crossReferences != null &&
+                item.crossReferences!.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              const Text(
+                'Аналоги',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 8),
+              for (final ref in item.crossReferences!)
+                _buildDetailRow(
+                  ref.isAftermarket ? 'Неоригинал' : 'Оригинал',
+                  [ref.oem, ref.brand].whereType<String>().join(' · '),
+                ),
+            ],
+            if (item.compatibility != null &&
+                item.compatibility!.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              const Text(
+                'Применимость',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 8),
+              for (final fit in item.compatibility!)
+                _buildDetailRow(fit.title, fit.details ?? '—'),
+            ],
           ],
         ),
       ),
@@ -326,10 +383,7 @@ class ItemDetailScreen extends StatelessWidget {
                 SizedBox(width: 8),
                 Text(
                   'Складская информация',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
               ],
             ),
@@ -354,20 +408,14 @@ class ItemDetailScreen extends StatelessWidget {
             const SizedBox(width: 4),
             Text(
               label,
-              style: TextStyle(
-                fontSize: 12,
-                color: AppTheme.textSecondary,
-              ),
+              style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
             ),
           ],
         ),
         const SizedBox(height: 4),
         Text(
           value,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-          ),
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
       ],
     );
@@ -383,19 +431,13 @@ class ItemDetailScreen extends StatelessWidget {
             width: 120,
             child: Text(
               label,
-              style: TextStyle(
-                fontSize: 14,
-                color: AppTheme.textSecondary,
-              ),
+              style: TextStyle(fontSize: 14, color: AppTheme.textSecondary),
             ),
           ),
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-              ),
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
             ),
           ),
         ],
@@ -416,4 +458,3 @@ class ItemDetailScreen extends StatelessWidget {
     }
   }
 }
-

@@ -88,6 +88,7 @@ async function bootstrap() {
   const appLogger = createAppLogger();
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: appLogger,
+    rawBody: true,
   });
   appLogger.log(
     `Loki bootstrap log. env=${process.env.LOKI_ENV || process.env.NODE_ENV || 'development'}`,

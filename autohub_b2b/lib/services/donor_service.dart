@@ -19,6 +19,13 @@ class DonorService {
     return DonorModel.fromJson(response.data as Map<String, dynamic>);
   }
 
+  Future<List<DonorHistoryEntry>> getHistory(int id) async {
+    final response = await _apiClient.dio.get('/api/donors/$id/history');
+    return (response.data as List<dynamic>)
+        .map((json) => DonorHistoryEntry.fromJson(json as Map<String, dynamic>))
+        .toList();
+  }
+
   Future<DonorModel> createDonor(Map<String, dynamic> data) async {
     final response = await _apiClient.dio.post('/api/donors', data: data);
     return DonorModel.fromJson(response.data as Map<String, dynamic>);

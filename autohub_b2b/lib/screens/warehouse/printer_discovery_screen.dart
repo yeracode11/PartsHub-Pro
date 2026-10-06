@@ -127,10 +127,7 @@ class _PrinterDiscoveryScreenState extends State<PrinterDiscoveryScreen> {
         title: const Text('Поиск Wi‑Fi принтеров'),
         actions: [
           if (_scanning)
-            TextButton(
-              onPressed: _stopScan,
-              child: const Text('Стоп'),
-            ),
+            TextButton(onPressed: _stopScan, child: const Text('Стоп')),
         ],
       ),
       body: Column(
@@ -243,10 +240,9 @@ class _PrinterDiscoveryScreenState extends State<PrinterDiscoveryScreen> {
                                 children: [
                                   Expanded(
                                     child: OutlinedButton(
-                                      onPressed:
-                                          busyConnect || busyTest
-                                              ? null
-                                              : () => _connect(h),
+                                      onPressed: busyConnect || busyTest
+                                          ? null
+                                          : () => _connect(h),
                                       child: busyConnect
                                           ? const SizedBox(
                                               height: 20,
@@ -261,10 +257,9 @@ class _PrinterDiscoveryScreenState extends State<PrinterDiscoveryScreen> {
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: FilledButton(
-                                      onPressed:
-                                          busyConnect || busyTest
-                                              ? null
-                                              : () => _testEscPos(h),
+                                      onPressed: busyConnect || busyTest
+                                          ? null
+                                          : () => _testEscPos(h),
                                       child: busyTest
                                           ? const SizedBox(
                                               height: 20,

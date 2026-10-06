@@ -27,7 +27,9 @@ export enum IncomingDocType {
 }
 
 @Entity('incoming_docs')
-@Index('IDX_incoming_docs_org_doc_number', ['organizationId', 'docNumber'], { unique: true })
+@Index('IDX_incoming_docs_org_doc_number', ['organizationId', 'docNumber'], {
+  unique: true,
+})
 export class IncomingDoc {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -110,4 +112,3 @@ export class IncomingDoc {
   @UpdateDateColumn()
   updatedAt: Date;
 }
-

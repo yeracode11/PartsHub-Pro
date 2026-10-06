@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
+import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/models/donor_model.dart';
+import 'package:autohub_b2b/screens/warehouse/donors_screen.dart'
+    show formatMoney;
 import 'package:autohub_b2b/services/api/api_user_message.dart';
 import 'package:autohub_b2b/services/donor_service.dart';
 
@@ -19,23 +22,55 @@ class DonorFormScreen extends StatefulWidget {
 class _DonorFormScreenState extends State<DonorFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _service = DonorService();
+  final _dateFormat = DateFormat('dd.MM.yyyy');
 
   late final TextEditingController _brand;
   late final TextEditingController _model;
+  late final TextEditingController _generation;
   late final TextEditingController _year;
   late final TextEditingController _vin;
   late final TextEditingController _engine;
+  late final TextEditingController _engineVolume;
+  late final TextEditingController _body;
   late final TextEditingController _color;
   late final TextEditingController _mileage;
   late final TextEditingController _purchasePrice;
-  late final TextEditingController _extraCosts;
+  late final TextEditingController _deliveryCost;
+  late final TextEditingController _dismantlingCost;
+  late final TextEditingController _otherCosts;
   late final TextEditingController _scrapIncome;
   late final TextEditingController _source;
   late final TextEditingController _notes;
+  DonorTransmission? _transmission;
+  DonorDrivetrain? _drivetrain;
   DateTime? _purchaseDate;
+  DateTime? _dismantlingStartDate;
+  DateTime? _dismantlingEndDate;
+  bool _alreadyOnSite = false;
+  bool _showCarDetails = false;
   bool _saving = false;
 
   bool get _isEdit => widget.donor != null;
+
+  List<TextEditingController> get _controllers => [
+    _brand,
+    _model,
+    _generation,
+    _year,
+    _vin,
+    _engine,
+    _engineVolume,
+    _body,
+    _color,
+    _mileage,
+    _purchasePrice,
+    _deliveryCost,
+    _dismantlingCost,
+    _otherCosts,
+    _scrapIncome,
+    _source,
+    _notes,
+  ];
 
   @override
   void initState() {
@@ -45,67 +80,116 @@ class _DonorFormScreenState extends State<DonorFormScreen> {
 
     _brand = TextEditingController(text: d?.brand ?? '');
     _model = TextEditingController(text: d?.model ?? '');
+    _generation = TextEditingController(text: d?.generation ?? '');
     _year = TextEditingController(text: d?.year?.toString() ?? '');
     _vin = TextEditingController(text: d?.vin ?? '');
     _engine = TextEditingController(text: d?.engine ?? '');
+    _engineVolume = TextEditingController(
+      text: d?.engineVolume?.toStringAsFixed(1) ?? '',
+    );
+    _body = TextEditingController(text: d?.body ?? '');
     _color = TextEditingController(text: d?.color ?? '');
     _mileage = TextEditingController(text: d?.mileage?.toString() ?? '');
     _purchasePrice = TextEditingController(text: money(d?.purchasePrice));
-    _extraCosts = TextEditingController(text: money(d?.extraCosts));
+    _deliveryCost = TextEditingController(text: money(d?.deliveryCost));
+    _dismantlingCost = TextEditingController(text: money(d?.dismantlingCost));
+    _otherCosts = TextEditingController(text: money(d?.otherCosts));
     _scrapIncome = TextEditingController(text: money(d?.scrapIncome));
     _source = TextEditingController(text: d?.source ?? '');
     _notes = TextEditingController(text: d?.notes ?? '');
+    _transmission = d?.transmission;
+    _drivetrain = d?.drivetrain;
     _purchaseDate = d?.purchaseDate ?? (d == null ? DateTime.now() : null);
+    _dismantlingStartDate = d?.dismantlingStartDate;
+    _dismantlingEndDate = d?.dismantlingEndDate;
+    _showCarDetails =
+        d != null &&
+        [
+          d.engine,
+          d.engineVolume,
+          d.transmission,
+          d.drivetrain,
+          d.body,
+          d.color,
+          d.mileage,
+        ].any((v) => v != null);
+
+    for (final c in [
+      _purchasePrice,
+      _deliveryCost,
+      _dismantlingCost,
+      _otherCosts,
+    ]) {
+      c.addListener(_onCostChanged);
+    }
   }
 
   @override
   void dispose() {
-    for (final c in [
-      _brand,
-      _model,
-      _year,
-      _vin,
-      _engine,
-      _color,
-      _mileage,
-      _purchasePrice,
-      _extraCosts,
-      _scrapIncome,
-      _source,
-      _notes,
-    ]) {
+    for (final c in _controllers) {
       c.dispose();
     }
     super.dispose();
   }
 
+  void _onCostChanged() => setState(() {});
+
   double _parseMoney(TextEditingController c) =>
       double.tryParse(c.text.replaceAll(RegExp(r'\s'), '')) ?? 0;
 
+  double? _parseVolume() =>
+      double.tryParse(_engineVolume.text.trim().replaceAll(',', '.'));
+
+  double get _totalCost =>
+      _parseMoney(_purchasePrice) +
+      _parseMoney(_deliveryCost) +
+      _parseMoney(_dismantlingCost) +
+      _parseMoney(_otherCosts);
+
+  String? _isoDate(DateTime? date) =>
+      date == null ? null : DateFormat('yyyy-MM-dd').format(date);
+
   Map<String, dynamic> _payload() {
-    // При правке пустая строка очищает поле; при создании пустые поля не шлём.
     String? text(TextEditingController c) =>
-        c.text.trim().isEmpty && !_isEdit ? null : c.text.trim();
+        c.text.trim().isEmpty ? null : c.text.trim();
     int? number(TextEditingController c) => int.tryParse(c.text.trim());
 
     final data = <String, dynamic>{
       'brand': _brand.text.trim(),
       'model': _model.text.trim(),
+      'generation': text(_generation),
       'year': number(_year),
-      'vin': text(_vin) ?? '',
+      'vin': text(_vin),
       'engine': text(_engine),
+      'engineVolume': _parseVolume(),
+      'transmission': _transmission?.value,
+      'drivetrain': _drivetrain?.value,
+      'body': text(_body),
       'color': text(_color),
       'mileage': number(_mileage),
       'purchasePrice': _parseMoney(_purchasePrice),
-      'extraCosts': _parseMoney(_extraCosts),
-      'scrapIncome': _parseMoney(_scrapIncome),
-      'purchaseDate': _purchaseDate == null
-          ? null
-          : DateFormat('yyyy-MM-dd').format(_purchaseDate!),
+      'deliveryCost': _parseMoney(_deliveryCost),
+      'dismantlingCost': _parseMoney(_dismantlingCost),
+      'otherCosts': _parseMoney(_otherCosts),
+      'purchaseDate': _isoDate(_purchaseDate),
       'source': text(_source),
       'notes': text(_notes),
     };
-    // Пустые необязательные поля не отправляем: валидатор не принимает null.
+
+    if (_isEdit) {
+      // При правке null очищает поле.
+      data['scrapIncome'] = _parseMoney(_scrapIncome);
+      if (widget.donor!.dismantlingStartDate != null ||
+          _dismantlingStartDate != null) {
+        data['dismantlingStartDate'] = _isoDate(_dismantlingStartDate);
+        data['dismantlingEndDate'] = _isoDate(_dismantlingEndDate);
+      }
+      return data;
+    }
+
+    if (_alreadyOnSite) {
+      data['status'] = DonorStatus.waitingForDismantling.value;
+    }
     data.removeWhere((key, value) => value == null);
     return data;
   }
@@ -123,20 +207,21 @@ class _DonorFormScreenState extends State<DonorFormScreen> {
       setState(() => _saving = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(userFacingApiMessage(e, prefix: 'Не удалось сохранить')),
+          content: Text(
+            userFacingApiMessage(e, prefix: 'Не удалось сохранить'),
+          ),
         ),
       );
     }
   }
 
-  Future<void> _pickDate() async {
-    final picked = await showDatePicker(
+  Future<DateTime?> _pickDate(DateTime? initial, {DateTime? first}) {
+    return showDatePicker(
       context: context,
-      initialDate: _purchaseDate ?? DateTime.now(),
-      firstDate: DateTime(2000),
+      initialDate: initial ?? DateTime.now(),
+      firstDate: first ?? DateTime(2000),
       lastDate: DateTime.now(),
     );
-    if (picked != null) setState(() => _purchaseDate = picked);
   }
 
   @override
@@ -171,13 +256,13 @@ class _DonorFormScreenState extends State<DonorFormScreen> {
                       _field(_model, 'Модель *', required: true),
                     ]),
                     _row([
+                      _field(_generation, 'Поколение', hint: 'XV70, E90'),
                       _field(
                         _year,
                         'Год',
                         digitsOnly: true,
                         validator: _validateYear,
                       ),
-                      _field(_engine, 'Двигатель', hint: '2AR-FE'),
                     ]),
                     _field(
                       _vin,
@@ -185,10 +270,39 @@ class _DonorFormScreenState extends State<DonorFormScreen> {
                       hint: 'Попадёт в описание каждой детали',
                       capitalize: true,
                     ),
-                    _row([
-                      _field(_color, 'Цвет'),
-                      _field(_mileage, 'Пробег, км', digitsOnly: true),
-                    ]),
+                    if (_showCarDetails)
+                      ..._buildCarDetails()
+                    else
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton(
+                          onPressed: () =>
+                              setState(() => _showCarDetails = true),
+                          child: const Text(
+                            'Двигатель, КПП, привод, кузов, пробег',
+                          ),
+                        ),
+                      ),
+                    if (!_isEdit) ...[
+                      const SizedBox(height: 8),
+                      _section('Где машина'),
+                      SegmentedButton<bool>(
+                        segments: const [
+                          ButtonSegment(
+                            value: false,
+                            label: Text('Куплена, едет'),
+                          ),
+                          ButtonSegment(
+                            value: true,
+                            label: Text('Уже на площадке'),
+                          ),
+                        ],
+                        selected: {_alreadyOnSite},
+                        onSelectionChanged: (s) =>
+                            setState(() => _alreadyOnSite = s.first),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
                     const SizedBox(height: 8),
                     _section('Деньги'),
                     _field(
@@ -198,12 +312,36 @@ class _DonorFormScreenState extends State<DonorFormScreen> {
                       digitsOnly: true,
                       required: true,
                     ),
+                    _row([
+                      _field(
+                        _deliveryCost,
+                        'Доставка',
+                        hint: 'Эвакуатор, растаможка',
+                        suffix: '₸',
+                        digitsOnly: true,
+                      ),
+                      _field(
+                        _dismantlingCost,
+                        'Разборка',
+                        hint: 'Работа разборщиков',
+                        suffix: '₸',
+                        digitsOnly: true,
+                      ),
+                    ]),
                     _field(
-                      _extraCosts,
-                      'Доп. расходы',
-                      hint: 'Доставка, растаможка, эвакуатор, разборка',
+                      _otherCosts,
+                      'Прочие расходы',
                       suffix: '₸',
                       digitsOnly: true,
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: Text(
+                        'Себестоимость машины: ${formatMoney(_totalCost)}',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
                     if (_isEdit)
                       _field(
@@ -213,21 +351,45 @@ class _DonorFormScreenState extends State<DonorFormScreen> {
                         suffix: '₸',
                         digitsOnly: true,
                       ),
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: OutlinedButton(
-                        onPressed: _pickDate,
-                        style: OutlinedButton.styleFrom(
-                          alignment: Alignment.centerLeft,
-                          padding: const EdgeInsets.all(16),
-                        ),
-                        child: Text(
-                          _purchaseDate == null
-                              ? 'Дата покупки'
-                              : 'Куплен ${DateFormat('dd.MM.yyyy').format(_purchaseDate!)}',
-                        ),
-                      ),
+                    _dateButton(
+                      label: 'Дата покупки',
+                      value: _purchaseDate,
+                      onPick: () async {
+                        final picked = await _pickDate(_purchaseDate);
+                        if (picked != null) {
+                          setState(() => _purchaseDate = picked);
+                        }
+                      },
                     ),
+                    if (_isEdit && _dismantlingStartDate != null) ...[
+                      _row([
+                        _dateButton(
+                          label: 'Начало разбора',
+                          value: _dismantlingStartDate,
+                          onPick: () async {
+                            final picked = await _pickDate(
+                              _dismantlingStartDate,
+                            );
+                            if (picked != null) {
+                              setState(() => _dismantlingStartDate = picked);
+                            }
+                          },
+                        ),
+                        _dateButton(
+                          label: 'Конец разбора',
+                          value: _dismantlingEndDate,
+                          onPick: () async {
+                            final picked = await _pickDate(
+                              _dismantlingEndDate ?? DateTime.now(),
+                              first: _dismantlingStartDate,
+                            );
+                            if (picked != null) {
+                              setState(() => _dismantlingEndDate = picked);
+                            }
+                          },
+                        ),
+                      ]),
+                    ],
                     _field(_source, 'Где куплен', hint: 'Аукцион, продавец'),
                     _field(_notes, 'Заметки', maxLines: 3),
                   ],
@@ -240,12 +402,53 @@ class _DonorFormScreenState extends State<DonorFormScreen> {
     );
   }
 
+  List<Widget> _buildCarDetails() => [
+    _row([
+      _field(_engine, 'Двигатель', hint: '2AR-FE', capitalize: true),
+      _field(
+        _engineVolume,
+        'Объём, л',
+        hint: '2.5',
+        decimal: true,
+        validator: _validateVolume,
+      ),
+    ]),
+    _row([
+      _dropdown<DonorTransmission>(
+        label: 'КПП',
+        value: _transmission,
+        values: DonorTransmission.values,
+        labelOf: (t) => t.label,
+        onChanged: (v) => setState(() => _transmission = v),
+      ),
+      _dropdown<DonorDrivetrain>(
+        label: 'Привод',
+        value: _drivetrain,
+        values: DonorDrivetrain.values,
+        labelOf: (d) => d.label,
+        onChanged: (v) => setState(() => _drivetrain = v),
+      ),
+    ]),
+    _row([
+      _field(_body, 'Кузов', hint: 'Седан, ACV40'),
+      _field(_color, 'Цвет'),
+    ]),
+    _field(_mileage, 'Пробег, км', digitsOnly: true),
+  ];
+
   String? _validateYear(String? value) {
     if (value == null || value.isEmpty) return null;
     final year = int.tryParse(value);
     if (year == null || year < 1950 || year > DateTime.now().year + 1) {
       return 'Некорректный год';
     }
+    return null;
+  }
+
+  String? _validateVolume(String? value) {
+    if (value == null || value.trim().isEmpty) return null;
+    final volume = _parseVolume();
+    if (volume == null || volume < 0.1 || volume > 20) return 'Например, 2.5';
     return null;
   }
 
@@ -269,6 +472,54 @@ class _DonorFormScreenState extends State<DonorFormScreen> {
     },
   );
 
+  Widget _dateButton({
+    required String label,
+    required DateTime? value,
+    required VoidCallback onPick,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: OutlinedButton(
+        onPressed: onPick,
+        style: OutlinedButton.styleFrom(
+          alignment: Alignment.centerLeft,
+          padding: const EdgeInsets.all(16),
+        ),
+        child: Text(
+          value == null ? label : '$label: ${_dateFormat.format(value)}',
+          style: value == null
+              ? const TextStyle(color: AppTheme.textSecondary)
+              : null,
+        ),
+      ),
+    );
+  }
+
+  Widget _dropdown<T>({
+    required String label,
+    required T? value,
+    required List<T> values,
+    required String Function(T) labelOf,
+    required ValueChanged<T?> onChanged,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: DropdownButtonFormField<T>(
+        initialValue: value,
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+        ),
+        items: [
+          const DropdownMenuItem(value: null, child: Text('Не указано')),
+          for (final v in values)
+            DropdownMenuItem(value: v, child: Text(labelOf(v))),
+        ],
+        onChanged: onChanged,
+      ),
+    );
+  }
+
   Widget _field(
     TextEditingController controller,
     String label, {
@@ -276,6 +527,7 @@ class _DonorFormScreenState extends State<DonorFormScreen> {
     String? suffix,
     bool required = false,
     bool digitsOnly = false,
+    bool decimal = false,
     bool capitalize = false,
     int maxLines = 1,
     String? Function(String?)? validator,
@@ -285,12 +537,18 @@ class _DonorFormScreenState extends State<DonorFormScreen> {
       child: TextFormField(
         controller: controller,
         maxLines: maxLines,
-        keyboardType: digitsOnly ? TextInputType.number : null,
+        keyboardType: decimal
+            ? const TextInputType.numberWithOptions(decimal: true)
+            : digitsOnly
+            ? TextInputType.number
+            : null,
         textCapitalization: capitalize
             ? TextCapitalization.characters
             : TextCapitalization.sentences,
         inputFormatters: digitsOnly
             ? [FilteringTextInputFormatter.digitsOnly]
+            : decimal
+            ? [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))]
             : null,
         decoration: InputDecoration(
           labelText: label,

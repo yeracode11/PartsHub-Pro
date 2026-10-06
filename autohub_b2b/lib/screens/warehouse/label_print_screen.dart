@@ -21,10 +21,7 @@ import 'package:autohub_b2b/services/api/api_user_message.dart';
 
 /// Печать этикетки фиксированного размера (PDF) из данных [LabelProductData] (обычно из карточки товара).
 class LabelPrintScreen extends StatefulWidget {
-  const LabelPrintScreen({
-    super.key,
-    required this.product,
-  });
+  const LabelPrintScreen({super.key, required this.product});
 
   final LabelProductData product;
 
@@ -53,8 +50,7 @@ class _LabelPrintScreenState extends State<LabelPrintScreen> {
 
   bool get _anyEscPosSending => _bleSending || _wifiSending || _tsplSending;
 
-  bool get _mobileBle =>
-      !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+  bool get _mobileBle => !kIsWeb && (Platform.isAndroid || Platform.isIOS);
 
   bool get _canNetworkEscPos => !kIsWeb;
   @override
@@ -190,13 +186,16 @@ class _LabelPrintScreenState extends State<LabelPrintScreen> {
       );
     } on UnsupportedError catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userFacingApiMessage(e))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(userFacingApiMessage(e))));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка BLE')), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text(userFacingApiMessage(e, prefix: 'Ошибка BLE')),
+          backgroundColor: Colors.red,
+        ),
       );
     } finally {
       if (mounted) setState(() => _bleSending = false);
@@ -246,7 +245,10 @@ class _LabelPrintScreenState extends State<LabelPrintScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка TSPL')), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text(userFacingApiMessage(e, prefix: 'Ошибка TSPL')),
+          backgroundColor: Colors.red,
+        ),
       );
     } finally {
       if (mounted) setState(() => _tsplSending = false);
@@ -295,13 +297,16 @@ class _LabelPrintScreenState extends State<LabelPrintScreen> {
       );
     } on UnsupportedError catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userFacingApiMessage(e))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(userFacingApiMessage(e))));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка сети')), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text(userFacingApiMessage(e, prefix: 'Ошибка сети')),
+          backgroundColor: Colors.red,
+        ),
       );
     } finally {
       if (mounted) setState(() => _wifiSending = false);
@@ -355,13 +360,17 @@ class _LabelPrintScreenState extends State<LabelPrintScreen> {
                             ),
                           ),
                           const SizedBox(height: 6),
-                          Text('Артикул: ${p.sku}', style: const TextStyle(fontSize: 16)),
+                          Text(
+                            'Артикул: ${p.sku}',
+                            style: const TextStyle(fontSize: 16),
+                          ),
                           if (p.price != null)
                             Text(
                               'Цена: ${money.format(p.price)} ${p.currencySymbol}',
                               style: const TextStyle(fontSize: 16),
                             ),
-                          if (p.warehouseCell != null && p.warehouseCell!.isNotEmpty)
+                          if (p.warehouseCell != null &&
+                              p.warehouseCell!.isNotEmpty)
                             Text(
                               'Ячейка: ${p.warehouseCell}',
                               style: const TextStyle(fontSize: 16),
@@ -474,7 +483,9 @@ class _LabelPrintScreenState extends State<LabelPrintScreen> {
                           return Center(child: Text('${snap.error}'));
                         }
                         if (!snap.hasData) {
-                          return const Center(child: CircularProgressIndicator());
+                          return const Center(
+                            child: CircularProgressIndicator(),
+                          );
                         }
                         final r = snap.data!;
                         return PdfPreview(
@@ -520,7 +531,9 @@ class _LabelPrintScreenState extends State<LabelPrintScreen> {
                               ),
                             )
                           : const Icon(Icons.bluetooth_connected),
-                      label: Text(_tsplSending ? 'Отправка TSPL…' : 'Печать BLE (TSPL)'),
+                      label: Text(
+                        _tsplSending ? 'Отправка TSPL…' : 'Печать BLE (TSPL)',
+                      ),
                     ),
                     const SizedBox(height: 10),
                   ],
@@ -542,7 +555,9 @@ class _LabelPrintScreenState extends State<LabelPrintScreen> {
                                 ? const SizedBox(
                                     width: 16,
                                     height: 16,
-                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
                                   )
                                 : const Icon(Icons.image_outlined),
                             label: Text(_bleSending ? '…' : 'ESC/POS BLE'),
@@ -565,9 +580,10 @@ class _LabelPrintScreenState extends State<LabelPrintScreen> {
                       label: Text(
                         _wifiSending
                             ? 'Отправка…'
-                            : (_thermalWifi.isWifi && _thermalWifi.wifiIp != null
-                                ? 'Печать по сети (${_thermalWifi.wifiIp})'
-                                : 'Печать по сети (ESC/POS)'),
+                            : (_thermalWifi.isWifi &&
+                                      _thermalWifi.wifiIp != null
+                                  ? 'Печать по сети (${_thermalWifi.wifiIp})'
+                                  : 'Печать по сети (ESC/POS)'),
                       ),
                     ),
                   ],

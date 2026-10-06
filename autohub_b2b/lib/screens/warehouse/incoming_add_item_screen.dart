@@ -9,6 +9,7 @@ import 'package:autohub_b2b/services/hardware/thermal_printer_service.dart';
 import 'package:autohub_b2b/widgets/unauthorized_placeholder.dart';
 import 'package:dio/dio.dart';
 import 'package:autohub_b2b/services/api/api_user_message.dart';
+import 'package:autohub_b2b/services/service_locator.dart';
 
 class IncomingAddItemScreen extends StatefulWidget {
   final String docId;
@@ -26,7 +27,6 @@ class IncomingAddItemScreen extends StatefulWidget {
 
 class _IncomingAddItemScreenState extends State<IncomingAddItemScreen> {
   final IncomingApiService _apiService = IncomingApiService(ApiClient());
-  final ApiClient _apiClient = ApiClient();
   final BarcodeScannerService _barcodeScanner = BarcodeScannerService();
   final ThermalPrinterService _printer = ThermalPrinterService();
 
@@ -38,8 +38,11 @@ class _IncomingAddItemScreenState extends State<IncomingAddItemScreen> {
   final _vinController = TextEditingController();
   final _quantityController = TextEditingController(text: '1');
   final _priceController = TextEditingController();
+  final _salePriceController = TextEditingController();
   final _warehouseCellController = TextEditingController();
   final _skuController = TextEditingController();
+  final _oemController = TextEditingController();
+  final _barcodeController = TextEditingController();
 
   List<ItemModel> _items = [];
   ItemModel? _selectedItem;
@@ -76,8 +79,11 @@ class _IncomingAddItemScreenState extends State<IncomingAddItemScreen> {
     _vinController.dispose();
     _quantityController.dispose();
     _priceController.dispose();
+    _salePriceController.dispose();
     _warehouseCellController.dispose();
     _skuController.dispose();
+    _oemController.dispose();
+    _barcodeController.dispose();
     _skuFocusNode.dispose();
     _barcodeScanner.dispose();
     super.dispose();
@@ -89,12 +95,11 @@ class _IncomingAddItemScreenState extends State<IncomingAddItemScreen> {
     });
 
     try {
-      final response = await _apiClient.dio.get('/api/items');
-      final List<dynamic> data = response.data;
+      final page = await ServiceLocator().itemsRepository.searchItems(
+        limit: 50,
+      );
       setState(() {
-        _items = data
-            .map((json) => ItemModel.fromJson(json as Map<String, dynamic>))
-            .toList();
+        _items = page.items;
         _isSearchingItems = false;
       });
     } catch (e) {
@@ -112,8 +117,13 @@ class _IncomingAddItemScreenState extends State<IncomingAddItemScreen> {
         _nameController.text = item.name;
         _categoryController.text = item.category ?? '';
         _skuController.text = item.sku ?? '';
+        _oemController.text = item.oem ?? '';
+        _barcodeController.text = item.barcode ?? '';
         _selectedCondition = item.condition;
-        _priceController.text = item.price.toStringAsFixed(2);
+        _salePriceController.text = item.price.toStringAsFixed(2);
+        if (item.purchaseCost != null) {
+          _priceController.text = item.purchaseCost!.toStringAsFixed(2);
+        }
       }
     });
   }
@@ -127,18 +137,16 @@ class _IncomingAddItemScreenState extends State<IncomingAddItemScreen> {
     });
 
     try {
-      // Ищем товар по SKU/штрих-коду
-      final foundItem = _items.firstWhere(
-        (item) => item.sku?.toLowerCase() == barcode.toLowerCase(),
-        orElse: () =>
-            ItemModel(name: '', price: 0, quantity: 0, condition: 'new'),
+      final foundItem = await ServiceLocator().itemsRepository.findByCode(
+        barcode,
       );
 
-      if (foundItem.name.isNotEmpty) {
-        // Товар найден - заполняем форму
+      if (foundItem != null) {
+        if (!_items.any((item) => item.id == foundItem.id)) {
+          _items = [foundItem, ..._items];
+        }
         _onItemSelected(foundItem);
-
-        // Воспроизводим звуковой сигнал (опционально)
+        _barcodeController.text = foundItem.barcode ?? barcode;
         await _barcodeScanner.playBeep();
 
         if (mounted) {
@@ -151,7 +159,7 @@ class _IncomingAddItemScreenState extends State<IncomingAddItemScreen> {
           );
         }
       } else {
-        // Товар не найден - заполняем только SKU
+        _barcodeController.text = barcode;
         _skuController.text = barcode;
 
         if (mounted) {
@@ -201,6 +209,14 @@ class _IncomingAddItemScreenState extends State<IncomingAddItemScreen> {
         'condition': _selectedCondition,
         'quantity': int.parse(_quantityController.text),
         'purchasePrice': double.parse(_priceController.text),
+        if (_salePriceController.text.trim().isNotEmpty)
+          'salePrice': double.parse(_salePriceController.text.trim()),
+        'oem': _oemController.text.trim().isEmpty
+            ? null
+            : _oemController.text.trim(),
+        'barcode': _barcodeController.text.trim().isEmpty
+            ? null
+            : _barcodeController.text.trim(),
         'warehouseCell': _warehouseCellController.text.isEmpty
             ? null
             : _warehouseCellController.text.trim(),
@@ -419,6 +435,24 @@ class _IncomingAddItemScreenState extends State<IncomingAddItemScreen> {
               },
             ),
             const SizedBox(height: 16),
+            TextFormField(
+              controller: _oemController,
+              textCapitalization: TextCapitalization.characters,
+              decoration: const InputDecoration(
+                labelText: 'OEM',
+                hintText: '04465-33450',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _barcodeController,
+              decoration: const InputDecoration(
+                labelText: 'Штрихкод',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
 
             // Категория
             TextFormField(
@@ -489,7 +523,10 @@ class _IncomingAddItemScreenState extends State<IncomingAddItemScreen> {
                 ),
                 DropdownMenuItem(
                   value: 'refurbished',
-                  child: Text('Восстановленное', overflow: TextOverflow.ellipsis),
+                  child: Text(
+                    'Восстановленное',
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ],
               onChanged: (value) {
@@ -614,6 +651,21 @@ class _IncomingAddItemScreenState extends State<IncomingAddItemScreen> {
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _salePriceController,
+              decoration: const InputDecoration(
+                labelText: 'Цена продажи',
+                border: OutlineInputBorder(),
+              ),
+              keyboardType: TextInputType.number,
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) return null;
+                final price = double.tryParse(value);
+                if (price == null || price < 0) return 'Введите сумму';
+                return null;
+              },
             ),
           ],
         ),

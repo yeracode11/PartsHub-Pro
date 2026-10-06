@@ -24,7 +24,7 @@ class ItemsRepository {
         );
         final List<dynamic> data = response.data;
         final items = data.map((j) => ItemModel.fromJson(j)).toList();
-        await _cacheItems(items);
+        if (filters == null || filters.isEmpty) await _cacheItems(items);
         return _mergePending(items);
       } catch (e) {
         debugPrint('[ItemsRepo] API failed, falling back to cache: $e');
@@ -34,6 +34,54 @@ class ItemsRepository {
       }
     }
     return _mergePending(await _getFromCache());
+  }
+
+  /// Страница склада: поиск идёт на сервере (OEM, аналоги, штрихкод).
+  /// Кэш не перезаписывается — его держит полная синхронизация.
+  /// Офлайн — тот же поиск по кэшу.
+  Future<ItemsPage> searchItems({
+    String query = '',
+    Map<String, dynamic>? filters,
+    int offset = 0,
+    int limit = 50,
+  }) async {
+    if (_connectivity.isOnline) {
+      try {
+        final response = await _api.dio.get(
+          '/api/items',
+          queryParameters: {
+            ...?filters,
+            if (query.trim().isNotEmpty) 'search': query.trim(),
+            'limit': limit,
+            'offset': offset,
+          },
+        );
+        final data = response.data as Map<String, dynamic>;
+        final items = (data['items'] as List<dynamic>)
+            .map((j) => ItemModel.fromJson(j as Map<String, dynamic>))
+            .toList();
+        return ItemsPage(
+          items: offset == 0 ? await _mergePending(items) : items,
+          total: (data['total'] as num?)?.toInt() ?? items.length,
+        );
+      } catch (e) {
+        debugPrint('[ItemsRepo] Search failed, falling back to cache: $e');
+        final cached = await _searchCache(query, offset, limit);
+        if (cached.items.isNotEmpty || offset > 0) return cached;
+        rethrow;
+      }
+    }
+    return _searchCache(query, offset, limit);
+  }
+
+  Future<ItemsPage> _searchCache(String query, int offset, int limit) async {
+    final matches = (await _mergePending(
+      await _getFromCache(),
+    )).where((item) => item.matchesQuery(query)).toList();
+    return ItemsPage(
+      items: matches.skip(offset).take(limit).toList(),
+      total: matches.length,
+    );
   }
 
   Future<List<ItemModel>> _mergePending(List<ItemModel> items) async {
@@ -67,6 +115,7 @@ class ItemsRepository {
     return _getItemFromCache(id);
   }
 
+  /// Код с этикетки или сканера: QR с id, штрихкод, артикул, внутренний код или OEM.
   Future<ItemModel?> findByCode(String code) async {
     final parsed = LabelQrPayload.parse(code);
     if (_connectivity.isOnline) {
@@ -77,23 +126,18 @@ class ItemsRepository {
             return byId;
           }
         }
-        if (parsed.sku != null && parsed.sku!.isNotEmpty) {
+        for (final candidate in {
+          if (parsed.sku != null && parsed.sku!.isNotEmpty) parsed.sku!,
+          parsed.raw,
+        }) {
           final response = await _api.dio.get(
             '/api/items',
-            queryParameters: {'sku': parsed.sku},
+            queryParameters: {'code': candidate},
           );
           final List<dynamic> data = response.data;
           if (data.isNotEmpty) {
             return ItemModel.fromJson(data[0]);
           }
-        }
-        final response = await _api.dio.get(
-          '/api/items',
-          queryParameters: {'sku': parsed.raw},
-        );
-        final List<dynamic> data = response.data;
-        if (data.isNotEmpty) {
-          return ItemModel.fromJson(data[0]);
         }
         return null;
       } catch (_) {
@@ -171,12 +215,14 @@ class ItemsRepository {
   }
 
   Future<void> enqueueOfflineCreate(Map<String, dynamic> data) async {
-    await _db.insertSyncItem(SyncQueueCompanion.insert(
-      syncTableName: 'items',
-      operation: 'create',
-      recordId: 0,
-      data: jsonEncode(data),
-    ));
+    await _db.insertSyncItem(
+      SyncQueueCompanion.insert(
+        syncTableName: 'items',
+        operation: 'create',
+        recordId: 0,
+        data: jsonEncode(data),
+      ),
+    );
   }
 
   ItemModel _mapDriftToModel(Item row) {

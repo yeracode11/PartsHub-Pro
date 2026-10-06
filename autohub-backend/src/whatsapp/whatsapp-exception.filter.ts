@@ -1,11 +1,11 @@
 import {
-  ExceptionFilter,
   Catch,
   ArgumentsHost,
   HttpStatus,
   HttpException,
   Logger,
 } from '@nestjs/common';
+import { BaseExceptionFilter } from '@nestjs/core';
 import { Response } from 'express';
 
 /**
@@ -13,10 +13,10 @@ import { Response } from 'express';
  * 401/403 не перехватываем — оставляем для авторизации.
  */
 @Catch()
-export class WhatsAppExceptionFilter implements ExceptionFilter {
+export class WhatsAppExceptionFilter extends BaseExceptionFilter {
   private readonly logger = new Logger(WhatsAppExceptionFilter.name);
 
-  catch(exception: unknown, host: ArgumentsHost) {
+  override catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest();
@@ -24,19 +24,19 @@ export class WhatsAppExceptionFilter implements ExceptionFilter {
 
     // Meta Cloud API — ответы без обёртки Green API
     if (url.includes('/webhooks/whatsapp')) {
-      throw exception;
+      return super.catch(exception, host);
     }
 
     // Только для WhatsApp API (Green API / JWT)
     if (!url.includes('whatsapp')) {
-      throw exception;
+      return super.catch(exception, host);
     }
 
     // 401/403 не перехватываем — пусть Nest обработает как обычно
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
       if (status === HttpStatus.UNAUTHORIZED || status === HttpStatus.FORBIDDEN) {
-        throw exception;
+        return super.catch(exception, host);
       }
     }
 

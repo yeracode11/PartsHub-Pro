@@ -3,12 +3,17 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ItemsController } from './items.controller';
 import { ItemsService } from './items.service';
 import { Item } from './entities/item.entity';
+import { PartCrossReference } from './entities/part-cross-reference.entity';
+import { PartCompatibility } from './entities/part-compatibility.entity';
+import { AuditModule } from '../audit/audit.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Item])],
+  imports: [
+    TypeOrmModule.forFeature([Item, PartCrossReference, PartCompatibility]),
+    AuditModule,
+  ],
   controllers: [ItemsController],
   providers: [ItemsService],
   exports: [ItemsService],
 })
 export class ItemsModule {}
-

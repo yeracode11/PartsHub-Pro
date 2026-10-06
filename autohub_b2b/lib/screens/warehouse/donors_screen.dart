@@ -1,14 +1,10 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 
-import 'package:autohub_b2b/blocs/auth/auth_bloc.dart';
-import 'package:autohub_b2b/blocs/auth/auth_state.dart';
 import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/models/donor_model.dart';
-import 'package:autohub_b2b/models/user_model.dart';
 import 'package:autohub_b2b/screens/warehouse/donor_detail_screen.dart';
 import 'package:autohub_b2b/screens/warehouse/donor_form_screen.dart';
 import 'package:autohub_b2b/services/api/api_user_message.dart';
@@ -26,12 +22,7 @@ final _money = NumberFormat.currency(
 String formatMoney(double value) => _money.format(value);
 
 /// Покупать доноров и видеть деньги могут владелец и менеджер.
-bool canManageDonors(BuildContext context) {
-  final state = context.read<AuthBloc>().state;
-  if (state is! AuthAuthenticated) return false;
-  return state.user.role == UserRole.owner ||
-      state.user.role == UserRole.manager;
-}
+bool canManageDonors(BuildContext context) => canSeeFinance(context);
 
 /// Сколько вложений в машину уже вернулось.
 class DonorPaybackBar extends StatelessWidget {
@@ -62,6 +53,23 @@ class DonorPaybackBar extends StatelessWidget {
   }
 }
 
+/// Группы для фильтра списка: что в работе, что продаётся, что закрыто.
+enum DonorGroup {
+  active('В работе', {
+    DonorStatus.purchased,
+    DonorStatus.waitingForDismantling,
+    DonorStatus.dismantling,
+    DonorStatus.partiallyDismantled,
+  }),
+  dismantled('Разобраны', {DonorStatus.fullyDismantled}),
+  archived('Архив', {DonorStatus.archived});
+
+  const DonorGroup(this.label, this.statuses);
+
+  final String label;
+  final Set<DonorStatus> statuses;
+}
+
 class DonorsScreen extends StatefulWidget {
   const DonorsScreen({super.key});
 
@@ -75,7 +83,7 @@ class _DonorsScreenState extends State<DonorsScreen> {
   bool _isLoading = true;
   bool _isOffline = false;
   bool _isForbidden = false;
-  bool _showClosed = false;
+  DonorGroup _group = DonorGroup.active;
 
   @override
   void initState() {
@@ -105,9 +113,9 @@ class _DonorsScreenState extends State<DonorsScreen> {
         _isOffline = !_isForbidden && isNetworkError(e);
       });
       if (!_isForbidden && !_isOffline) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userFacingApiMessage(e))),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userFacingApiMessage(e))));
       }
     }
   }
@@ -129,8 +137,8 @@ class _DonorsScreenState extends State<DonorsScreen> {
     if (mounted) _load();
   }
 
-  List<DonorModel> get _visibleDonors =>
-      _donors.where((d) => d.isClosed == _showClosed).toList();
+  List<DonorModel> _donorsIn(DonorGroup group) =>
+      _donors.where((d) => group.statuses.contains(d.status)).toList();
 
   @override
   Widget build(BuildContext context) {
@@ -171,7 +179,7 @@ class _DonorsScreenState extends State<DonorsScreen> {
     if (_isLoading) return const Center(child: CircularProgressIndicator());
     if (_isOffline) return OfflinePlaceholder(onRetry: _load);
 
-    final donors = _visibleDonors;
+    final donors = _donorsIn(_group);
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
@@ -184,14 +192,19 @@ class _DonorsScreenState extends State<DonorsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   _buildSummary(),
-                  SegmentedButton<bool>(
-                    segments: const [
-                      ButtonSegment(value: false, label: Text('В работе')),
-                      ButtonSegment(value: true, label: Text('Закрытые')),
+                  SegmentedButton<DonorGroup>(
+                    showSelectedIcon: false,
+                    segments: [
+                      for (final group in DonorGroup.values)
+                        ButtonSegment(
+                          value: group,
+                          label: Text(
+                            '${group.label} · ${_donorsIn(group).length}',
+                          ),
+                        ),
                     ],
-                    selected: {_showClosed},
-                    onSelectionChanged: (s) =>
-                        setState(() => _showClosed = s.first),
+                    selected: {_group},
+                    onSelectionChanged: (s) => setState(() => _group = s.first),
                   ),
                   const SizedBox(height: 16),
                   if (donors.isEmpty)
@@ -219,7 +232,7 @@ class _DonorsScreenState extends State<DonorsScreen> {
   /// Итог по машинам в работе: сколько денег заморожено в донорах.
   Widget _buildSummary() {
     final active = _donors
-        .where((d) => !d.isClosed && d.economics != null)
+        .where((d) => !d.isArchived && d.economics != null)
         .toList();
     if (active.isEmpty) return const SizedBox.shrink();
 
@@ -248,12 +261,14 @@ class _DonorsScreenState extends State<DonorsScreen> {
   }
 
   Widget _buildEmpty() {
-    final text = _showClosed
-        ? 'Закрытых доноров пока нет.'
-        : canManageDonors(context)
-        ? 'Купили машину на разбор? Добавьте её — детали, снятые с неё, '
-              'пойдут на склад, а здесь будет видно, когда она окупится.'
-        : 'Машин в разборе пока нет.';
+    final text = switch (_group) {
+      DonorGroup.archived => 'В архиве пока пусто.',
+      DonorGroup.dismantled => 'Полностью разобранных машин пока нет.',
+      DonorGroup.active when canManageDonors(context) =>
+        'Купили машину на разбор? Добавьте её — детали, снятые с неё, '
+            'пойдут на склад, а здесь будет видно, когда она окупится.',
+      DonorGroup.active => 'Машин в разборе пока нет.',
+    };
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 16),
       child: Text(
@@ -311,7 +326,7 @@ class _DonorCard extends StatelessWidget {
     final meta = [
       donor.status.label,
       if (donor.vin != null) donor.vin!,
-      if (donor.engine != null) donor.engine!,
+      if (donor.engineLabel != null) donor.engineLabel!,
     ].join(' · ');
 
     return Card(
@@ -340,10 +355,8 @@ class _DonorCard extends StatelessWidget {
                         width: 48,
                         height: 48,
                         fit: BoxFit.cover,
-                        errorWidget: (_, __, ___) => const SizedBox(
-                          width: 48,
-                          height: 48,
-                        ),
+                        errorWidget: (_, __, ___) =>
+                            const SizedBox(width: 48, height: 48),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -370,10 +383,10 @@ class _DonorCard extends StatelessWidget {
                   ),
                   if (economics != null)
                     Text(
-                      '${economics.profit >= 0 ? '+' : ''}${formatMoney(economics.profit)}',
+                      '${economics.realizedProfit >= 0 ? '+' : ''}${formatMoney(economics.realizedProfit)}',
                       style: theme.textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.w600,
-                        color: economics.profit >= 0
+                        color: economics.realizedProfit >= 0
                             ? AppTheme.secondaryColor
                             : AppTheme.textPrimary,
                       ),

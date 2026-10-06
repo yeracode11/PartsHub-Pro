@@ -7,6 +7,8 @@ import {
   Param,
   Body,
   Logger,
+  BadRequestException,
+  NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -14,6 +16,19 @@ import { ItemsService } from '../items/items.service';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { OrdersService } from '../orders/orders.service';
 import { Order, OrderWorkStage } from '../orders/entities/order.entity';
+import { normalizeOrderItems } from '../order-items/order-items.service';
+
+function optionalText(value: unknown, maxLength: number): string | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'string') {
+    throw new BadRequestException('Некорректные данные заказа');
+  }
+  const trimmed = value.trim();
+  if (trimmed.length > maxLength) {
+    throw new BadRequestException(`Текст длиннее ${maxLength} символов`);
+  }
+  return trimmed || null;
+}
 
 @Controller('api/b2c')
 export class B2CController {
@@ -226,8 +241,9 @@ export class B2CController {
       // В будущем можно добавить фильтрацию по customerId, когда будет авторизация
       const orders = await this.orderRepository.find({
         where: { isB2C: true },
-        relations: ['customer', 'items', 'items.item', 'organization'],
+        relations: ['items', 'items.item', 'organization'],
         order: { createdAt: 'DESC' },
+        take: 100,
       });
       
       
@@ -277,32 +293,30 @@ export class B2CController {
   async createOrder(@Body() data: any) {
     try {
       
-      const items = data.items || [];
+      const items = normalizeOrderItems(data?.items ?? []);
       if (items.length === 0) {
-        throw new Error('Order must contain at least one item');
+        throw new BadRequestException('Добавьте хотя бы один товар');
       }
+      const notes = optionalText(data?.notes, 1000);
+      const shippingAddress = optionalText(data?.shippingAddress, 500);
       
       // Если указан organizationId в запросе, используем его (для авторизованных пользователей)
       // Иначе группируем по организациям продавцов товаров
-      const targetOrganizationId = data.organizationId;
+      const targetOrganizationId =
+        typeof data?.organizationId === 'string' ? data.organizationId : null;
       
       if (targetOrganizationId) {
-        
-        // Проверяем, что организация существует
         const org = await this.organizationsService.findOne(targetOrganizationId);
-        if (!org) {
-          throw new Error(`Organization ${targetOrganizationId} not found`);
+        if (!org.isActive) {
+          throw new NotFoundException('Продавец не найден');
         }
         
         // Создаем один заказ для указанной организации
         const orderData = {
-          items: items.map((item: any) => ({
-            itemId: item.itemId,
-            quantity: item.quantity,
-          })),
+          items,
           customerId: data.customerId || null,
-          notes: data.notes ? `${data.notes} (Заказ из B2C)` : 'Заказ из B2C маркетплейса',
-          shippingAddress: data.shippingAddress || null, // Адрес доставки
+          notes: notes ? `${notes} (Заказ из B2C)` : 'Заказ из B2C маркетплейса',
+          shippingAddress,
           status: 'pending',
           paymentStatus: 'pending',
           isB2C: true,
@@ -330,16 +344,12 @@ export class B2CController {
       // Если organizationId не указан, группируем по организациям продавцов
       
       // Получаем информацию о товарах и их организациях-продавцах
-      const itemIds = items.map((item: any) => item.itemId);
+      const itemIds = items.map((item) => item.itemId);
       
       const itemsWithOrgs = await this.itemsService.findItemsByIds(itemIds);
       
-      // Логируем organizationId каждого товара
-      itemsWithOrgs.forEach(item => {
-      });
-      
       if (itemsWithOrgs.length !== itemIds.length) {
-        throw new Error('Some items not found');
+        throw new NotFoundException('Некоторые товары не найдены');
       }
 
       // Группируем товары по organizationId (продавцам)
@@ -362,9 +372,6 @@ export class B2CController {
         });
       }
 
-      itemsBySeller.forEach((sellerItems, orgId) => {
-      });
-
       // Создаем отдельный заказ для каждой организации-продавца
       const createdOrders: Order[] = [];
       
@@ -372,8 +379,8 @@ export class B2CController {
       const orderData = {
           items: sellerItems as Array<{ itemId: number; quantity: number }>,
         customerId: data.customerId || null,
-          notes: data.notes ? `${data.notes} (Заказ из B2C)` : 'Заказ из B2C маркетплейса',
-          shippingAddress: data.shippingAddress || null, // Адрес доставки
+          notes: notes ? `${notes} (Заказ из B2C)` : 'Заказ из B2C маркетплейса',
+          shippingAddress,
         status: 'pending',
         paymentStatus: 'pending',
         isB2C: true, // Помечаем что это заказ из B2C магазина

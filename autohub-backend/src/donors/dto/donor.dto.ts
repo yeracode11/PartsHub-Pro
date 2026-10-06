@@ -15,7 +15,11 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
-import { DonorStatus } from '../entities/donor-vehicle.entity';
+import { PartialType } from '@nestjs/mapped-types';
+import {
+  DonorDrivetrain,
+  DonorTransmission,
+} from '../entities/donor-vehicle.entity';
 
 export class CreateDonorDto {
   @IsString()
@@ -27,6 +31,16 @@ export class CreateDonorDto {
   @IsNotEmpty()
   @MaxLength(50)
   model: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  generation?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  body?: string;
 
   @IsOptional()
   @IsInt()
@@ -43,6 +57,20 @@ export class CreateDonorDto {
   @IsString()
   @MaxLength(50)
   engine?: string;
+
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 1 })
+  @Min(0.1)
+  @Max(20)
+  engineVolume?: number;
+
+  @IsOptional()
+  @IsEnum(DonorTransmission)
+  transmission?: DonorTransmission;
+
+  @IsOptional()
+  @IsEnum(DonorDrivetrain)
+  drivetrain?: DonorDrivetrain;
 
   @IsOptional()
   @IsString()
@@ -61,7 +89,17 @@ export class CreateDonorDto {
   @IsOptional()
   @IsNumber()
   @Min(0)
-  extraCosts?: number;
+  deliveryCost?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  dismantlingCost?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  otherCosts?: number;
 
   @IsOptional()
   @IsNumber()
@@ -79,79 +117,23 @@ export class CreateDonorDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(5000)
   notes?: string;
+
+  /** Куплен или уже стоит на площадке. По умолчанию — куплен. */
+  @IsOptional()
+  @IsString()
+  status?: string;
 }
 
-export class UpdateDonorDto {
+export class UpdateDonorDto extends PartialType(CreateDonorDto) {
   @IsOptional()
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(50)
-  brand?: string;
-
-  @IsOptional()
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(50)
-  model?: string;
-
-  @IsOptional()
-  @IsInt()
-  @Min(1950)
-  @Max(2100)
-  year?: number;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(30)
-  vin?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(50)
-  engine?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(50)
-  color?: string;
-
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  mileage?: number;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  purchasePrice?: number;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  extraCosts?: number;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  scrapIncome?: number;
+  @IsDateString()
+  dismantlingStartDate?: string | null;
 
   @IsOptional()
   @IsDateString()
-  purchaseDate?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(255)
-  source?: string;
-
-  @IsOptional()
-  @IsEnum(DonorStatus)
-  status?: DonorStatus;
-
-  @IsOptional()
-  @IsString()
-  notes?: string;
+  dismantlingEndDate?: string | null;
 }
 
 export class RemoveDonorPhotoDto {
@@ -194,6 +176,11 @@ export class DonorPartDto {
   @IsString()
   @MaxLength(100)
   sku?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  oem?: string;
 
   @IsOptional()
   @IsString()

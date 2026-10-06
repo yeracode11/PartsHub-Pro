@@ -62,6 +62,16 @@ export class IncomingItem {
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   purchasePrice: number;
 
+  /** Цена продажи; если не указана, у нового товара цена = закупочной, как раньше. */
+  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+  salePrice: string | null;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  oem: string | null;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  barcode: string | null;
+
   // Ячейка хранения
   @Column({ type: 'varchar', length: 100, nullable: true })
   warehouseCell: string | null;
@@ -80,4 +90,3 @@ export class IncomingItem {
   @UpdateDateColumn()
   updatedAt: Date;
 }
-

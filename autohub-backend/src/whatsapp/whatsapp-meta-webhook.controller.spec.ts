@@ -1,3 +1,5 @@
+import { createHmac } from 'crypto';
+import { UnauthorizedException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { WhatsAppMetaWebhookController } from './whatsapp-meta-webhook.controller';
 import { MetaWhatsAppConfig } from './meta-whatsapp.config';
@@ -100,5 +102,38 @@ describe('WhatsAppMetaWebhookController', () => {
 
     expect(inboundService.handleWebhookPayload).toHaveBeenCalledWith(payload);
     expect(result).toEqual({ status: 'ok' });
+  });
+
+  describe('with META_APP_SECRET', () => {
+    const payload = { object: 'whatsapp_business_account', entry: [] };
+    const rawBody = Buffer.from(JSON.stringify(payload));
+
+    beforeEach(() => {
+      (metaConfig as any).appSecret = 'secret';
+    });
+    afterEach(() => {
+      delete (metaConfig as any).appSecret;
+    });
+
+    it('rejects POST without a valid signature', async () => {
+      await expect(
+        controller.receiveWebhook(payload, {
+          headers: { 'x-hub-signature-256': 'sha256=' + '0'.repeat(64) },
+          rawBody,
+        } as never),
+      ).rejects.toThrow(UnauthorizedException);
+      expect(inboundService.handleWebhookPayload).not.toHaveBeenCalled();
+    });
+
+    it('accepts POST signed with the app secret', async () => {
+      const signature =
+        'sha256=' + createHmac('sha256', 'secret').update(rawBody).digest('hex');
+      const result = await controller.receiveWebhook(payload, {
+        headers: { 'x-hub-signature-256': signature },
+        rawBody,
+      } as never);
+      expect(result).toEqual({ status: 'ok' });
+      expect(inboundService.handleWebhookPayload).toHaveBeenCalledWith(payload);
+    });
   });
 });

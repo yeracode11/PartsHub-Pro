@@ -4,23 +4,83 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, In, Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { DonorStatus, DonorVehicle } from './entities/donor-vehicle.entity';
 import { Item } from '../items/entities/item.entity';
-import { AddDonorPartsDto, CreateDonorDto, UpdateDonorDto } from './dto/donor.dto';
+import {
+  AddDonorPartsDto,
+  CreateDonorDto,
+  UpdateDonorDto,
+} from './dto/donor.dto';
 import {
   allocateDonorCost,
   calculateDonorEconomics,
   DonorEconomics,
+  summarizeDonorEconomics,
 } from './donor-economics';
+import { AuditService, diffFields } from '../audit/audit.service';
+import { normalizeOem } from '../items/oem';
+import { PartCompatibility } from '../items/entities/part-compatibility.entity';
+import {
+  allowedDonorTransitions,
+  businessToday,
+  parseDonorStatus,
+  planStatusChange,
+} from './donor-status';
 
 /** Деньги по заказу считаем полученными, когда заказ завершён или оплачен. */
 const SOLD_CONDITION = `o.status <> 'cancelled' AND (o.status = 'completed' OR o."paymentStatus" = 'paid')`;
 const PENDING_CONDITION = `o.status <> 'cancelled' AND NOT (o.status = 'completed' OR o."paymentStatus" = 'paid')`;
 
-const FINANCE_FIELDS = ['purchasePrice', 'extraCosts', 'scrapIncome'] as const;
+/** Снятая деталь точно подходит на свою машину-донора. */
+export function donorCompatibility(donor: DonorVehicle) {
+  const engine = [
+    donor.engine,
+    donor.engineVolume ? Number(donor.engineVolume).toFixed(1) : null,
+  ]
+    .filter(Boolean)
+    .join(' ');
+  return {
+    make: donor.brand.slice(0, 50),
+    model: donor.model.slice(0, 80),
+    generation: donor.generation ?? null,
+    yearFrom: donor.year ?? null,
+    yearTo: donor.year ?? null,
+    body: donor.body ?? null,
+    engine: engine ? engine.slice(0, 80) : null,
+    transmission: donor.transmission ?? null,
+  };
+}
 
-type DonorWithEconomics = DonorVehicle & { economics?: DonorEconomics };
+const sumWhen = (condition: string, expression: string) =>
+  `COALESCE(SUM(CASE WHEN ${condition} THEN ${expression} ELSE 0 END), 0)`;
+
+const COST_FIELDS = [
+  'purchasePrice',
+  'deliveryCost',
+  'dismantlingCost',
+  'otherCosts',
+] as const;
+const FINANCE_FIELDS = [...COST_FIELDS, 'scrapIncome'] as const;
+const TEXT_FIELDS = [
+  'generation',
+  'body',
+  'engine',
+  'color',
+  'source',
+  'notes',
+] as const;
+const AUDITED_FIELDS = [...FINANCE_FIELDS, 'status'] as const;
+const AUDIT_ENTITY = 'donor_vehicle';
+const INITIAL_STATUSES = [
+  DonorStatus.PURCHASED,
+  DonorStatus.WAITING_FOR_DISMANTLING,
+];
+
+type DonorWithEconomics = DonorVehicle & {
+  economics?: DonorEconomics;
+  allowedStatuses: DonorStatus[];
+};
 
 export const MAX_PHOTOS = 20;
 
@@ -30,7 +90,11 @@ interface PartSales {
   pendingQuantity: number;
 }
 
-const NO_SALES: PartSales = { soldQuantity: 0, soldRevenue: 0, pendingQuantity: 0 };
+const NO_SALES: PartSales = {
+  soldQuantity: 0,
+  soldRevenue: 0,
+  pendingQuantity: 0,
+};
 
 @Injectable()
 export class DonorsService {
@@ -40,6 +104,7 @@ export class DonorsService {
     @InjectRepository(Item)
     private readonly itemRepository: Repository<Item>,
     private readonly dataSource: DataSource,
+    private readonly auditService: AuditService,
   ) {}
 
   async findAll(
@@ -55,13 +120,32 @@ export class DonorsService {
     });
     if (donors.length === 0) return [];
 
-    const economics = await this.loadEconomics(
-      organizationId,
-      donors,
-    );
+    const economics = await this.loadEconomics(organizationId, donors);
     return donors.map((donor) =>
       this.present(donor, economics.get(donor.id)!, options.includeFinance),
     );
+  }
+
+  async getEconomics(id: number, organizationId: string) {
+    const donor = await this.getDonor(id, organizationId);
+    const economics = await this.loadEconomics(organizationId, [donor]);
+    return economics.get(donor.id)!;
+  }
+
+  /** Сводка по всем донорам организации (или по статусу) без загрузки деталей. */
+  async getEconomicsSummary(organizationId: string, status?: DonorStatus) {
+    const donors = await this.donorRepository.find({
+      where: { organizationId, ...(status ? { status } : {}) },
+    });
+    const economics = await this.loadEconomics(organizationId, donors, {
+      allDonors: !status,
+    });
+    return summarizeDonorEconomics([...economics.values()]);
+  }
+
+  async getHistory(id: number, organizationId: string) {
+    await this.getDonor(id, organizationId);
+    return this.auditService.history(organizationId, AUDIT_ENTITY, id);
   }
 
   async findOne(id: number, organizationId: string, includeFinance: boolean) {
@@ -147,21 +231,88 @@ export class DonorsService {
     return this.findOne(id, organizationId, includeFinance);
   }
 
-  async create(organizationId: string, dto: CreateDonorDto) {
+  async create(
+    organizationId: string,
+    dto: CreateDonorDto,
+    actorId?: string | null,
+  ) {
+    const status = parseDonorStatus(dto.status) ?? DonorStatus.PURCHASED;
+    if (!INITIAL_STATUSES.includes(status)) {
+      throw new BadRequestException(
+        'Новый донор может быть только купленным или ждущим разбора',
+      );
+    }
     const donor = this.donorRepository.create({
       ...this.normalize(dto),
       organizationId,
-      status: DonorStatus.AWAITING,
+      status,
     });
-    const saved = await this.donorRepository.save(donor);
+    const saved = await this.dataSource.transaction(async (manager) => {
+      const created = await manager.save(DonorVehicle, donor);
+      await this.auditService.record(
+        {
+          organizationId,
+          userId: actorId,
+          entityType: AUDIT_ENTITY,
+          entityId: created.id,
+          action: 'create',
+          changes: diffFields(null, { ...created }, AUDITED_FIELDS),
+        },
+        manager,
+      );
+      return created;
+    });
     return this.findOne(saved.id, organizationId, true);
   }
 
-  async update(id: number, organizationId: string, dto: UpdateDonorDto) {
-    await this.getDonor(id, organizationId);
+  async update(
+    id: number,
+    organizationId: string,
+    dto: UpdateDonorDto,
+    actorId?: string | null,
+  ) {
+    const donor = await this.getDonor(id, organizationId);
     const data = this.normalize(dto);
+
+    const status = parseDonorStatus(dto.status);
+    if (status) {
+      Object.assign(data, planStatusChange(donor, status, this.today()));
+    }
+    if (dto.dismantlingStartDate !== undefined) {
+      data.dismantlingStartDate = dto.dismantlingStartDate || null;
+    }
+    if (dto.dismantlingEndDate !== undefined) {
+      data.dismantlingEndDate = dto.dismantlingEndDate || null;
+    }
+    const start =
+      'dismantlingStartDate' in data
+        ? data.dismantlingStartDate
+        : donor.dismantlingStartDate;
+    const end =
+      'dismantlingEndDate' in data
+        ? data.dismantlingEndDate
+        : donor.dismantlingEndDate;
+    if (start && end && String(end) < String(start)) {
+      throw new BadRequestException(
+        'Разбор не может закончиться раньше, чем начался',
+      );
+    }
+
     if (Object.keys(data).length > 0) {
-      await this.donorRepository.update({ id, organizationId }, data);
+      await this.dataSource.transaction(async (manager) => {
+        await manager.update(DonorVehicle, { id, organizationId }, data);
+        await this.auditService.record(
+          {
+            organizationId,
+            userId: actorId,
+            entityType: AUDIT_ENTITY,
+            entityId: id,
+            action: 'update',
+            changes: diffFields({ ...donor }, data, AUDITED_FIELDS),
+          },
+          manager,
+        );
+      });
     }
     return this.findOne(id, organizationId, true);
   }
@@ -173,7 +324,7 @@ export class DonorsService {
     });
     if (partsCount > 0) {
       throw new BadRequestException(
-        'С донора уже сняты детали. Удалить нельзя — закройте учёт (статус «Закрыт»).',
+        'С донора уже сняты детали. Удалить нельзя — переведите его в архив.',
       );
     }
     await this.donorRepository.delete({ id, organizationId });
@@ -181,10 +332,15 @@ export class DonorsService {
   }
 
   /** Снять детали с донора: каждая деталь становится товаром склада с привязкой к машине. */
-  async addParts(id: number, organizationId: string, dto: AddDonorPartsDto) {
+  async addParts(
+    id: number,
+    organizationId: string,
+    dto: AddDonorPartsDto,
+    actorId?: string | null,
+  ) {
     const donor = await this.getDonor(id, organizationId);
-    if (donor.status === DonorStatus.CLOSED) {
-      throw new BadRequestException('Учёт по донору закрыт');
+    if (donor.status === DonorStatus.ARCHIVED) {
+      throw new BadRequestException('Донор в архиве — снимать детали нельзя');
     }
 
     const origin = this.describeOrigin(donor);
@@ -200,6 +356,8 @@ export class DonorsService {
           condition: part.condition || 'used',
           warehouseCell: part.warehouseCell?.trim() || null,
           sku: part.sku?.trim() || null,
+          oem: normalizeOem(part.oem) ? part.oem!.trim() : null,
+          oemNormalized: normalizeOem(part.oem),
           description: part.description?.trim()
             ? `${part.description.trim()}\n${origin}`
             : origin,
@@ -207,12 +365,36 @@ export class DonorsService {
         }),
       );
       const saved = await manager.save(Item, items);
+      await manager.insert(
+        PartCompatibility,
+        saved.map((item) => ({
+          ...donorCompatibility(donor),
+          organizationId,
+          itemId: item.id,
+        })),
+      );
 
-      if (donor.status === DonorStatus.AWAITING) {
+      if (INITIAL_STATUSES.includes(donor.status)) {
+        const patch = planStatusChange(
+          donor,
+          DonorStatus.DISMANTLING,
+          this.today(),
+        );
         await manager.update(
           DonorVehicle,
           { id: donor.id, organizationId },
-          { status: DonorStatus.DISMANTLING },
+          patch,
+        );
+        await this.auditService.record(
+          {
+            organizationId,
+            userId: actorId,
+            entityType: AUDIT_ENTITY,
+            entityId: donor.id,
+            action: 'update',
+            changes: diffFields({ ...donor }, patch, AUDITED_FIELDS),
+          },
+          manager,
         );
       }
       return saved;
@@ -231,13 +413,28 @@ export class DonorsService {
     return donor;
   }
 
-  private normalize(dto: CreateDonorDto | UpdateDonorDto): Partial<DonorVehicle> {
-    const data: Partial<DonorVehicle> = { ...(dto as any) };
+  /** Только поля карточки; статус и даты разбора меняются через planStatusChange. */
+  private normalize(
+    dto: CreateDonorDto | UpdateDonorDto,
+  ): Partial<DonorVehicle> {
+    const data: Partial<DonorVehicle> = {};
     if (dto.brand !== undefined) data.brand = dto.brand.trim();
     if (dto.model !== undefined) data.model = dto.model.trim();
+    for (const field of TEXT_FIELDS) {
+      if (dto[field] !== undefined) data[field] = dto[field]?.trim() || null;
+    }
     if (dto.vin !== undefined) {
-      const vin = dto.vin.replace(/\s+/g, '').toUpperCase();
+      const vin = (dto.vin ?? '').replace(/\s+/g, '').toUpperCase();
       data.vin = vin.length ? vin : null;
+    }
+    for (const field of ['year', 'mileage', 'engineVolume'] as const) {
+      if (dto[field] !== undefined) data[field] = dto[field] ?? null;
+    }
+    if (dto.transmission !== undefined)
+      data.transmission = dto.transmission ?? null;
+    if (dto.drivetrain !== undefined) data.drivetrain = dto.drivetrain ?? null;
+    for (const field of [...FINANCE_FIELDS]) {
+      if (dto[field] !== undefined) data[field] = dto[field] ?? 0;
     }
     if (dto.purchaseDate !== undefined) {
       data.purchaseDate = dto.purchaseDate ? new Date(dto.purchaseDate) : null;
@@ -245,10 +442,23 @@ export class DonorsService {
     return data;
   }
 
+  private today() {
+    return businessToday();
+  }
+
   private describeOrigin(donor: DonorVehicle): string {
-    const car = [donor.brand, donor.model, donor.year].filter(Boolean).join(' ');
+    const car = [donor.brand, donor.model, donor.generation, donor.year]
+      .filter(Boolean)
+      .join(' ');
+    const engine = [
+      donor.engine,
+      donor.engineVolume ? `${donor.engineVolume} л` : null,
+    ]
+      .filter(Boolean)
+      .join(' ');
     const details = [
-      donor.engine ? `двигатель ${donor.engine}` : null,
+      engine ? `двигатель ${engine}` : null,
+      donor.body ? `кузов ${donor.body}` : null,
       donor.vin ? `VIN/кузов ${donor.vin}` : null,
       donor.mileage ? `пробег ${donor.mileage} км` : null,
     ].filter(Boolean);
@@ -260,26 +470,40 @@ export class DonorsService {
     economics: DonorEconomics,
     includeFinance: boolean,
   ) {
-    const result: DonorWithEconomics = { ...donor };
+    const result: DonorWithEconomics = {
+      ...donor,
+      allowedStatuses: allowedDonorTransitions(donor.status),
+    };
     if (includeFinance) {
       result.economics = economics;
     } else {
       for (const field of FINANCE_FIELDS) delete (result as any)[field];
       (result as any).stock = {
         partsCount: economics.partsCount,
+        unitsReceived: economics.unitsReceived,
         unitsInStock: economics.unitsInStock,
         unitsSold: economics.unitsSold,
+        unitsReserved: economics.unitsReserved,
+        unitsWrittenOff: economics.unitsWrittenOff,
       };
     }
     return result;
   }
 
-  /** Экономика по списку доноров за три агрегирующих запроса, без N+1. */
+  /**
+   * Экономика по списку доноров за два агрегирующих запроса, без N+1.
+   * allDonors: считать по всем донорам организации, не перечисляя id в запросе.
+   */
   private async loadEconomics(
     organizationId: string,
     donors: DonorVehicle[],
+    options: { allDonors?: boolean } = {},
   ): Promise<Map<number, DonorEconomics>> {
+    if (donors.length === 0) return new Map();
     const ids = donors.map((d) => d.id);
+    const donorFilter = options.allDonors
+      ? 'i."donorId" IS NOT NULL'
+      : 'i."donorId" IN (:...ids)';
 
     const [stockRows, salesRows] = await Promise.all([
       this.itemRepository
@@ -289,36 +513,37 @@ export class DonorsService {
         .addSelect('COALESCE(SUM(i.quantity), 0)', 'unitsInStock')
         .addSelect('COALESCE(SUM(i.price * i.quantity), 0)', 'stockValue')
         .where('i."organizationId" = :organizationId', { organizationId })
-        .andWhere('i."donorId" IN (:...ids)', { ids })
+        .andWhere(donorFilter, { ids })
         .groupBy('i."donorId"')
         .getRawMany(),
       this.dataSource
         .createQueryBuilder()
         .select('i."donorId"', 'donorId')
+        .addSelect(sumWhen(SOLD_CONDITION, 'oi.subtotal'), 'soldRevenue')
+        .addSelect(sumWhen(SOLD_CONDITION, 'oi.quantity'), 'unitsSold')
         .addSelect(
-          `COALESCE(SUM(CASE WHEN ${SOLD_CONDITION} THEN oi.subtotal ELSE 0 END), 0)`,
-          'soldRevenue',
+          sumWhen(SOLD_CONDITION, 'i.price * oi.quantity'),
+          'soldListValue',
         )
+        .addSelect(sumWhen(PENDING_CONDITION, 'oi.subtotal'), 'pendingRevenue')
+        .addSelect(sumWhen(PENDING_CONDITION, 'oi.quantity'), 'unitsReserved')
         .addSelect(
-          `COALESCE(SUM(CASE WHEN ${SOLD_CONDITION} THEN oi.quantity ELSE 0 END), 0)`,
-          'unitsSold',
-        )
-        .addSelect(
-          `COALESCE(SUM(CASE WHEN ${PENDING_CONDITION} THEN oi.subtotal ELSE 0 END), 0)`,
-          'pendingRevenue',
+          sumWhen(PENDING_CONDITION, 'i.price * oi.quantity'),
+          'pendingListValue',
         )
         .from('order_items', 'oi')
         .innerJoin('items', 'i', 'i.id = oi."itemId"')
         .innerJoin('orders', 'o', 'o.id = oi."orderId"')
         .where('i."organizationId" = :organizationId', { organizationId })
         .andWhere('o."organizationId" = :organizationId', { organizationId })
-        .andWhere('i."donorId" IN (:...ids)', { ids })
+        .andWhere(donorFilter, { ids })
         .groupBy('i."donorId"')
         .getRawMany(),
     ]);
 
     const stockById = new Map(stockRows.map((r) => [Number(r.donorId), r]));
     const salesById = new Map(salesRows.map((r) => [Number(r.donorId), r]));
+    const num = (value: unknown) => Number(value) || 0;
 
     return new Map(
       donors.map((donor) => {
@@ -327,15 +552,24 @@ export class DonorsService {
         return [
           donor.id,
           calculateDonorEconomics({
-            purchasePrice: Number(donor.purchasePrice) || 0,
-            extraCosts: Number(donor.extraCosts) || 0,
-            scrapIncome: Number(donor.scrapIncome) || 0,
-            soldRevenue: Number(sales?.soldRevenue) || 0,
-            pendingRevenue: Number(sales?.pendingRevenue) || 0,
-            stockValue: Number(stock?.stockValue) || 0,
-            partsCount: Number(stock?.partsCount) || 0,
-            unitsInStock: Number(stock?.unitsInStock) || 0,
-            unitsSold: Number(sales?.unitsSold) || 0,
+            purchasePrice: num(donor.purchasePrice),
+            deliveryCost: num(donor.deliveryCost),
+            dismantlingCost: num(donor.dismantlingCost),
+            otherCosts: num(donor.otherCosts),
+            scrapIncome: num(donor.scrapIncome),
+            soldRevenue: num(sales?.soldRevenue),
+            // Возвраты и списания появятся вместе со своими модулями (Phase 4–5).
+            refunds: 0,
+            pendingRevenue: num(sales?.pendingRevenue),
+            stockValue: num(stock?.stockValue),
+            soldListValue: num(sales?.soldListValue),
+            pendingListValue: num(sales?.pendingListValue),
+            writtenOffListValue: 0,
+            partsCount: num(stock?.partsCount),
+            unitsInStock: num(stock?.unitsInStock),
+            unitsSold: num(sales?.unitsSold),
+            unitsReserved: num(sales?.unitsReserved),
+            unitsWrittenOff: 0,
           }),
         ];
       }),
@@ -350,18 +584,9 @@ export class DonorsService {
     const rows = await this.dataSource
       .createQueryBuilder()
       .select('oi."itemId"', 'itemId')
-      .addSelect(
-        `COALESCE(SUM(CASE WHEN ${SOLD_CONDITION} THEN oi.quantity ELSE 0 END), 0)`,
-        'soldQuantity',
-      )
-      .addSelect(
-        `COALESCE(SUM(CASE WHEN ${SOLD_CONDITION} THEN oi.subtotal ELSE 0 END), 0)`,
-        'soldRevenue',
-      )
-      .addSelect(
-        `COALESCE(SUM(CASE WHEN ${PENDING_CONDITION} THEN oi.quantity ELSE 0 END), 0)`,
-        'pendingQuantity',
-      )
+      .addSelect(sumWhen(SOLD_CONDITION, 'oi.quantity'), 'soldQuantity')
+      .addSelect(sumWhen(SOLD_CONDITION, 'oi.subtotal'), 'soldRevenue')
+      .addSelect(sumWhen(PENDING_CONDITION, 'oi.quantity'), 'pendingQuantity')
       .from('order_items', 'oi')
       .innerJoin('orders', 'o', 'o.id = oi."orderId"')
       .where('o."organizationId" = :organizationId', { organizationId })
