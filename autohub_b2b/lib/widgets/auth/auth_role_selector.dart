@@ -48,6 +48,17 @@ class AuthRoleSelector extends StatelessWidget {
             ),
           ],
         ),
+        const SizedBox(height: 8),
+        Text(
+          value == worker
+              ? 'Мастер входит по телефону владельца. Имя и название организации вводить не нужно.'
+              : 'Владелец создаёт новую организацию и получает полный доступ.',
+          style: const TextStyle(
+            fontSize: 12,
+            color: AuthDesign.textMuted,
+            height: 1.35,
+          ),
+        ),
       ],
     );
   }

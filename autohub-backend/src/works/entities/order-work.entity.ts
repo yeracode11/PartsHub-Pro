@@ -56,6 +56,9 @@ export class OrderWork {
   @Column({ type: 'boolean', default: false })
   done: boolean;
 
+  @Column({ type: 'timestamptz', nullable: true })
+  doneAt: Date | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

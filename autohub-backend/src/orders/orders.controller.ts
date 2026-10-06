@@ -17,6 +17,11 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '../common/enums/user-role.enum';
 import { OrganizationsService } from '../organizations/organizations.service';
 
+class PaymentBody {
+  amount?: number;
+  method?: string;
+}
+
 @Controller('api/orders')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class OrdersController {
@@ -69,6 +74,25 @@ export class OrdersController {
     return this.ordersService.findB2COrders(organizationId);
   }
 
+  @Get('payments/summary')
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  async paymentSummary(
+    @CurrentUser() user: any,
+    @Query('from') from: string,
+    @Query('to') to: string,
+  ) {
+    const organizationId = await this.resolveOrganizationId(user);
+    if (!organizationId) {
+      return { cash: 0, card: 0, total: 0, count: 0 };
+    }
+    const start = new Date(from);
+    const end = new Date(to);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      return { cash: 0, card: 0, total: 0, count: 0 };
+    }
+    return this.ordersService.paymentSummary(organizationId, start, end);
+  }
+
   @Get(':id')
   async findOne(@Param('id') id: string, @CurrentUser() user: any) {
     const organizationId = await this.resolveOrganizationId(user);
@@ -86,6 +110,34 @@ export class OrdersController {
       return { error: 'No active organization' } as any;
     }
     return this.ordersService.create(organizationId, data, undefined, user);
+  }
+
+  @Post(':id/payments')
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  async addPayment(
+    @Param('id') id: string,
+    @CurrentUser() user: any,
+    @Body() body: PaymentBody,
+  ) {
+    const organizationId = await this.resolveOrganizationId(user);
+    if (!organizationId) {
+      return { error: 'No active organization' } as any;
+    }
+    return this.ordersService.addPayment(+id, organizationId, body, user);
+  }
+
+  @Delete(':id/payments/:paymentId')
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  async removePayment(
+    @Param('id') id: string,
+    @Param('paymentId') paymentId: string,
+    @CurrentUser() user: any,
+  ) {
+    const organizationId = await this.resolveOrganizationId(user);
+    if (!organizationId) {
+      return { error: 'No active organization' } as any;
+    }
+    return this.ordersService.removePayment(+id, +paymentId, organizationId);
   }
 
   @Put(':id')

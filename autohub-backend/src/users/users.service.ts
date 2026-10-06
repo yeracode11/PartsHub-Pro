@@ -4,6 +4,7 @@ import {
   BadRequestException,
   ConflictException,
 } from '@nestjs/common';
+import * as bcrypt from 'bcrypt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './entities/user.entity';
@@ -15,6 +16,7 @@ import {
   phoneDigitsKey,
 } from '../common/utils/phone.util';
 import { UserRole } from '../common/enums/user-role.enum';
+import { CreateStaffDto } from './dto/create-staff.dto';
 
 const SYNTHETIC_EMAIL_SUFFIX = '@phone.autohub.local';
 
@@ -78,6 +80,121 @@ export class UsersService {
     }
 
     return await this.create(createDto);
+  }
+
+  async listMasters(organizationId: string) {
+    const users = await this.userRepository.find({
+      where: { organizationId, role: UserRole.WORKER, isActive: true },
+      order: { name: 'ASC' },
+    });
+    return users.map((user) => this.toStaffView(user));
+  }
+
+  async createMaster(organizationId: string, dto: CreateStaffDto) {
+    const name = dto.name.trim();
+    if (!name) {
+      throw new BadRequestException('Укажите имя');
+    }
+    const phoneE164 = normalizePhoneE164(dto.phone);
+    await this.assertPhoneAvailable(phoneE164, organizationId);
+
+    const hashedPassword = await bcrypt.hash(dto.password, 10);
+    const pay = this.normalizePay(dto.payType, dto.payRate);
+    const user = this.userRepository.create({
+      email: `${phoneDigitsKey(phoneE164)}${SYNTHETIC_EMAIL_SUFFIX}`,
+      password: hashedPassword,
+      name,
+      phone: phoneE164,
+      role: UserRole.WORKER,
+      organizationId,
+      isActive: true,
+      payType: pay.payType,
+      payRate: pay.payRate,
+    });
+    const saved = await this.userRepository.save(user);
+    return this.toStaffView(saved);
+  }
+
+  async removeMaster(organizationId: string, userId: string) {
+    const user = await this.userRepository.findOne({
+      where: { id: userId, organizationId, role: UserRole.WORKER },
+    });
+    if (!user) {
+      throw new NotFoundException('Мастер не найден');
+    }
+    user.isActive = false;
+    await this.userRepository.save(user);
+    return { success: true };
+  }
+
+  async updateMasterPay(
+    organizationId: string,
+    userId: string,
+    payType?: string,
+    payRate?: number,
+  ) {
+    const user = await this.userRepository.findOne({
+      where: { id: userId, organizationId, role: UserRole.WORKER, isActive: true },
+    });
+    if (!user) {
+      throw new NotFoundException('Мастер не найден');
+    }
+    const pay = this.normalizePay(payType, payRate);
+    user.payType = pay.payType;
+    user.payRate = pay.payRate;
+    const saved = await this.userRepository.save(user);
+    return this.toStaffView(saved);
+  }
+
+  private toStaffView(user: User) {
+    return {
+      id: user.id,
+      name: user.name,
+      phone: user.phone,
+      role: user.role,
+      payType: user.payType === 'hourly' ? 'hourly' : 'percent',
+      payRate: Number(user.payRate ?? 40),
+    };
+  }
+
+  private normalizePay(payType?: string, payRate?: number) {
+    const type = payType === 'hourly' ? 'hourly' : 'percent';
+    let rate = Number(payRate);
+    if (!Number.isFinite(rate)) {
+      rate = type === 'hourly' ? 0 : 40;
+    }
+    if (type === 'percent') {
+      rate = Math.min(100, Math.max(0, rate));
+    } else {
+      rate = Math.max(0, rate);
+    }
+    return { payType: type, payRate: Math.round(rate * 100) / 100 };
+  }
+
+  private async assertPhoneAvailable(
+    phoneE164: string,
+    organizationId: string,
+  ): Promise<void> {
+    const takenByUser = await this.userRepository.findOne({
+      where: { phone: phoneE164, isActive: true },
+    });
+    if (takenByUser) {
+      throw new ConflictException('Этот номер уже зарегистрирован');
+    }
+
+    const targetKey = phoneDigitsKey(phoneE164);
+    const organizations = await this.organizationRepository.find({
+      where: { isActive: true },
+    });
+    const orgConflict = organizations.find(
+      (org) => org.phone && phoneDigitsKey(org.phone) === targetKey,
+    );
+    if (orgConflict && orgConflict.id !== organizationId) {
+      throw new ConflictException('Этот номер уже используется другой организацией');
+    }
+    if (orgConflict && orgConflict.id === organizationId) {
+      throw new ConflictException('Этот номер уже используется владельцем');
+    }
   }
 
   async updateProfile(userId: string, updateDto: UpdateUserDto): Promise<User> {

@@ -20,6 +20,7 @@ import 'package:autohub_b2b/utils/auth_guard.dart';
 import 'package:autohub_b2b/models/label_product_model.dart';
 import 'package:autohub_b2b/services/api/api_user_message.dart';
 import 'package:autohub_b2b/services/auth/secure_storage_service.dart';
+import 'package:autohub_b2b/widgets/orders/order_payment_section.dart';
 
 class SalesScreen extends StatefulWidget {
   const SalesScreen({super.key});
@@ -36,6 +37,7 @@ class _SalesScreenState extends State<SalesScreen> {
   String? error;
   bool isForbidden = false;
   String? forbiddenMessage;
+  Map<String, dynamic>? _today;
 
   @override
   void initState() {
@@ -43,17 +45,20 @@ class _SalesScreenState extends State<SalesScreen> {
     _loadOrders();
   }
 
-  Future<void> _loadOrders() async {
+  Future<void> _loadOrders({bool silent = false}) async {
     if (!mounted) return;
 
-    setState(() {
-      isLoading = true;
-      error = null;
-      isForbidden = false;
-    });
+    if (!silent) {
+      setState(() {
+        isLoading = true;
+        error = null;
+        isForbidden = false;
+      });
+    }
 
     try {
       final loadedOrders = await _ordersRepo.getOrders();
+      await _loadToday();
 
       if (!mounted) return;
 
@@ -81,6 +86,37 @@ class _SalesScreenState extends State<SalesScreen> {
         });
       }
     }
+  }
+
+  Future<void> _loadToday() async {
+    final now = DateTime.now();
+    final from = DateTime(now.year, now.month, now.day).toUtc().toIso8601String();
+    final to = DateTime(now.year, now.month, now.day)
+        .add(const Duration(days: 1))
+        .toUtc()
+        .toIso8601String();
+    try {
+      final response = await dio.get(
+        '/api/orders/payments/summary',
+        queryParameters: {'from': from, 'to': to},
+      );
+      if (!mounted) return;
+      setState(() {
+        _today = Map<String, dynamic>.from(response.data as Map);
+      });
+    } catch (_) {}
+  }
+
+  String _todayLine() {
+    final today = _today;
+    if (today == null) return '';
+    final money = NumberFormat('#,##0.##', 'ru_RU');
+    double value(String key) {
+      final raw = today[key];
+      if (raw is num) return raw.toDouble();
+      return double.tryParse(raw?.toString() ?? '') ?? 0;
+    }
+    return 'Сегодня: нал ${money.format(value('cash'))} · карта ${money.format(value('card'))} · ${money.format(value('total'))} ₸';
   }
 
   @override
@@ -111,10 +147,10 @@ class _SalesScreenState extends State<SalesScreen> {
                         style: Theme.of(context).textTheme.displayMedium
                             ?.copyWith(fontSize: isMobile ? 24 : 28),
                       ),
-                      if (!isMobile) ...[
+                      if (_today != null) ...[
                         const SizedBox(height: 4),
                         Text(
-                          'Управление заказами и продажами',
+                          _todayLine(),
                           style: Theme.of(context).textTheme.bodyMedium
                               ?.copyWith(color: AppTheme.textSecondary),
                         ),
@@ -640,6 +676,7 @@ class _SalesScreenState extends State<SalesScreen> {
         availableItems: availableItems,
         dio: dio,
         onSuccess: _loadOrders,
+        onPaymentsChanged: () => _loadOrders(silent: true),
       );
 
       if (isMobile) {
@@ -665,7 +702,11 @@ class _SalesScreenState extends State<SalesScreen> {
             context,
             MaterialPageRoute(
               builder: (context) =>
-                  OrderDetailScreen(order: fullOrder, dio: dio),
+                  OrderDetailScreen(
+                    order: fullOrder,
+                    dio: dio,
+                    onPaymentsChanged: () => _loadOrders(silent: true),
+                  ),
             ),
           );
           // Если заказ был обновлен, перезагружаем список
@@ -698,6 +739,7 @@ class _SalesScreenState extends State<SalesScreen> {
             availableItems: availableItems,
             dio: dio,
             onSuccess: _loadOrders,
+        onPaymentsChanged: () => _loadOrders(silent: true),
           );
 
           if (isMobile) {
@@ -748,6 +790,7 @@ class _OrderDialog extends StatefulWidget {
   final List<Map<String, dynamic>> availableItems;
   final Dio dio;
   final VoidCallback onSuccess;
+  final VoidCallback? onPaymentsChanged;
 
   const _OrderDialog({
     required this.isEdit,
@@ -755,6 +798,7 @@ class _OrderDialog extends StatefulWidget {
     required this.availableItems,
     required this.dio,
     required this.onSuccess,
+    this.onPaymentsChanged,
   });
 
   @override
@@ -764,7 +808,6 @@ class _OrderDialog extends StatefulWidget {
 class _OrderDialogState extends State<_OrderDialog> {
   final notesController = TextEditingController();
   String selectedStatus = 'pending';
-  String selectedPaymentStatus = 'pending';
   List<Map<String, dynamic>> selectedItems = [];
   List<Map<String, dynamic>> selectedWorks = [];
   List<WorkCatalogModel> _workCatalog = [];
@@ -845,7 +888,6 @@ class _OrderDialogState extends State<_OrderDialog> {
     if (widget.order != null) {
       notesController.text = widget.order!.notes ?? '';
       selectedStatus = widget.order!.status;
-      selectedPaymentStatus = widget.order!.paymentStatus;
       reserveUntil = widget.order!.reservedUntil;
       reserveEnabled = selectedStatus == 'reserved' || reserveUntil != null;
       if (reserveUntil != null) {
@@ -884,6 +926,7 @@ class _OrderDialogState extends State<_OrderDialog> {
                 'pricePerHour': work.pricePerHour,
                 'performerId': work.performerId,
                 'performerName': work.performerName,
+                'done': work.done,
               },
             )
             .toList();
@@ -1693,36 +1736,32 @@ class _OrderDialogState extends State<_OrderDialog> {
                       },
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: DropdownButtonFormField<String>(
-                      value: selectedPaymentStatus,
-                      decoration: const InputDecoration(
-                        labelText: 'Оплата',
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                        contentPadding: EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                      ),
-                      items: const [
-                        DropdownMenuItem(
-                          value: 'pending',
-                          child: Text('Не оплачен'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'partially_paid',
-                          child: Text('Частично'),
-                        ),
-                        DropdownMenuItem(value: 'paid', child: Text('Оплачен')),
-                      ],
-                      onChanged: (v) =>
-                          setState(() => selectedPaymentStatus = v!),
-                    ),
-                  ),
                 ],
               ),
+              if (widget.isEdit && widget.order?.id != null) ...[
+                const SizedBox(height: 16),
+                OrderPaymentSection(
+                  dio: widget.dio,
+                  orderId: widget.order!.id!,
+                  total: widget.order!.total,
+                  payments: widget.order!.payments,
+                  paidAmount: widget.order!.paidAmount,
+                  dueAmount: widget.order!.payments.isNotEmpty ||
+                          widget.order!.paidAmount > 0 ||
+                          widget.order!.paymentStatus == 'paid'
+                      ? widget.order!.dueAmount
+                      : (widget.order!.dueAmount > 0
+                          ? widget.order!.dueAmount
+                          : widget.order!.total),
+                  onChanged: widget.onPaymentsChanged,
+                ),
+              ] else ...[
+                const SizedBox(height: 8),
+                const Text(
+                  'Оплату можно принять после создания заказа',
+                  style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+                ),
+              ],
             ],
           ),
         ),
@@ -2045,31 +2084,32 @@ class _OrderDialogState extends State<_OrderDialog> {
                       },
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: DropdownButtonFormField<String>(
-                      value: selectedPaymentStatus,
-                      decoration: const InputDecoration(
-                        labelText: 'Статус оплаты',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: const [
-                        DropdownMenuItem(
-                          value: 'pending',
-                          child: Text('Не оплачен'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'partially_paid',
-                          child: Text('Частично'),
-                        ),
-                        DropdownMenuItem(value: 'paid', child: Text('Оплачен')),
-                      ],
-                      onChanged: (v) =>
-                          setState(() => selectedPaymentStatus = v!),
-                    ),
-                  ),
                 ],
               ),
+              if (widget.isEdit && widget.order?.id != null) ...[
+                const SizedBox(height: 16),
+                OrderPaymentSection(
+                  dio: widget.dio,
+                  orderId: widget.order!.id!,
+                  total: widget.order!.total,
+                  payments: widget.order!.payments,
+                  paidAmount: widget.order!.paidAmount,
+                  dueAmount: widget.order!.payments.isNotEmpty ||
+                          widget.order!.paidAmount > 0 ||
+                          widget.order!.paymentStatus == 'paid'
+                      ? widget.order!.dueAmount
+                      : (widget.order!.dueAmount > 0
+                          ? widget.order!.dueAmount
+                          : widget.order!.total),
+                  onChanged: widget.onPaymentsChanged,
+                ),
+              ] else ...[
+                const SizedBox(height: 8),
+                const Text(
+                  'Оплату можно принять после создания заказа',
+                  style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+                ),
+              ],
               const SizedBox(height: 16),
               TextField(
                 controller: notesController,
@@ -2144,7 +2184,6 @@ class _OrderDialogState extends State<_OrderDialog> {
         'vehicleId': _vehicleId,
       },
       'status': reserveEnabled ? 'reserved' : selectedStatus,
-      'paymentStatus': selectedPaymentStatus,
       'notes': notesController.text.isEmpty ? null : notesController.text,
       'reservedUntil': reserveEnabled ? reserveUntil?.toIso8601String() : null,
       'items': selectedItems
@@ -2159,6 +2198,7 @@ class _OrderDialogState extends State<_OrderDialog> {
                 'normHours': work['normHours'],
                 'pricePerHour': work['pricePerHour'],
                 'performerId': work['performerId'],
+                'done': work['done'] == true,
               },
             )
             .toList(),

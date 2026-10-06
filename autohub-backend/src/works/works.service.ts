@@ -103,6 +103,9 @@ export class WorksService {
     organizationId: string,
     inputs: OrderWorkInput[],
   ): Promise<number> {
+    const existing = await this.orderWorkRepository.find({ where: { orderId } });
+    const previousRows = Array.isArray(existing) ? existing : [];
+    const used = new Set<number>();
     await this.orderWorkRepository.delete({ orderId });
     if (!inputs || inputs.length === 0) {
       return 0;
@@ -118,6 +121,17 @@ export class WorksService {
         organizationId,
         input.performerId,
       );
+      const done = Boolean(input.done);
+      const previous = previousRows.find(
+        (row) =>
+          !used.has(row.id) &&
+          row.name === resolved.name &&
+          (row.performerId ?? null) === performerId,
+      );
+      if (previous?.id) used.add(previous.id);
+      const doneAt = done
+        ? previous?.doneAt ?? (previous?.done ? previous.updatedAt : new Date())
+        : null;
 
       const work = this.orderWorkRepository.create({
         orderId,
@@ -127,7 +141,8 @@ export class WorksService {
         pricePerHour: resolved.pricePerHour,
         subtotal,
         performerId,
-        done: Boolean(input.done),
+        done,
+        doneAt,
       });
       await this.orderWorkRepository.save(work);
     }

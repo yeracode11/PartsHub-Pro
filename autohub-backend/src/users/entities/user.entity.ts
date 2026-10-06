@@ -48,6 +48,13 @@ export class User {
   @Column({ type: 'boolean', default: true })
   isActive: boolean;
 
+  /** percent — доля от суммы работы, hourly — ставка за нормо-час. */
+  @Column({ type: 'varchar', length: 20, default: 'percent' })
+  payType: string;
+
+  @Column({ type: 'decimal', precision: 10, scale: 2, default: 40 })
+  payRate: number;
+
   @CreateDateColumn()
   createdAt: Date;
 

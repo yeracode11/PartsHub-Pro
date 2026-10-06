@@ -28,7 +28,7 @@ class AuthSignUpRequested extends AuthEvent {
   final String password;
   final String name;
   final String organizationName;
-  /// `owner` или `worker` (мастер).
+  /// Регистрация создаёт владельца. Мастера добавляет владелец в профиле.
   final String role;
 
   const AuthSignUpRequested({
@@ -36,7 +36,7 @@ class AuthSignUpRequested extends AuthEvent {
     required this.password,
     required this.name,
     required this.organizationName,
-    required this.role,
+    this.role = 'owner',
   });
 
   @override

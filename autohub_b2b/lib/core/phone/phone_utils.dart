@@ -1,364 +1,281 @@
 import 'package:flutter/services.dart';
 
-enum AuthPhoneRegion { kz, us }
+/// Страна для маски телефона: СНГ и США.
+class PhoneCountry {
+  const PhoneCountry({
+    required this.iso,
+    required this.name,
+    required this.dial,
+    required this.nationalLength,
+    required this.groups,
+    required this.example,
+    this.group = PhoneCountryGroup.cis,
+  });
 
-/// Нормализация телефона KZ (+7) и US/CA (+1).
+  final String iso;
+  final String name;
+  final String dial;
+  final int nationalLength;
+  final List<int> groups;
+  final String example;
+  final PhoneCountryGroup group;
+
+  String get dialLabel => '+$dial';
+  String get buttonLabel => '$iso $dialLabel';
+
+  static const kazakhstan = PhoneCountry(
+    iso: 'KZ',
+    name: 'Казахстан',
+    dial: '7',
+    nationalLength: 10,
+    groups: [3, 3, 2, 2],
+    example: '(777) 123-45-67',
+  );
+
+  static const russia = PhoneCountry(
+    iso: 'RU',
+    name: 'Россия',
+    dial: '7',
+    nationalLength: 10,
+    groups: [3, 3, 2, 2],
+    example: '(999) 123-45-67',
+  );
+
+  static const azerbaijan = PhoneCountry(
+    iso: 'AZ',
+    name: 'Азербайджан',
+    dial: '994',
+    nationalLength: 9,
+    groups: [2, 3, 2, 2],
+    example: '(50) 123-45-67',
+  );
+
+  static const armenia = PhoneCountry(
+    iso: 'AM',
+    name: 'Армения',
+    dial: '374',
+    nationalLength: 8,
+    groups: [2, 3, 3],
+    example: '(91) 123-456',
+  );
+
+  static const belarus = PhoneCountry(
+    iso: 'BY',
+    name: 'Беларусь',
+    dial: '375',
+    nationalLength: 9,
+    groups: [2, 3, 2, 2],
+    example: '(29) 123-45-67',
+  );
+
+  static const kyrgyzstan = PhoneCountry(
+    iso: 'KG',
+    name: 'Кыргызстан',
+    dial: '996',
+    nationalLength: 9,
+    groups: [3, 3, 3],
+    example: '(555) 123-456',
+  );
+
+  static const moldova = PhoneCountry(
+    iso: 'MD',
+    name: 'Молдова',
+    dial: '373',
+    nationalLength: 8,
+    groups: [4, 4],
+    example: '(6212) 3456',
+  );
+
+  static const tajikistan = PhoneCountry(
+    iso: 'TJ',
+    name: 'Таджикистан',
+    dial: '992',
+    nationalLength: 9,
+    groups: [2, 3, 4],
+    example: '(91) 123-4567',
+  );
+
+  static const turkmenistan = PhoneCountry(
+    iso: 'TM',
+    name: 'Туркменистан',
+    dial: '993',
+    nationalLength: 8,
+    groups: [2, 2, 2, 2],
+    example: '(65) 12-34-56',
+  );
+
+  static const uzbekistan = PhoneCountry(
+    iso: 'UZ',
+    name: 'Узбекистан',
+    dial: '998',
+    nationalLength: 9,
+    groups: [2, 3, 2, 2],
+    example: '(90) 123-45-67',
+  );
+
+  static const usa = PhoneCountry(
+    iso: 'US',
+    name: 'США',
+    dial: '1',
+    nationalLength: 10,
+    groups: [3, 3, 4],
+    example: '(555) 123-4567',
+    group: PhoneCountryGroup.usa,
+  );
+
+  static const all = [
+    azerbaijan,
+    armenia,
+    belarus,
+    kazakhstan,
+    kyrgyzstan,
+    moldova,
+    russia,
+    tajikistan,
+    turkmenistan,
+    uzbekistan,
+    usa,
+  ];
+}
+
+enum PhoneCountryGroup { cis, usa }
+
+/// Нормализация телефона в E.164 для стран СНГ и США.
 abstract final class PhoneUtils {
-  static const String kzCountryCode = '+7';
-  static const String usCountryCode = '+1';
-
-  /// E.164: +77771234567 или +15551234567
   static String? normalizeToE164(
     String input, {
-    AuthPhoneRegion region = AuthPhoneRegion.kz,
+    PhoneCountry country = PhoneCountry.kazakhstan,
     bool nationalDigitsOnly = false,
-  }) {
-    final digits = input.replaceAll(RegExp(r'[^0-9]'), '');
-    if (digits.isEmpty) return null;
-
-    if (nationalDigitsOnly) {
-      return normalizeNationalToE164(input, region: region);
-    }
-
-    if (region == AuthPhoneRegion.us ||
-        (digits.startsWith('1') && digits.length == 11)) {
-      return _normalizeUs(digits, region);
-    }
-
-    return _normalizeKz(digits);
-  }
-
-  /// Код страны в селекторе, в поле — только национальные 10 цифр.
-  static String? normalizeNationalToE164(
-    String input, {
-    required AuthPhoneRegion region,
   }) {
     var digits = input.replaceAll(RegExp(r'[^0-9]'), '');
     if (digits.isEmpty) return null;
 
-    if (region == AuthPhoneRegion.us) {
-      if (digits.length == 11 && digits.startsWith('1')) {
+    if (nationalDigitsOnly) {
+      if (digits.length == country.nationalLength + country.dial.length &&
+          digits.startsWith(country.dial)) {
+        digits = digits.substring(country.dial.length);
+      }
+      if (country.dial == '7' && digits.length == 11 && digits.startsWith('8')) {
         digits = digits.substring(1);
       }
-      if (digits.length != 10) return null;
-      return '+1$digits';
+      if (digits.length != country.nationalLength) return null;
+      return '+${country.dial}$digits';
     }
 
     if (digits.length == 11 && digits.startsWith('8')) {
-      digits = digits.substring(1);
-    } else if (digits.length == 11 && digits.startsWith('7')) {
-      digits = digits.substring(1);
+      digits = '7${digits.substring(1)}';
     }
-    if (digits.length != 10) return null;
-    return '+7$digits';
+
+    final matched = _matchDial(digits);
+    if (matched == null) return null;
+    return '+$digits';
   }
 
-  static String? _normalizeUs(String digits, AuthPhoneRegion region) {
-    String national;
-    if (digits.length == 11 && digits.startsWith('1')) {
-      national = digits;
-    } else if (digits.length == 10) {
-      national = '1$digits';
-    } else if (region == AuthPhoneRegion.us && digits.length <= 10) {
-      return null;
-    } else {
-      return null;
-    }
-
-    if (national.length != 11 || !national.startsWith('1')) {
-      return null;
-    }
-    return '+$national';
-  }
-
-  static String? _normalizeKz(String digits) {
-    String normalized;
-    if (digits.length == 11 && digits.startsWith('7')) {
-      normalized = digits;
-    } else if (digits.length == 11 && digits.startsWith('8')) {
-      normalized = '7${digits.substring(1)}';
-    } else if (digits.length == 10) {
-      normalized = '7$digits';
-    } else {
-      return null;
-    }
-
-    if (normalized.length != 11 || !normalized.startsWith('7')) {
-      return null;
-    }
-
-    return '+$normalized';
-  }
-
-  static bool isValidPhone(
-    String input, {
-    AuthPhoneRegion region = AuthPhoneRegion.kz,
-    bool nationalDigitsOnly = false,
-  }) {
-    return normalizeToE164(
-          input,
-          region: region,
-          nationalDigitsOnly: nationalDigitsOnly,
-        ) !=
-        null;
-  }
-
-  static AuthPhoneRegion regionFromE164(String? e164) {
-    if (e164 != null && e164.trim().startsWith('+1')) {
-      return AuthPhoneRegion.us;
-    }
-    return AuthPhoneRegion.kz;
-  }
-
-  /// Национальная маска для профиля: код страны отдельно в селекторе.
-  static String formatNationalForInput(String e164) {
-    var digits = e164.replaceAll(RegExp(r'[^0-9]'), '');
-    if (digits.isEmpty) return e164;
-
-    if (e164.startsWith('+1') || (digits.startsWith('1') && digits.length == 11)) {
-      final national = digits.length == 11 ? digits.substring(1) : digits;
-      return NationalUsPhoneInputFormatter.maskDigits(national);
-    }
-
-    if (digits.length == 11 && (digits.startsWith('7') || digits.startsWith('8'))) {
-      digits = digits.substring(1);
-    }
-    return NationalKzPhoneInputFormatter.maskDigits(digits);
-  }
-
-  /// Маска для поля ввода из E.164 (+77771234567 / +15551234567).
-  static String formatForInput(String e164) {
-    final digits = e164.replaceAll(RegExp(r'[^0-9]'), '');
-    if (digits.isEmpty) return e164;
-
-    if (e164.startsWith('+1') || (digits.startsWith('1') && digits.length == 11)) {
-      var normalized = digits;
-      if (!normalized.startsWith('1')) {
-        normalized = '1$normalized';
+  static PhoneCountry countryFromE164(String? e164) {
+    final digits = e164?.replaceAll(RegExp(r'[^0-9]'), '') ?? '';
+    if (digits.isEmpty) return PhoneCountry.kazakhstan;
+    final sorted = [...PhoneCountry.all]
+      ..sort((a, b) => b.dial.length.compareTo(a.dial.length));
+    for (final country in sorted) {
+      if (digits.startsWith(country.dial) &&
+          digits.length == country.dial.length + country.nationalLength) {
+        if (country.dial == '7') return PhoneCountry.kazakhstan;
+        return country;
       }
-      return UsPhoneInputFormatter.maskDigits(normalized);
     }
+    return PhoneCountry.kazakhstan;
+  }
 
-    var normalized = digits;
-    if (normalized.startsWith('8') && normalized.length > 1) {
-      normalized = '7${normalized.substring(1)}';
-    } else if (!normalized.startsWith('7')) {
-      normalized = '7$normalized';
+  static String formatNationalForInput(String e164) {
+    final country = countryFromE164(e164);
+    var digits = e164.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.startsWith(country.dial)) {
+      digits = digits.substring(country.dial.length);
     }
-    return KazakhstanPhoneInputFormatter.maskDigits(normalized);
+    return NationalPhoneInputFormatter.maskDigits(digits, country);
   }
 
   static String? validationMessage(
     String? value, {
-    AuthPhoneRegion region = AuthPhoneRegion.kz,
-    bool nationalDigitsOnly = false,
+    PhoneCountry country = PhoneCountry.kazakhstan,
+    bool nationalDigitsOnly = true,
   }) {
     if (value == null || value.trim().isEmpty) {
       return 'Введите номер телефона';
     }
-    if (!isValidPhone(
-      value,
-      region: region,
-      nationalDigitsOnly: nationalDigitsOnly,
-    )) {
-      if (nationalDigitsOnly) {
-        return region == AuthPhoneRegion.us
-            ? '10 цифр, например (555) 123-4567'
-            : '10 цифр, например (777) 123-45-67';
+    if (normalizeToE164(
+          value,
+          country: country,
+          nationalDigitsOnly: nationalDigitsOnly,
+        ) ==
+        null) {
+      return 'Формат: ${country.dialLabel} ${country.example}';
+    }
+    return null;
+  }
+
+  static PhoneCountry? _matchDial(String digits) {
+    final sorted = [...PhoneCountry.all]
+      ..sort((a, b) => b.dial.length.compareTo(a.dial.length));
+    for (final country in sorted) {
+      if (digits.startsWith(country.dial) &&
+          digits.length == country.dial.length + country.nationalLength) {
+        return country;
       }
-      return region == AuthPhoneRegion.us
-          ? 'Формат: +1 (555) 123-4567'
-          : 'Формат: +7 (777) 123-45-67';
     }
     return null;
   }
 }
 
-/// Национальная часть KZ: (777) 123-45-67
-class NationalKzPhoneInputFormatter extends TextInputFormatter {
+class NationalPhoneInputFormatter extends TextInputFormatter {
+  NationalPhoneInputFormatter(this.country);
+
+  final PhoneCountry country;
+
   @override
   TextEditingValue formatEditUpdate(
     TextEditingValue oldValue,
     TextEditingValue newValue,
   ) {
     final digits = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
-    if (digits.isEmpty) {
-      return const TextEditingValue();
+    if (digits.isEmpty) return const TextEditingValue();
+
+    var national = digits;
+    if (national.length == country.nationalLength + country.dial.length &&
+        national.startsWith(country.dial)) {
+      national = national.substring(country.dial.length);
+    }
+    if (country.dial == '7' &&
+        national.length == 11 &&
+        (national.startsWith('8') || national.startsWith('7'))) {
+      national = national.substring(1);
     }
 
-    final limited =
-        digits.length > 10 ? digits.substring(0, 10) : digits;
-    final masked = maskDigits(limited);
+    final limited = national.length > country.nationalLength
+        ? national.substring(0, country.nationalLength)
+        : national;
+    final masked = maskDigits(limited, country);
     return TextEditingValue(
       text: masked,
       selection: TextSelection.collapsed(offset: masked.length),
     );
   }
 
-  static String maskDigits(String digits) {
-    final buffer = StringBuffer();
-    if (digits.isNotEmpty) {
-      final areaEnd = digits.length > 3 ? 3 : digits.length;
-      buffer.write('(${digits.substring(0, areaEnd)}');
-      if (digits.length >= 3) buffer.write(')');
+  static String maskDigits(String digits, PhoneCountry country) {
+    if (digits.isEmpty) return '';
+    final parts = <String>[];
+    var index = 0;
+    for (final size in country.groups) {
+      if (index >= digits.length) break;
+      final end = index + size > digits.length ? digits.length : index + size;
+      parts.add(digits.substring(index, end));
+      index = end;
     }
-    if (digits.length > 3) {
-      final firstEnd = digits.length > 6 ? 6 : digits.length;
-      buffer.write(' ${digits.substring(3, firstEnd)}');
-    }
-    if (digits.length > 6) {
-      final secondEnd = digits.length > 8 ? 8 : digits.length;
-      buffer.write('-${digits.substring(6, secondEnd)}');
-    }
-    if (digits.length > 8) {
-      buffer.write('-${digits.substring(8, digits.length > 10 ? 10 : digits.length)}');
-    }
-    return buffer.toString();
-  }
-}
-
-/// Национальная часть US: (555) 123-4567
-class NationalUsPhoneInputFormatter extends TextInputFormatter {
-  @override
-  TextEditingValue formatEditUpdate(
-    TextEditingValue oldValue,
-    TextEditingValue newValue,
-  ) {
-    final digits = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
-    if (digits.isEmpty) {
-      return const TextEditingValue();
-    }
-
-    final limited =
-        digits.length > 10 ? digits.substring(0, 10) : digits;
-    final masked = maskDigits(limited);
-    return TextEditingValue(
-      text: masked,
-      selection: TextSelection.collapsed(offset: masked.length),
-    );
-  }
-
-  static String maskDigits(String digits) {
-    final buffer = StringBuffer();
-    if (digits.isNotEmpty) {
-      final areaEnd = digits.length > 3 ? 3 : digits.length;
-      buffer.write('(${digits.substring(0, areaEnd)}');
-      if (digits.length >= 3) buffer.write(')');
-    }
-    if (digits.length > 3) {
-      final firstEnd = digits.length > 6 ? 6 : digits.length;
-      buffer.write(' ${digits.substring(3, firstEnd)}');
-    }
-    if (digits.length > 6) {
-      buffer.write('-${digits.substring(6, digits.length > 10 ? 10 : digits.length)}');
-    }
-    return buffer.toString();
-  }
-}
-
-/// Маска +7 (XXX) XXX-XX-XX
-class KazakhstanPhoneInputFormatter extends TextInputFormatter {
-  @override
-  TextEditingValue formatEditUpdate(
-    TextEditingValue oldValue,
-    TextEditingValue newValue,
-  ) {
-    final digits = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
-    if (digits.isEmpty) {
-      return const TextEditingValue();
-    }
-
-    var normalized = digits;
-    if (normalized.startsWith('8') && normalized.length > 1) {
-      normalized = '7${normalized.substring(1)}';
-    } else if (!normalized.startsWith('7')) {
-      normalized = '7$normalized';
-    }
-
-    final limited = normalized.length > 11
-        ? normalized.substring(0, 11)
-        : normalized;
-
-    final masked = maskDigits(limited);
-    return TextEditingValue(
-      text: masked,
-      selection: TextSelection.collapsed(offset: masked.length),
-    );
-  }
-
-  static String maskDigits(String digits) {
-    return _maskKz(digits);
-  }
-
-  static String _maskKz(String digits) {
-    final buffer = StringBuffer('+7');
-    if (digits.length > 1) {
-      final area = digits.substring(1, digits.length > 4 ? 4 : digits.length);
-      buffer.write(' ($area');
-      if (digits.length >= 4) buffer.write(')');
-    }
-    if (digits.length > 4) {
-      final first = digits.substring(4, digits.length > 7 ? 7 : digits.length);
-      buffer.write(' $first');
-    }
-    if (digits.length > 7) {
-      final second = digits.substring(7, digits.length > 9 ? 9 : digits.length);
-      buffer.write('-$second');
-    }
-    if (digits.length > 9) {
-      final third = digits.substring(9, digits.length > 11 ? 11 : digits.length);
-      buffer.write('-$third');
-    }
-    return buffer.toString();
-  }
-}
-
-/// Маска +1 (XXX) XXX-XXXX
-class UsPhoneInputFormatter extends TextInputFormatter {
-  @override
-  TextEditingValue formatEditUpdate(
-    TextEditingValue oldValue,
-    TextEditingValue newValue,
-  ) {
-    final digits = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
-    if (digits.isEmpty) {
-      return const TextEditingValue();
-    }
-
-    var normalized = digits;
-    if (!normalized.startsWith('1')) {
-      normalized = '1$normalized';
-    }
-
-    final limited = normalized.length > 11
-        ? normalized.substring(0, 11)
-        : normalized;
-
-    final masked = maskDigits(limited);
-    return TextEditingValue(
-      text: masked,
-      selection: TextSelection.collapsed(offset: masked.length),
-    );
-  }
-
-  static String maskDigits(String digits) {
-    return _maskUs(digits);
-  }
-
-  static String _maskUs(String digits) {
-    final buffer = StringBuffer('+1');
-    if (digits.length > 1) {
-      final area = digits.substring(1, digits.length > 4 ? 4 : digits.length);
-      buffer.write(' ($area');
-      if (digits.length >= 4) buffer.write(')');
-    }
-    if (digits.length > 4) {
-      final first = digits.substring(4, digits.length > 7 ? 7 : digits.length);
-      buffer.write(' $first');
-    }
-    if (digits.length > 7) {
-      final second = digits.substring(7, digits.length > 11 ? 11 : digits.length);
-      buffer.write('-$second');
+    final buffer = StringBuffer('(${parts.first}');
+    if (parts.first.length >= country.groups.first) buffer.write(')');
+    for (var i = 1; i < parts.length; i++) {
+      buffer.write(i == 1 ? ' ' : '-');
+      buffer.write(parts[i]);
     }
     return buffer.toString();
   }

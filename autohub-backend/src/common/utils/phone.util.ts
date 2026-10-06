@@ -44,16 +44,44 @@ export function normalizeKzPhone(input: string): string {
   return `+${normalized}`;
 }
 
-/** E.164: Казахстан (+7) или US/CA (+1). */
-export function normalizePhoneE164(input: string): string {
-  const trimmed = input.trim();
-  const digits = trimmed.replace(/\D/g, '');
+/** Код страны и длина национального номера: СНГ и США. */
+const PHONE_COUNTRIES: Array<{ dial: string; national: number }> = [
+  { dial: '998', national: 9 },
+  { dial: '996', national: 9 },
+  { dial: '994', national: 9 },
+  { dial: '993', national: 8 },
+  { dial: '992', national: 9 },
+  { dial: '375', national: 9 },
+  { dial: '374', national: 8 },
+  { dial: '373', national: 8 },
+  { dial: '7', national: 10 },
+  { dial: '1', national: 10 },
+];
 
-  if (trimmed.startsWith('+1') || (digits.startsWith('1') && digits.length === 11)) {
-    return normalizeUsPhone(trimmed);
+/** E.164 для стран СНГ и США. */
+export function normalizePhoneE164(input: string): string {
+  let digits = input.trim().replace(/\D/g, '');
+  if (!digits) {
+    throw new BadRequestException('Введите корректный номер телефона');
   }
 
-  return normalizeKzPhone(trimmed);
+  if (digits.length === 11 && digits.startsWith('8')) {
+    digits = `7${digits.slice(1)}`;
+  }
+
+  const matched = [...PHONE_COUNTRIES]
+    .sort((a, b) => b.dial.length - a.dial.length)
+    .find(
+      (country) =>
+        digits.startsWith(country.dial) &&
+        digits.length === country.dial.length + country.national,
+    );
+
+  if (!matched) {
+    throw new BadRequestException('Введите корректный номер телефона');
+  }
+
+  return `+${digits}`;
 }
 
 /** Сравнение номеров независимо от форматирования в БД. */

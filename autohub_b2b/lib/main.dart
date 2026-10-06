@@ -29,6 +29,8 @@ import 'package:autohub_b2b/screens/whatsapp/whatsapp_screen.dart';
 import 'package:autohub_b2b/screens/vehicles/vehicles_screen.dart';
 import 'package:autohub_b2b/screens/profile/profile_screen.dart';
 import 'package:autohub_b2b/screens/settings/settings_screen.dart';
+import 'package:autohub_b2b/screens/schedule/schedule_screen.dart';
+import 'package:autohub_b2b/screens/payroll/payroll_screen.dart';
 import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/services/auth/secure_storage_service.dart';
 import 'package:autohub_b2b/screens/onboarding/onboarding_screen.dart';
@@ -169,6 +171,8 @@ class _MainScreenState extends State<MainScreen> {
     const AnalyticsScreen(),
     const WhatsAppScreen(),
     const SettingsScreen(),
+    const ScheduleScreen(),
+    const PayrollScreen(),
   ];
 
   @override
@@ -189,6 +193,9 @@ class _MainScreenState extends State<MainScreen> {
           _selectedIndex = 1; // Склад
           _warehouseSubMenuIndex = 0; // Товары
         }
+        if (_userRole == 'UserRole.worker' && _selectedIndex == 0) {
+          _selectedIndex = 8;
+        }
       });
     }
   }
@@ -202,11 +209,23 @@ class _MainScreenState extends State<MainScreen> {
         authState.user.businessType == BusinessType.dismantler) {
       return false;
     }
+    if (section == 'schedule' &&
+        authState.user.businessType == BusinessType.dismantler) {
+      return false;
+    }
+    if (section == 'payroll' &&
+        authState.user.businessType == BusinessType.dismantler) {
+      return false;
+    }
 
     if (_userRole == null) return true;
 
     if (_userRole == 'UserRole.storekeeper') {
       return section == 'warehouse' || section == 'settings';
+    }
+
+    if (_userRole == 'UserRole.worker') {
+      return section == 'schedule' || section == 'payroll';
     }
 
     return true;
@@ -285,6 +304,10 @@ class _MainScreenState extends State<MainScreen> {
         return 'WhatsApp';
       case 7:
         return 'Настройки';
+      case 8:
+        return 'Запись';
+      case 9:
+        return 'Зарплата';
       default:
         return 'AutoHub B2B';
     }
@@ -424,6 +447,13 @@ class _MainScreenState extends State<MainScreen> {
                                   selectedIcon: Icons.dashboard,
                                   label: 'Дашборд',
                                   index: 0,
+                                ),
+                              if (_canAccessSection('schedule', authState))
+                                _buildNavItem(
+                                  icon: Icons.calendar_today_outlined,
+                                  selectedIcon: Icons.calendar_today,
+                                  label: 'Запись',
+                                  index: 8,
                                 ),
                               if (_canAccessSection('warehouse', authState))
                                 _buildWarehouseMenu(),
@@ -660,6 +690,10 @@ class _MainScreenState extends State<MainScreen> {
         return 'WhatsApp';
       case 7:
         return 'Настройки';
+      case 8:
+        return 'Запись';
+      case 9:
+        return 'Зарплата';
       default:
         return 'Auto+ Pro';
     }
@@ -720,9 +754,26 @@ class _MainScreenState extends State<MainScreen> {
                     index: 0,
                     context: context,
                   ),
+                if (_canAccessSection('schedule', authState))
+                  _buildDrawerNavItem(
+                    icon: Icons.calendar_today_outlined,
+                    selectedIcon: Icons.calendar_today,
+                    label: 'Запись',
+                    index: 8,
+                    context: context,
+                  ),
+                if (_canAccessSection('payroll', authState))
+                  _buildDrawerNavItem(
+                    icon: Icons.payments_outlined,
+                    selectedIcon: Icons.payments,
+                    label: 'Зарплата',
+                    index: 9,
+                    context: context,
+                  ),
                 if (_canAccessSection('warehouse', authState))
                   _buildDrawerWarehouseMenu(context),
                 // Модуль "Найти запчасть"
+                if (_canAccessSection('warehouse', authState))
                 ListTile(
                   leading: const Icon(
                     Icons.qr_code_scanner,
@@ -950,11 +1001,18 @@ class _MainScreenState extends State<MainScreen> {
         'section': 'crm',
       },
       {
-        'index': 5,
-        'icon': Icons.analytics,
-        'label': 'Аналитика',
-        'section': 'analytics',
+        'index': 8,
+        'icon': Icons.calendar_today,
+        'label': 'Запись',
+        'section': 'schedule',
       },
+      if (_userRole == 'UserRole.worker')
+        {
+          'index': 9,
+          'icon': Icons.payments,
+          'label': 'Зарплата',
+          'section': 'payroll',
+        },
     ];
 
     final mainSections = allSections

@@ -10,7 +10,6 @@ import 'package:autohub_b2b/widgets/auth/auth_design.dart';
 import 'package:autohub_b2b/widgets/auth/auth_form_field.dart';
 import 'package:autohub_b2b/widgets/auth/auth_phone_field.dart';
 import 'package:autohub_b2b/widgets/auth/auth_primary_button.dart';
-import 'package:autohub_b2b/widgets/auth/auth_role_selector.dart';
 import 'package:autohub_b2b/widgets/auth/auth_screen_shell.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -22,6 +21,7 @@ class RegisterScreen extends StatefulWidget {
 
 class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _phoneKey = GlobalKey<AuthPhoneFieldState>();
   final _nameController = TextEditingController();
   final _organizationController = TextEditingController();
   final _phoneController = TextEditingController();
@@ -30,7 +30,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   bool _agreedToTerms = false;
-  String _role = AuthRoleSelector.owner;
   String? _errorMessage;
 
   @override
@@ -47,8 +46,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
         }
       },
       builder: (context, state) {
-        final isWorker = _role == AuthRoleSelector.worker;
-
         return AuthScreenShell(
           wideForm: true,
           subtitle: 'Создайте аккаунт Auto+ Pro',
@@ -63,11 +60,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                AuthRoleSelector(
-                  value: _role,
-                  onChanged: (role) => setState(() => _role = role),
-                ),
-                const SizedBox(height: 16),
                 AuthFormField(
                   controller: _nameController,
                   label: 'Имя',
@@ -84,7 +76,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 const SizedBox(height: 16),
                 AuthFormField(
                   controller: _organizationController,
-                  label: isWorker ? 'Название организации' : 'Название вашей организации',
+                  label: 'Название вашей организации',
                   icon: Icons.business_outlined,
                   textInputAction: TextInputAction.next,
                   textCapitalization: TextCapitalization.words,
@@ -95,20 +87,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     return null;
                   },
                 ),
-                if (isWorker)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 6),
-                    child: Text(
-                      'Укажите название, которое дал владелец',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AuthDesign.textMuted,
-                        height: 1.35,
-                      ),
-                    ),
-                  ),
                 const SizedBox(height: 16),
                 AuthPhoneField(
+                  key: _phoneKey,
                   controller: _phoneController,
                   textInputAction: TextInputAction.next,
                 ),
@@ -203,14 +184,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
+    final phone = _phoneKey.currentState?.toE164();
+    if (phone == null) return;
+
     FocusScope.of(context).unfocus();
     context.read<AuthBloc>().add(
           AuthSignUpRequested(
-            phone: _phoneController.text.trim(),
+            phone: phone,
             password: _passwordController.text,
             name: _nameController.text.trim(),
             organizationName: _organizationController.text.trim(),
-            role: _role,
           ),
         );
   }

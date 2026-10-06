@@ -128,7 +128,7 @@ export class AuthService {
   }
 
   /**
-   * Регистрация: владелец создаёт организацию, мастер присоединяется к существующей.
+   * Регистрация владельца: создаёт организацию. Мастера добавляет владелец в профиле.
    */
   async register(registerDto: RegisterDto) {
     let phoneE164: string;
@@ -146,36 +146,19 @@ export class AuthService {
 
     const displayName = registerDto.name.trim();
     const organizationName = registerDto.organizationName.trim();
-    const role =
-      registerDto.role === 'worker' ? UserRole.WORKER : UserRole.OWNER;
-
-    let organization: Organization;
-
-    if (role === UserRole.OWNER) {
-      const businessType =
-        (registerDto.businessType as BusinessType) || BusinessType.SERVICE;
-
-      organization = await this.organizationsService.create({
-        name: organizationName,
-        businessType,
-        phone: phoneE164,
-        isActive: true,
-      } as any);
-    } else {
-      const found = await this.organizationRepository
-        .createQueryBuilder('org')
-        .where('LOWER(TRIM(org.name)) = LOWER(:name)', { name: organizationName })
-        .andWhere('org.isActive = :active', { active: true })
-        .getOne();
-
-      if (!found) {
-        throw new NotFoundException(
-          'Организация не найдена. Уточните название у владельца.',
-        );
-      }
-
-      organization = found;
+    if (!displayName || !organizationName) {
+      throw new BadRequestException('Укажите имя и название организации');
     }
+
+    const businessType =
+      (registerDto.businessType as BusinessType) || BusinessType.SERVICE;
+
+    const organization = await this.organizationsService.create({
+      name: organizationName,
+      businessType,
+      phone: phoneE164,
+      isActive: true,
+    } as any);
 
     const hashedPassword = await bcrypt.hash(registerDto.password, 10);
     const syntheticEmail = `${phoneDigitsKey(phoneE164)}@phone.autohub.local`;
@@ -185,7 +168,7 @@ export class AuthService {
       password: hashedPassword,
       name: displayName,
       phone: phoneE164,
-      role,
+      role: UserRole.OWNER,
       organizationId: organization.id,
       isActive: true,
     });
@@ -258,17 +241,29 @@ export class AuthService {
     return this.findUserByOrganizationPhone(phoneE164);
   }
 
-  /** Пользователь-владелец (или первый активный) по телефону организации. */
-  private async findUserByOrganizationPhone(phoneE164: string): Promise<User | null> {
-    const targetKey = phoneDigitsKey(phoneE164);
+  /** Организация по телефону, с которым регистрировался владелец. */
+  private async findOrganizationByPhone(phoneE164: string): Promise<Organization | null> {
+    const exact = await this.organizationRepository.findOne({
+      where: { phone: phoneE164, isActive: true },
+    });
+    if (exact) {
+      return exact;
+    }
 
+    const targetKey = phoneDigitsKey(phoneE164);
     const organizations = await this.organizationRepository.find({
       where: { isActive: true },
     });
-
-    const organization = organizations.find(
-      (org) => org.phone && phoneDigitsKey(org.phone) === targetKey,
+    return (
+      organizations.find(
+        (org) => org.phone && phoneDigitsKey(org.phone) === targetKey,
+      ) ?? null
     );
+  }
+
+  /** Пользователь-владелец (или первый активный) по телефону организации. */
+  private async findUserByOrganizationPhone(phoneE164: string): Promise<User | null> {
+    const organization = await this.findOrganizationByPhone(phoneE164);
 
     if (!organization) {
       return null;

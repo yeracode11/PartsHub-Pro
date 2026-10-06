@@ -96,6 +96,33 @@ class OrderWorkModel {
   }
 }
 
+class OrderPaymentModel {
+  final int id;
+  final double amount;
+  final String method;
+  final DateTime? createdAt;
+
+  const OrderPaymentModel({
+    required this.id,
+    required this.amount,
+    required this.method,
+    this.createdAt,
+  });
+
+  bool get isCard => method == 'card';
+
+  factory OrderPaymentModel.fromJson(Map<String, dynamic> json) {
+    return OrderPaymentModel(
+      id: json['id'] as int,
+      amount: OrderWorkModel._asDouble(json['amount']),
+      method: json['method']?.toString() ?? 'cash',
+      createdAt: json['createdAt'] != null
+          ? DateTime.tryParse(json['createdAt'].toString())
+          : null,
+    );
+  }
+}
+
 /// Позиция справочника работ организации.
 class WorkCatalogModel {
   final int id;
@@ -204,6 +231,9 @@ class OrderModel extends Equatable {
   final Map<String, dynamic>? customer;
   final Map<String, dynamic>? vehicle;
   final List<WorkStageModel>? workStages;
+  final List<OrderPaymentModel> payments;
+  final double paidAmount;
+  final double dueAmount;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -225,6 +255,9 @@ class OrderModel extends Equatable {
     this.customer,
     this.vehicle,
     this.workStages,
+    this.payments = const [],
+    this.paidAmount = 0,
+    this.dueAmount = 0,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -247,6 +280,9 @@ class OrderModel extends Equatable {
     Map<String, dynamic>? customer,
     Map<String, dynamic>? vehicle,
     List<WorkStageModel>? workStages,
+    List<OrderPaymentModel>? payments,
+    double? paidAmount,
+    double? dueAmount,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -268,6 +304,9 @@ class OrderModel extends Equatable {
       customer: customer ?? this.customer,
       vehicle: vehicle ?? this.vehicle,
       workStages: workStages ?? this.workStages,
+      payments: payments ?? this.payments,
+      paidAmount: paidAmount ?? this.paidAmount,
+      dueAmount: dueAmount ?? this.dueAmount,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -366,6 +405,16 @@ class OrderModel extends Equatable {
       customer: json['customer'] as Map<String, dynamic>?,
       vehicle: json['vehicle'] as Map<String, dynamic>?,
       workStages: workStages,
+      payments: json['payments'] is List
+          ? (json['payments'] as List)
+              .map((item) =>
+                  OrderPaymentModel.fromJson(item as Map<String, dynamic>))
+              .toList()
+          : const [],
+      paidAmount: OrderWorkModel._asDouble(json['paidAmount']),
+      dueAmount: json['dueAmount'] != null
+          ? OrderWorkModel._asDouble(json['dueAmount'])
+          : total,
       createdAt: DateTime.parse(json['createdAt'] as String),
       updatedAt: DateTime.parse(json['updatedAt'] as String),
     );
@@ -390,6 +439,9 @@ class OrderModel extends Equatable {
         customer,
         vehicle,
         workStages,
+        payments,
+        paidAmount,
+        dueAmount,
         createdAt,
         updatedAt,
       ];

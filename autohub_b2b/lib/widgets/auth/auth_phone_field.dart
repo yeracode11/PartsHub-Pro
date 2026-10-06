@@ -11,16 +11,18 @@ class AuthPhoneField extends StatefulWidget {
     required this.controller,
     this.textInputAction,
     this.onFieldSubmitted,
-    this.initialRegion = AuthPhoneRegion.kz,
-    this.onRegionChanged,
+    this.initialCountry = PhoneCountry.kazakhstan,
+    this.onCountryChanged,
     this.variant = PhoneFieldVariant.auth,
+    this.label = 'Телефон',
   });
 
   final TextEditingController controller;
+  final String label;
   final TextInputAction? textInputAction;
   final void Function(String)? onFieldSubmitted;
-  final AuthPhoneRegion initialRegion;
-  final ValueChanged<AuthPhoneRegion>? onRegionChanged;
+  final PhoneCountry initialCountry;
+  final ValueChanged<PhoneCountry>? onCountryChanged;
   final PhoneFieldVariant variant;
 
   @override
@@ -28,177 +30,294 @@ class AuthPhoneField extends StatefulWidget {
 }
 
 class AuthPhoneFieldState extends State<AuthPhoneField> {
-  late AuthPhoneRegion _region;
+  late PhoneCountry _country;
 
-  AuthPhoneRegion get region => _region;
+  PhoneCountry get country => _country;
+
+  String? toE164() {
+    return PhoneUtils.normalizeToE164(
+      widget.controller.text,
+      country: _country,
+      nationalDigitsOnly: true,
+    );
+  }
 
   bool get _isProfile => widget.variant == PhoneFieldVariant.profile;
-
-  bool get _nationalOnly => _isProfile;
 
   @override
   void initState() {
     super.initState();
-    _region = widget.initialRegion;
+    _country = widget.initialCountry;
   }
 
-  void _setRegion(AuthPhoneRegion value) {
-    if (_region == value) return;
+  void _setCountry(PhoneCountry value) {
+    if (_country.iso == value.iso && _country.dial == value.dial) return;
     setState(() {
-      _region = value;
+      _country = value;
       widget.controller.clear();
     });
-    widget.onRegionChanged?.call(value);
+    widget.onCountryChanged?.call(value);
+  }
+
+  Future<void> _pickCountry() async {
+    final picked = await showPhoneCountryPicker(context, selected: _country);
+    if (picked != null) _setCountry(picked);
   }
 
   @override
   Widget build(BuildContext context) {
-    final isUs = _region == AuthPhoneRegion.us;
-
-    final countrySelector = _isProfile
-        ? _ProfileCountrySelector(
-            region: _region,
-            onChanged: _setRegion,
-          )
-        : Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<AuthPhoneRegion>(
-                value: _region,
-                borderRadius: AuthDesign.fieldRadius,
-                items: const [
-                  DropdownMenuItem(
-                    value: AuthPhoneRegion.kz,
-                    child: Text('+7'),
-                  ),
-                  DropdownMenuItem(
-                    value: AuthPhoneRegion.us,
-                    child: Text('+1'),
-                  ),
-                ],
-                onChanged: (value) {
-                  if (value != null) _setRegion(value);
-                },
-              ),
-            ),
-          );
-
     final field = TextFormField(
       controller: widget.controller,
       keyboardType: TextInputType.phone,
       textInputAction: widget.textInputAction,
       onFieldSubmitted: widget.onFieldSubmitted,
-      inputFormatters: [
-        if (_nationalOnly)
-          isUs
-              ? NationalUsPhoneInputFormatter()
-              : NationalKzPhoneInputFormatter()
-        else
-          isUs ? UsPhoneInputFormatter() : KazakhstanPhoneInputFormatter(),
-      ],
+      inputFormatters: [NationalPhoneInputFormatter(_country)],
       style: TextStyle(
         fontSize: 16,
         color: _isProfile ? AppTheme.textPrimary : AuthDesign.text,
       ),
       decoration: _isProfile
           ? InputDecoration(
-              labelText: 'Телефон',
-              hintText: isUs ? '(555) 123-4567' : '(777) 123-45-67',
-              prefixIcon: const Icon(Icons.phone_outlined, size: 20),
+              labelText: widget.label,
+              hintText: _country.example,
             )
           : InputDecoration(
-              labelText: 'Телефон',
-              hintText: isUs ? '+1 (555) 123-4567' : '+7 (777) 123-45-67',
-              prefixIcon: const Icon(Icons.phone_outlined, size: 20),
+              labelText: widget.label,
+              hintText: _country.example,
               filled: true,
               fillColor: AuthDesign.surface,
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 16,
                 vertical: 16,
               ),
-              border: OutlineInputBorder(
-                borderRadius: AuthDesign.fieldRadius,
-                borderSide: const BorderSide(color: AuthDesign.border),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: AuthDesign.fieldRadius,
-                borderSide: const BorderSide(color: AuthDesign.border),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: AuthDesign.fieldRadius,
-                borderSide:
-                    const BorderSide(color: AuthDesign.primary, width: 1.5),
-              ),
-              errorBorder: OutlineInputBorder(
-                borderRadius: AuthDesign.fieldRadius,
-                borderSide: const BorderSide(color: AuthDesign.error),
-              ),
-              focusedErrorBorder: OutlineInputBorder(
-                borderRadius: AuthDesign.fieldRadius,
-                borderSide:
-                    const BorderSide(color: AuthDesign.error, width: 1.5),
-              ),
+              border: _border(AuthDesign.border),
+              enabledBorder: _border(AuthDesign.border),
+              focusedBorder: _border(AuthDesign.primary, width: 1.5),
+              errorBorder: _border(AuthDesign.error),
+              focusedErrorBorder: _border(AuthDesign.error, width: 1.5),
             ),
       validator: (value) => PhoneUtils.validationMessage(
         value,
-        region: _region,
-        nationalDigitsOnly: _nationalOnly,
+        country: _country,
       ),
     );
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        countrySelector,
+        _CountryButton(
+          country: _country,
+          profile: _isProfile,
+          onPressed: _pickCountry,
+        ),
         const SizedBox(width: 8),
         Expanded(child: field),
       ],
     );
   }
+
+  OutlineInputBorder _border(Color color, {double width = 1}) {
+    return OutlineInputBorder(
+      borderRadius: AuthDesign.fieldRadius,
+      borderSide: BorderSide(color: color, width: width),
+    );
+  }
 }
 
-class _ProfileCountrySelector extends StatelessWidget {
-  const _ProfileCountrySelector({
-    required this.region,
-    required this.onChanged,
+class _CountryButton extends StatelessWidget {
+  const _CountryButton({
+    required this.country,
+    required this.profile,
+    required this.onPressed,
   });
 
-  final AuthPhoneRegion region;
-  final ValueChanged<AuthPhoneRegion> onChanged;
+  final PhoneCountry country;
+  final bool profile;
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 88,
-      child: InputDecorator(
-        decoration: InputDecoration(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-          labelText: 'Код',
-        ),
-        child: DropdownButtonHideUnderline(
-          child: DropdownButton<AuthPhoneRegion>(
-            isExpanded: true,
-            value: region,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: AppTheme.textPrimary,
-            ),
-            icon: const Icon(Icons.expand_more, size: 20),
-            items: const [
-              DropdownMenuItem(
-                value: AuthPhoneRegion.kz,
-                child: Text('+7'),
+    final border = profile ? AppTheme.borderColor : AuthDesign.border;
+    final background = profile ? Colors.transparent : AuthDesign.surface;
+    return Material(
+      color: background,
+      borderRadius: AuthDesign.fieldRadius,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: AuthDesign.fieldRadius,
+        child: Container(
+          height: 56,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            borderRadius: AuthDesign.fieldRadius,
+            border: Border.all(color: border),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                country.buttonLabel,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: profile ? AppTheme.textPrimary : AuthDesign.text,
+                ),
               ),
-              DropdownMenuItem(
-                value: AuthPhoneRegion.us,
-                child: Text('+1'),
+              const SizedBox(width: 2),
+              Icon(
+                Icons.expand_more,
+                size: 18,
+                color: profile ? AppTheme.textSecondary : AuthDesign.textMuted,
               ),
             ],
-            onChanged: (value) {
-              if (value != null) onChanged(value);
-            },
           ),
+        ),
+      ),
+    );
+  }
+}
+
+Future<PhoneCountry?> showPhoneCountryPicker(
+  BuildContext context, {
+  required PhoneCountry selected,
+}) {
+  final content = _PhoneCountryList(selected: selected);
+  final width = MediaQuery.sizeOf(context).width;
+  if (width >= 600) {
+    return showDialog<PhoneCountry>(
+      context: context,
+      builder: (context) => Dialog(
+        child: SizedBox(width: 420, height: 520, child: content),
+      ),
+    );
+  }
+  return showModalBottomSheet<PhoneCountry>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (context) => SizedBox(
+      height: MediaQuery.sizeOf(context).height * 0.72,
+      child: content,
+    ),
+  );
+}
+
+class _PhoneCountryList extends StatefulWidget {
+  const _PhoneCountryList({required this.selected});
+
+  final PhoneCountry selected;
+
+  @override
+  State<_PhoneCountryList> createState() => _PhoneCountryListState();
+}
+
+class _PhoneCountryListState extends State<_PhoneCountryList> {
+  final _query = TextEditingController();
+  String _filter = '';
+
+  @override
+  void dispose() {
+    _query.dispose();
+    super.dispose();
+  }
+
+  List<PhoneCountry> get _visible {
+    final query = _filter.trim().toLowerCase();
+    if (query.isEmpty) return PhoneCountry.all;
+    return PhoneCountry.all.where((country) {
+      return country.name.toLowerCase().contains(query) ||
+          country.iso.toLowerCase().contains(query) ||
+          country.dialLabel.contains(query) ||
+          country.dial.contains(query);
+    }).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final countries = _visible;
+    final cis = countries.where((c) => c.group == PhoneCountryGroup.cis);
+    final usa = countries.where((c) => c.group == PhoneCountryGroup.usa);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: Text(
+            'Страна',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: TextField(
+            controller: _query,
+            autofocus: true,
+            decoration: const InputDecoration(
+              hintText: 'Поиск',
+              prefixIcon: Icon(Icons.search, size: 20),
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
+            onChanged: (value) => setState(() => _filter = value),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Expanded(
+          child: ListView(
+            children: [
+              if (cis.isNotEmpty) ...[
+                const _GroupLabel('СНГ'),
+                ...cis.map(_tile),
+              ],
+              if (usa.isNotEmpty) ...[
+                const _GroupLabel('США'),
+                ...usa.map(_tile),
+              ],
+              if (countries.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Text('Ничего не найдено'),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _tile(PhoneCountry country) {
+    final selected = country.iso == widget.selected.iso;
+    return ListTile(
+      title: Text(country.name),
+      trailing: Text(
+        country.dialLabel,
+        style: TextStyle(
+          fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+          color: selected ? AuthDesign.primary : AuthDesign.textMuted,
+        ),
+      ),
+      selected: selected,
+      onTap: () => Navigator.pop(context, country),
+    );
+  }
+}
+
+class _GroupLabel extends StatelessWidget {
+  const _GroupLabel(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: AuthDesign.textMuted,
         ),
       ),
     );

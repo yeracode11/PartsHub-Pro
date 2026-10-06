@@ -224,7 +224,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         'password': event.password,
         'name': event.name.trim(),
         'organizationName': event.organizationName.trim(),
-        'role': event.role,
+        'role': 'owner',
       });
 
       final registerData = registerResponse.data;

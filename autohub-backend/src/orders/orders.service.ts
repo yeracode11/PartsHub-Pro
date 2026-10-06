@@ -1,7 +1,8 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Order, OrderWorkStage } from './entities/order.entity';
+import { OrderPayment, OrderPaymentMethod } from './entities/order-payment.entity';
 import { Vehicle } from '../vehicles/entities/vehicle.entity';
 import { Customer } from '../customers/entities/customer.entity';
 import { OrderItemsService } from '../order-items/order-items.service';
@@ -29,6 +30,8 @@ export class OrdersService {
     private readonly templatesService: TemplatesService,
     private readonly organizationsService: OrganizationsService,
     private readonly worksService: WorksService,
+    @InjectRepository(OrderPayment)
+    private readonly paymentRepository: Repository<OrderPayment>,
   ) {}
 
   private readonly orderRelations = [
@@ -38,6 +41,7 @@ export class OrdersService {
     'items.item',
     'works',
     'works.performer',
+    'payments',
   ];
 
   async getRecentOrders(organizationId: string, limit: number) {
@@ -53,11 +57,12 @@ export class OrdersService {
 
   // Получить только заказы из B2C магазина
   async findB2COrders(organizationId: string) {
-    return await this.orderRepository.find({
+    const orders = await this.orderRepository.find({
       where: { organizationId, isB2C: true },
       relations: this.orderRelations,
       order: { createdAt: 'DESC' },
     });
+    return orders.map((order) => this.decorate(order));
   }
 
   // CRUD методы для управления заказами
@@ -67,7 +72,7 @@ export class OrdersService {
       relations: this.orderRelations,
       order: { createdAt: 'DESC' },
     });
-    return orders;
+    return orders.map((order) => this.decorate(order));
   }
 
   async findOne(id: number, organizationId: string) {
@@ -78,7 +83,7 @@ export class OrdersService {
     if (!order) {
       throw new Error(`Order with ID ${id} not found`);
     }
-    return order;
+    return this.decorate(order);
   }
 
   async create(
@@ -176,8 +181,7 @@ export class OrdersService {
       await this.notifyB2CReservation(createdOrder, actor);
     }
 
-    // Возвращаем заказ с items
-    return createdOrder;
+    return createdOrder ? this.decorate(createdOrder) : createdOrder;
   }
 
 
@@ -205,6 +209,10 @@ export class OrdersService {
       organization: _organization,
       createdAt: _createdAt,
       updatedAt: _updatedAt,
+      paymentStatus: _paymentStatus,
+      payments: _payments,
+      paidAmount: _paidAmount,
+      dueAmount: _dueAmount,
       ...orderData
     } = data as any;
     const previousStatus = existingOrder.status;
@@ -321,6 +329,153 @@ export class OrdersService {
     const worksTotal = await this.worksService.calculateWorksTotal(orderId);
     const totalAmount = Math.round((partsTotal + worksTotal) * 100) / 100;
     await this.orderRepository.update({ id: orderId, organizationId }, { totalAmount });
+    await this.syncPaymentStatus(orderId, organizationId);
+  }
+
+  async addPayment(
+    orderId: number,
+    organizationId: string,
+    input: { amount?: number; method?: string },
+    actor?: { id?: string },
+  ) {
+    const order = await this.orderRepository.findOne({
+      where: { id: orderId, organizationId },
+    });
+    if (!order) {
+      throw new NotFoundException('Заказ не найден');
+    }
+
+    const method = this.parsePaymentMethod(input.method);
+    const amount = this.roundMoney(Number(input.amount));
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new BadRequestException('Укажите сумму оплаты');
+    }
+
+    const due = await this.dueAmount(order);
+    if (amount > due + 0.001) {
+      throw new BadRequestException('Сумма больше остатка');
+    }
+
+    await this.paymentRepository.save(
+      this.paymentRepository.create({
+        organizationId,
+        orderId,
+        amount,
+        method,
+        createdByUserId: actor?.id ?? null,
+      }),
+    );
+    await this.syncPaymentStatus(orderId, organizationId);
+    return this.findOne(orderId, organizationId);
+  }
+
+  async removePayment(orderId: number, paymentId: number, organizationId: string) {
+    const payment = await this.paymentRepository.findOne({
+      where: { id: paymentId, orderId, organizationId },
+    });
+    if (!payment) {
+      throw new NotFoundException('Оплата не найдена');
+    }
+    await this.paymentRepository.delete({ id: paymentId, organizationId });
+    await this.syncPaymentStatus(orderId, organizationId);
+    return this.findOne(orderId, organizationId);
+  }
+
+  async paymentSummary(organizationId: string, from: Date, to: Date) {
+    const rows = await this.paymentRepository
+      .createQueryBuilder('payment')
+      .where('payment.organizationId = :organizationId', { organizationId })
+      .andWhere('payment.createdAt >= :from', { from })
+      .andWhere('payment.createdAt < :to', { to })
+      .getMany();
+
+    let cash = 0;
+    let card = 0;
+    for (const row of rows) {
+      const amount = Number(row.amount);
+      if (row.method === 'card') card += amount;
+      else cash += amount;
+    }
+    return {
+      cash: this.roundMoney(cash),
+      card: this.roundMoney(card),
+      total: this.roundMoney(cash + card),
+      count: rows.length,
+    };
+  }
+
+  private async dueAmount(order: Order): Promise<number> {
+    const payments = await this.paymentRepository.find({
+      where: { orderId: order.id, organizationId: order.organizationId },
+    });
+    const paid = this.roundMoney(
+      payments.reduce((sum, payment) => sum + Number(payment.amount), 0),
+    );
+    const total = Number(order.totalAmount);
+    if (payments.length === 0 && order.paymentStatus === 'paid') {
+      return 0;
+    }
+    return this.roundMoney(Math.max(0, total - paid));
+  }
+
+  private async syncPaymentStatus(orderId: number, organizationId: string) {
+    const order = await this.orderRepository.findOne({
+      where: { id: orderId, organizationId },
+    });
+    if (!order) return;
+
+    const payments = await this.paymentRepository.find({
+      where: { orderId, organizationId },
+    });
+    const paid = this.roundMoney(
+      payments.reduce((sum, payment) => sum + Number(payment.amount), 0),
+    );
+    const total = Number(order.totalAmount);
+    const paymentStatus =
+      payments.length === 0 || paid <= 0
+        ? 'pending'
+        : paid + 0.009 >= total
+          ? 'paid'
+          : 'partially_paid';
+
+    if (payments.length === 0 && order.paymentStatus === 'paid') {
+      return;
+    }
+    if (order.paymentStatus !== paymentStatus) {
+      await this.orderRepository.update(
+        { id: orderId, organizationId },
+        { paymentStatus },
+      );
+    }
+  }
+
+  private decorate(order: Order): Order {
+    const rows = Array.isArray(order.payments) ? order.payments : [];
+    const payments = rows.map((payment) => ({
+      id: payment.id,
+      amount: Number(payment.amount),
+      method: payment.method,
+      createdAt: payment.createdAt,
+    }));
+    const paidFromRows = this.roundMoney(
+      payments.reduce((sum, payment) => sum + payment.amount, 0),
+    );
+    const total = Number(order.totalAmount);
+    const paidAmount =
+      payments.length === 0 && order.paymentStatus === 'paid' ? total : paidFromRows;
+    (order as any).payments = payments;
+    (order as any).paidAmount = paidAmount;
+    (order as any).dueAmount = this.roundMoney(Math.max(0, total - paidAmount));
+    return order;
+  }
+
+  private parsePaymentMethod(method?: string): OrderPaymentMethod {
+    if (method === 'cash' || method === 'card') return method;
+    throw new BadRequestException('Укажите способ оплаты: нал или карта');
+  }
+
+  private roundMoney(value: number): number {
+    return Math.round(value * 100) / 100;
   }
 
   private getDefaultWorkStages(): OrderWorkStage[] {

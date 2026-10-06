@@ -11,6 +11,10 @@ import 'package:autohub_b2b/screens/legal/privacy_policy_screen.dart';
 import 'package:autohub_b2b/screens/settings/settings_screen.dart';
 import 'package:autohub_b2b/screens/legal/terms_of_use_screen.dart';
 import 'package:autohub_b2b/utils/dialog_helper.dart';
+import 'package:autohub_b2b/core/phone/phone_utils.dart';
+import 'package:autohub_b2b/services/api/api_client.dart';
+import 'package:autohub_b2b/services/api/api_user_message.dart';
+import 'package:autohub_b2b/widgets/auth/auth_phone_field.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -22,6 +26,9 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   String? _organizationName;
   String? _organizationPhone;
+  List<Map<String, dynamic>> _masters = [];
+  bool _mastersLoading = false;
+  bool _mastersRequested = false;
 
   @override
   void initState() {
@@ -70,7 +77,205 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Future<void> _loadMasters() async {
+    setState(() => _mastersLoading = true);
+    try {
+      final response = await ApiClient().dio.get('/api/users/staff');
+      if (!mounted) return;
+      setState(() {
+        _masters = (response.data as List).cast<Map<String, dynamic>>();
+        _mastersLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _mastersLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userFacingApiMessage(e))),
+      );
+    }
+  }
+
+  Future<void> _addMaster() async {
+    final created = await showDialog<bool>(
+      context: context,
+      builder: (_) => const _AddMasterDialog(),
+    );
+    if (created == true) _loadMasters();
+  }
+
+  String _payLabel(Map<String, dynamic> master) {
+    final rate = master['payRate'];
+    final value = rate is num ? rate : num.tryParse('$rate') ?? 40;
+    if (master['payType'] == 'hourly') {
+      return '${value.toString()} ₸/час';
+    }
+    return '$value%';
+  }
+
+  Future<void> _editPay(Map<String, dynamic> master) async {
+    var type = master['payType'] == 'hourly' ? 'hourly' : 'percent';
+    final rate = TextEditingController(text: '${master['payRate'] ?? 40}');
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setLocal) => AlertDialog(
+          title: Text(master['name']?.toString() ?? 'Оплата мастера'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<String>(
+                value: type,
+                decoration: const InputDecoration(
+                  labelText: 'Начисление',
+                  border: OutlineInputBorder(),
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'percent', child: Text('Процент от работы')),
+                  DropdownMenuItem(value: 'hourly', child: Text('Ставка за час')),
+                ],
+                onChanged: (value) => setLocal(() => type = value ?? 'percent'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: rate,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: InputDecoration(
+                  labelText: type == 'hourly' ? '₸ за нормо-час' : 'Процент',
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Отмена'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Сохранить'),
+            ),
+          ],
+        ),
+      ),
+    );
+    final raw = rate.text.trim().replaceAll(',', '.');
+    rate.dispose();
+    if (saved != true) return;
+    try {
+      await ApiClient().dio.patch('/api/users/staff/${master['id']}', data: {
+        'payType': type,
+        'payRate': double.tryParse(raw) ?? 40,
+      });
+      _loadMasters();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка'))),
+      );
+    }
+  }
+
+  Future<void> _removeMaster(Map<String, dynamic> master) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Удалить мастера?'),
+        content: Text(master['name']?.toString() ?? ''),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Удалить'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await ApiClient().dio.delete('/api/users/staff/${master['id']}');
+      _loadMasters();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка'))),
+      );
+    }
+  }
+
+  Widget _buildMastersCard() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Мастера',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Добавить мастера',
+                  onPressed: _addMaster,
+                  icon: const Icon(Icons.person_add_outlined),
+                ),
+              ],
+            ),
+            const Padding(
+              padding: EdgeInsets.only(right: 8, bottom: 8),
+              child: Text(
+                'Мастер входит по телефону и паролю, которые вы зададите',
+                style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+              ),
+            ),
+            if (_mastersLoading)
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (_masters.isEmpty)
+              const Padding(
+                padding: EdgeInsets.fromLTRB(0, 4, 8, 12),
+                child: Text('Мастеров пока нет'),
+              )
+            else
+              ..._masters.map(
+                (master) => ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(master['name']?.toString() ?? ''),
+                  subtitle: Text(
+                    '${master['phone'] ?? ''} · ${_payLabel(master)}',
+                  ),
+                  onTap: () => _editPay(master),
+                  trailing: IconButton(
+                    tooltip: 'Удалить',
+                    icon: const Icon(Icons.close),
+                    onPressed: () => _removeMaster(master),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildProfileContent(BuildContext context, UserModel user) {
+    final isOwner = user.role == UserRole.owner;
+    if (isOwner && !_mastersRequested) {
+      _mastersRequested = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _loadMasters();
+      });
+    }
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -198,6 +403,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ],
             ),
           ),
+          if (isOwner) ...[
+            const SizedBox(height: 24),
+            _buildMastersCard(),
+          ],
           const SizedBox(height: 24),
 
           // Действия
@@ -438,6 +647,146 @@ class _ProfileScreenState extends State<ProfileScreen> {
           authBloc.add(AuthSignOutRequested());
         }
       },
+    );
+  }
+}
+
+class _AddMasterDialog extends StatefulWidget {
+  const _AddMasterDialog();
+
+  @override
+  State<_AddMasterDialog> createState() => _AddMasterDialogState();
+}
+
+class _AddMasterDialogState extends State<_AddMasterDialog> {
+  final _name = TextEditingController();
+  final _phone = TextEditingController();
+  final _password = TextEditingController();
+  final _phoneKey = GlobalKey<AuthPhoneFieldState>();
+  final _rate = TextEditingController(text: '40');
+  String _payType = 'percent';
+  bool _saving = false;
+  bool _obscure = true;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _phone.dispose();
+    _password.dispose();
+    _rate.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final name = _name.text.trim();
+    final country = _phoneKey.currentState?.country ?? PhoneCountry.kazakhstan;
+    final phone = PhoneUtils.normalizeToE164(
+      _phone.text.trim(),
+      country: country,
+      nationalDigitsOnly: true,
+    );
+    final password = _password.text;
+    if (name.isEmpty || phone == null || password.length < 6) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Укажите имя, телефон и пароль от 6 символов')),
+      );
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      await ApiClient().dio.post('/api/users/staff', data: {
+        'name': name,
+        'phone': phone,
+        'password': password,
+        'payType': _payType,
+        'payRate': double.tryParse(_rate.text.trim().replaceAll(',', '.')) ?? 40,
+      });
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка'))),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Новый мастер'),
+      content: SizedBox(
+        width: 420,
+        child: SingleChildScrollView(
+          child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _name,
+              autofocus: true,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(
+                labelText: 'Имя',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            AuthPhoneField(
+              key: _phoneKey,
+              controller: _phone,
+              variant: PhoneFieldVariant.profile,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _password,
+              obscureText: _obscure,
+              decoration: InputDecoration(
+                labelText: 'Пароль',
+                border: const OutlineInputBorder(),
+                suffixIcon: IconButton(
+                  onPressed: () => setState(() => _obscure = !_obscure),
+                  icon: Icon(
+                    _obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              value: _payType,
+              decoration: const InputDecoration(
+                labelText: 'Начисление',
+                border: OutlineInputBorder(),
+              ),
+              items: const [
+                DropdownMenuItem(value: 'percent', child: Text('Процент от работы')),
+                DropdownMenuItem(value: 'hourly', child: Text('Ставка за час')),
+              ],
+              onChanged: (value) => setState(() => _payType = value ?? 'percent'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _rate,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: InputDecoration(
+                labelText: _payType == 'hourly' ? '₸ за нормо-час' : 'Процент',
+                border: const OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _saving ? null : () => Navigator.pop(context),
+          child: const Text('Отмена'),
+        ),
+        FilledButton(
+          onPressed: _saving ? null : _save,
+          child: const Text('Добавить'),
+        ),
+      ],
     );
   }
 }

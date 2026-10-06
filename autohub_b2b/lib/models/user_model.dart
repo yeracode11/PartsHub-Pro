@@ -15,7 +15,7 @@ enum UserRole {
       case UserRole.storekeeper:
         return 'Кладовщик';
       case UserRole.worker:
-        return 'Мастер/Мойщик';
+        return 'Мастер';
     }
   }
 }

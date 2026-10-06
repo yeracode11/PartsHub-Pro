@@ -19,6 +19,7 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _phoneKey = GlobalKey<AuthPhoneFieldState>();
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
@@ -62,6 +63,7 @@ class _LoginScreenState extends State<LoginScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 AuthPhoneField(
+                  key: _phoneKey,
                   controller: _phoneController,
                   textInputAction: TextInputAction.next,
                 ),
@@ -121,10 +123,13 @@ class _LoginScreenState extends State<LoginScreen> {
     if (state is AuthLoading) return;
     if (_formKey.currentState?.validate() != true) return;
 
+    final phone = _phoneKey.currentState?.toE164();
+    if (phone == null) return;
+
     FocusScope.of(context).unfocus();
     context.read<AuthBloc>().add(
           AuthSignInRequested(
-            phone: _phoneController.text.trim(),
+            phone: phone,
             password: _passwordController.text,
           ),
         );

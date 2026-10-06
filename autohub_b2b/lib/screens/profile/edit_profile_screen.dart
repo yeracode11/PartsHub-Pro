@@ -32,7 +32,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late final UserApiService _userApiService;
   bool _isLoading = false;
   bool _phoneReady = false;
-  AuthPhoneRegion _phoneRegion = AuthPhoneRegion.kz;
+  PhoneCountry _phoneCountry = PhoneCountry.kazakhstan;
 
   @override
   void initState() {
@@ -50,7 +50,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     if (!mounted) return;
     setState(() {
       if (phone != null && phone.isNotEmpty) {
-        _phoneRegion = PhoneUtils.regionFromE164(phone);
+        _phoneCountry = PhoneUtils.countryFromE164(phone);
         _phoneController.text = PhoneUtils.formatNationalForInput(phone);
       }
       _phoneReady = true;
@@ -75,10 +75,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     });
 
     try {
-      final region = _phoneFieldKey.currentState?.region ?? _phoneRegion;
+      final country = _phoneFieldKey.currentState?.country ?? _phoneCountry;
       final phoneE164 = PhoneUtils.normalizeToE164(
         _phoneController.text.trim(),
-        region: region,
+        country: country,
         nationalDigitsOnly: true,
       );
       if (phoneE164 == null) {
@@ -195,9 +195,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 AuthPhoneField(
                   key: _phoneFieldKey,
                   controller: _phoneController,
-                  initialRegion: _phoneRegion,
+                  initialCountry: _phoneCountry,
                   variant: PhoneFieldVariant.profile,
-                  onRegionChanged: (r) => _phoneRegion = r,
+                  onCountryChanged: (country) => _phoneCountry = country,
                 ),
                 const SizedBox(height: 16),
               ] else

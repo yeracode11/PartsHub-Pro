@@ -9,15 +9,18 @@ import 'package:autohub_b2b/screens/receipt/receipt_preview_screen.dart';
 import 'package:autohub_b2b/screens/vehicles/vehicle_detail_screen.dart';
 import 'package:autohub_b2b/services/auth/secure_storage_service.dart';
 import 'package:autohub_b2b/services/api/api_user_message.dart';
+import 'package:autohub_b2b/widgets/orders/order_payment_section.dart';
 
 class OrderDetailScreen extends StatefulWidget {
   final OrderModel order;
   final Dio dio;
+  final VoidCallback? onPaymentsChanged;
 
   const OrderDetailScreen({
     super.key,
     required this.order,
     required this.dio,
+    this.onPaymentsChanged,
   });
 
   @override
@@ -26,7 +29,6 @@ class OrderDetailScreen extends StatefulWidget {
 
 class _OrderDetailScreenState extends State<OrderDetailScreen> {
   String selectedStatus = 'pending';
-  String selectedPaymentStatus = 'pending';
   bool isSaving = false;
   List<WorkStageModel> workStages = [];
   bool _canSeeWorkOrder = false;
@@ -35,7 +37,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   void initState() {
     super.initState();
     selectedStatus = widget.order.status;
-    selectedPaymentStatus = widget.order.paymentStatus;
     if (widget.order.workStages != null) {
       workStages = widget.order.workStages!;
     } else if (widget.order.isB2C) {
@@ -74,7 +75,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         '/api/orders/${widget.order.id}',
         data: {
           'status': selectedStatus,
-          'paymentStatus': selectedPaymentStatus,
           if (_canSeeWorkOrder && workStages.isNotEmpty)
             'workStages': workStages.map((stage) => stage.toJson()).toList(),
         },
@@ -373,19 +373,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     final numberFormat = NumberFormat('#,###', 'ru_RU');
     final dateFormat = DateFormat('dd.MM.yyyy HH:mm');
     final items = widget.order.items ?? [];
-    
-    // Если товаров нет, показываем сообщение
-    if (items.isEmpty) {
-      return Scaffold(
-        appBar: AppBar(
-          title: Text('Заказ ${widget.order.orderNumber ?? '#${widget.order.id}'}'),
-          actions: _documentActions(),
-        ),
-        body: const Center(
-          child: Text('Товары в заказе не найдены'),
-        ),
-      );
-    }
 
     return Scaffold(
       appBar: AppBar(
@@ -502,38 +489,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Статус оплаты',
-                                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                                      color: AppTheme.textSecondary,
-                                    ),
-                              ),
-                              const SizedBox(height: 8),
-                              DropdownButtonFormField<String>(
-                                value: selectedPaymentStatus,
-                                decoration: const InputDecoration(
-                                  border: OutlineInputBorder(),
-                                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                ),
-                                items: const [
-                                  DropdownMenuItem(value: 'pending', child: Text('Не оплачен')),
-                                  DropdownMenuItem(value: 'partially_paid', child: Text('Частично')),
-                                  DropdownMenuItem(value: 'paid', child: Text('Оплачен')),
-                                ],
-                                onChanged: (value) {
-                                  setState(() {
-                                    selectedPaymentStatus = value!;
-                                  });
-                                },
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
                                 'Сумма заказа',
                                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
                                       color: AppTheme.textSecondary,
@@ -563,6 +518,25 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 ),
               ),
             ),
+
+            if (widget.order.id != null) ...[
+              const SizedBox(height: 16),
+              OrderPaymentSection(
+                dio: widget.dio,
+                orderId: widget.order.id!,
+                total: widget.order.total,
+                payments: widget.order.payments,
+                paidAmount: widget.order.paidAmount,
+                dueAmount: widget.order.payments.isNotEmpty ||
+                        widget.order.paidAmount > 0 ||
+                        widget.order.paymentStatus == 'paid'
+                    ? widget.order.dueAmount
+                    : (widget.order.dueAmount > 0
+                        ? widget.order.dueAmount
+                        : widget.order.total),
+                onChanged: widget.onPaymentsChanged,
+              ),
+            ],
 
             const SizedBox(height: 24),
 

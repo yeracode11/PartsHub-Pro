@@ -21,6 +21,8 @@ import { IncomingModule } from './incoming/incoming.module';
 import { WarehousesModule } from './warehouses/warehouses.module';
 import { AdminModule } from './admin/admin.module';
 import { WorksModule } from './works/works.module';
+import { ScheduleModule } from './schedule/schedule.module';
+import { PayrollModule } from './payroll/payroll.module';
 import { WhatsAppExceptionFilter } from './whatsapp/whatsapp-exception.filter';
 
 const logger = new Logger('AppModule');
@@ -113,6 +115,8 @@ const logger = new Logger('AppModule');
     IncomingModule,
     WarehousesModule,
     WorksModule,
+    ScheduleModule,
+    PayrollModule,
     AdminModule,
   ],
   controllers: [AppController],

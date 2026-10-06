@@ -19,8 +19,8 @@ export class RegisterDto {
   organizationName: string;
 
   @IsString()
-  @IsIn(['owner', 'worker'], { message: 'Роль должна быть owner или worker' })
-  role: 'owner' | 'worker';
+  @IsIn(['owner'], { message: 'Регистрация доступна только владельцу' })
+  role: 'owner';
 
   @IsString()
   @IsOptional()
