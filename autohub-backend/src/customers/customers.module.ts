@@ -5,8 +5,10 @@ import { CustomersController } from './customers.controller';
 import { Customer } from './entities/customer.entity';
 import { OrganizationsModule } from '../organizations/organizations.module';
 
+import { AuditModule } from '../audit/audit.module';
+
 @Module({
-  imports: [TypeOrmModule.forFeature([Customer]), OrganizationsModule],
+  imports: [TypeOrmModule.forFeature([Customer]), OrganizationsModule, AuditModule],
   providers: [CustomersService],
   controllers: [CustomersController],
   exports: [CustomersService],

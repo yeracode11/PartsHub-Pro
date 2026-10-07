@@ -2,6 +2,8 @@ import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import { averagePurchaseCost, IncomingService } from './incoming.service';
+import { InventoryService } from '../inventory/inventory.service';
+import { MovementType } from '../inventory/entities/inventory-movement.entity';
 import {
   IncomingDoc,
   IncomingDocType,
@@ -17,6 +19,7 @@ describe('IncomingService', () => {
   let itemRepository: any;
   let dataSource: any;
   let queryRunner: any;
+  let inventory: { apply: jest.Mock };
 
   const currentYear = new Date().getFullYear();
 
@@ -59,6 +62,7 @@ describe('IncomingService', () => {
 
     incomingItemRepository = {};
     itemRepository = {};
+    inventory = { apply: jest.fn() };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -78,6 +82,10 @@ describe('IncomingService', () => {
         {
           provide: DataSource,
           useValue: dataSource,
+        },
+        {
+          provide: InventoryService,
+          useValue: inventory,
         },
       ],
     }).compile();
@@ -170,7 +178,7 @@ describe('IncomingService', () => {
           entity ? itemQb : claimQb,
         ),
         update: jest.fn(),
-        save: jest.fn(),
+        save: jest.fn(async (_entity, data) => ({ ...data, id: 9 })),
       };
       dataSource.transaction = jest.fn(async (cb) => cb(manager));
     });
@@ -185,7 +193,17 @@ describe('IncomingService', () => {
       expect(manager.update).toHaveBeenCalledWith(
         Item,
         { id: 5, organizationId: 'org-1' },
-        { quantity: 4, purchaseCost: '25000.00', warehouseCell: 'A-1' },
+        { purchaseCost: '25000.00', warehouseCell: 'A-1' },
+      );
+      expect(inventory.apply).toHaveBeenCalledWith(
+        expect.objectContaining({
+          organizationId: 'org-1',
+          itemId: 5,
+          type: MovementType.RECEIVING,
+          quantityDelta: 2,
+          documentType: 'incoming_doc',
+        }),
+        manager,
       );
     });
 
@@ -207,7 +225,16 @@ describe('IncomingService', () => {
           price: 45000,
           purchaseCost: '30000.00',
           oemNormalized: '8115033A10',
+          quantity: 0,
         }),
+      );
+      expect(inventory.apply).toHaveBeenCalledWith(
+        expect.objectContaining({
+          itemId: 9,
+          type: MovementType.RECEIVING,
+          quantityDelta: 2,
+        }),
+        manager,
       );
     });
 
@@ -221,6 +248,7 @@ describe('IncomingService', () => {
         'Накладная уже проведена',
       );
       expect(manager.update).not.toHaveBeenCalled();
+      expect(inventory.apply).not.toHaveBeenCalled();
     });
   });
 });

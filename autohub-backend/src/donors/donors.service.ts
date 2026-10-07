@@ -19,6 +19,8 @@ import {
   summarizeDonorEconomics,
 } from './donor-economics';
 import { AuditService, diffFields } from '../audit/audit.service';
+import { InventoryService } from '../inventory/inventory.service';
+import { MovementType } from '../inventory/entities/inventory-movement.entity';
 import { normalizeOem } from '../items/oem';
 import { PartCompatibility } from '../items/entities/part-compatibility.entity';
 import {
@@ -29,8 +31,8 @@ import {
 } from './donor-status';
 
 /** Деньги по заказу считаем полученными, когда заказ завершён или оплачен. */
-const SOLD_CONDITION = `o.status <> 'cancelled' AND (o.status = 'completed' OR o."paymentStatus" = 'paid')`;
-const PENDING_CONDITION = `o.status <> 'cancelled' AND NOT (o.status = 'completed' OR o."paymentStatus" = 'paid')`;
+const SOLD_CONDITION = `o.status <> 'cancelled' AND (o.status IN ('completed', 'returned') OR o."paymentStatus" = 'paid')`;
+const PENDING_CONDITION = `o.status <> 'cancelled' AND o.status <> 'returned' AND NOT (o.status = 'completed' OR o."paymentStatus" = 'paid')`;
 
 /** Снятая деталь точно подходит на свою машину-донора. */
 export function donorCompatibility(donor: DonorVehicle) {
@@ -105,6 +107,7 @@ export class DonorsService {
     private readonly itemRepository: Repository<Item>,
     private readonly dataSource: DataSource,
     private readonly auditService: AuditService,
+    private readonly inventoryService: InventoryService,
   ) {}
 
   async findAll(
@@ -345,14 +348,15 @@ export class DonorsService {
 
     const origin = this.describeOrigin(donor);
     const created = await this.dataSource.transaction(async (manager) => {
-      const items = dto.parts.map((part) =>
-        manager.create(Item, {
+      const drafts = dto.parts.map((part) => ({
+        quantity: part.quantity ?? 1,
+        item: manager.create(Item, {
           organizationId,
           donorId: donor.id,
           name: part.name.trim(),
           category: part.category?.trim() || null,
           price: part.price,
-          quantity: part.quantity ?? 1,
+          quantity: 0,
           condition: part.condition || 'used',
           warehouseCell: part.warehouseCell?.trim() || null,
           sku: part.sku?.trim() || null,
@@ -363,8 +367,28 @@ export class DonorsService {
             : origin,
           syncedToB2C: true,
         }),
+      }));
+      const saved = await manager.save(
+        Item,
+        drafts.map((draft) => draft.item),
       );
-      const saved = await manager.save(Item, items);
+      for (let i = 0; i < saved.length; i++) {
+        if (drafts[i].quantity <= 0) continue;
+        const updated = await this.inventoryService.apply(
+          {
+            organizationId,
+            itemId: saved[i].id,
+            type: MovementType.RECEIVING,
+            quantityDelta: drafts[i].quantity,
+            userId: actorId,
+            documentType: 'donor',
+            documentId: String(donor.id),
+            reason: 'снято с донора',
+          },
+          manager,
+        );
+        saved[i].quantity = updated.quantity;
+      }
       await manager.insert(
         PartCompatibility,
         saved.map((item) => ({

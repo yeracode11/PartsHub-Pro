@@ -7,12 +7,15 @@ import { TransfersController } from './transfers.controller';
 import { Warehouse } from './entities/warehouse.entity';
 import { WarehouseTransfer } from './entities/warehouse-transfer.entity';
 import { Item } from '../items/entities/item.entity';
+import { InventoryModule } from '../inventory/inventory.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Warehouse, WarehouseTransfer, Item])],
+  imports: [
+    TypeOrmModule.forFeature([Warehouse, WarehouseTransfer, Item]),
+    InventoryModule,
+  ],
   controllers: [WarehousesController, TransfersController],
   providers: [WarehousesService, TransfersService],
   exports: [WarehousesService, TransfersService],
 })
 export class WarehousesModule {}
-

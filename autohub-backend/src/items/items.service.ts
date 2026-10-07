@@ -22,6 +22,8 @@ import {
 } from './item-catalog';
 import { normalizeOem } from './oem';
 import { AuditService, diffFields } from '../audit/audit.service';
+import { InventoryService } from '../inventory/inventory.service';
+import { MovementType } from '../inventory/entities/inventory-movement.entity';
 
 export interface ItemReadOptions {
   /** Закупочная цена — только для финансовых ролей. */
@@ -54,6 +56,7 @@ export class ItemsService {
     @InjectRepository(Item)
     private readonly itemRepository: Repository<Item>,
     private readonly auditService: AuditService,
+    private readonly inventoryService: InventoryService,
   ) {}
 
   async getPopularItems(organizationId: string, limit: number) {
@@ -71,7 +74,9 @@ export class ItemsService {
       .where('item."organizationId" = :organizationId', { organizationId })
       .andWhere('ord."organizationId" = :organizationId', { organizationId })
       .andWhere(`ord.status <> 'cancelled'`)
-      .andWhere(`(ord.status = 'completed' OR ord."paymentStatus" = 'paid')`)
+      .andWhere(
+        `(ord.status IN ('completed', 'returned') OR ord."paymentStatus" = 'paid')`,
+      )
       .groupBy('item.id')
       .addGroupBy('item.name')
       .addGroupBy('item.price')
@@ -295,17 +300,35 @@ export class ItemsService {
     const input = parseItemCatalogInput(data, {
       canEditCost: !!options.includeFinance,
     });
+    const openingQuantity = Number(input.fields.quantity ?? 0);
+    delete input.fields.quantity;
     const id = await this.withBarcodeGuard(() =>
       this.itemRepository.manager.transaction(async (manager) => {
         const saved = await manager.save(
           Item,
           manager.create(Item, {
             ...input.fields,
+            quantity: 0,
             organizationId,
             syncedToB2C: true, // Автоматически синхронизируем новые товары в B2C
           }),
         );
         await this.replaceRelations(manager, saved.id, organizationId, input);
+        if (Number.isInteger(openingQuantity) && openingQuantity > 0) {
+          await this.inventoryService.apply(
+            {
+              organizationId,
+              itemId: saved.id,
+              type: MovementType.RECEIVING,
+              quantityDelta: openingQuantity,
+              userId: options.actorId,
+              documentType: 'item',
+              documentId: String(saved.id),
+              reason: 'создание',
+            },
+            manager,
+          );
+        }
         return saved.id;
       }),
     );
@@ -324,6 +347,11 @@ export class ItemsService {
     const input = parseItemCatalogInput(data, {
       canEditCost: !!options.includeFinance,
     });
+    const requestedQuantity =
+      input.fields.quantity === undefined
+        ? undefined
+        : Number(input.fields.quantity);
+    delete input.fields.quantity;
 
     await this.withBarcodeGuard(() =>
       this.itemRepository.manager.transaction(async (manager) => {
@@ -331,6 +359,25 @@ export class ItemsService {
           await manager.update(Item, { id, organizationId }, input.fields);
         }
         await this.replaceRelations(manager, id, organizationId, input);
+        if (
+          requestedQuantity !== undefined &&
+          Number.isInteger(requestedQuantity) &&
+          requestedQuantity !== Number(before.quantity)
+        ) {
+          await this.inventoryService.apply(
+            {
+              organizationId,
+              itemId: id,
+              type: MovementType.INVENTORY_ADJUSTMENT,
+              quantityDelta: requestedQuantity - Number(before.quantity),
+              userId: options.actorId,
+              documentType: 'item',
+              documentId: String(id),
+              reason: 'правка карточки',
+            },
+            manager,
+          );
+        }
         await this.auditService.record(
           {
             organizationId,

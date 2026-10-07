@@ -93,7 +93,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(userFacingApiMessage(e, prefix: 'Ошибка обновления заказа')),
+            content: Text(
+              userFacingApiMessage(e, prefix: 'Ошибка обновления заказа'),
+            ),
             backgroundColor: Colors.red,
           ),
         );
@@ -316,9 +318,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           children: [
             Text(
               'Работы (${works.length})',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
             ...works.map((work) {
@@ -337,11 +339,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                           Text(
                             [
                               '${work.normHours} н/ч × ${numberFormat.format(work.pricePerHour)} ₸',
-                              if (performer != null && performer.isNotEmpty) performer,
+                              if (performer != null && performer.isNotEmpty)
+                                performer,
                             ].join(' · '),
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: AppTheme.textSecondary,
-                                ),
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: AppTheme.textSecondary),
                           ),
                         ],
                       ),
@@ -349,8 +351,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     Text(
                       '${numberFormat.format(work.subtotal)} ₸',
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ],
                 ),
@@ -376,7 +378,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Заказ ${widget.order.orderNumber ?? '#${widget.order.id}'}'),
+        title: Text(
+          'Заказ ${widget.order.orderNumber ?? '#${widget.order.id}'}',
+        ),
         actions: [
           ..._documentActions(),
           if (isSaving)
@@ -416,23 +420,25 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                             children: [
                               Text(
                                 'Номер заказа',
-                                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                                      color: AppTheme.textSecondary,
-                                    ),
+                                style: Theme.of(context).textTheme.labelMedium
+                                    ?.copyWith(color: AppTheme.textSecondary),
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                widget.order.orderNumber ?? '#${widget.order.id}',
-                                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                      fontWeight: FontWeight.bold,
-                                    ),
+                                widget.order.orderNumber ??
+                                    '#${widget.order.id}',
+                                style: Theme.of(context).textTheme.titleLarge
+                                    ?.copyWith(fontWeight: FontWeight.bold),
                               ),
                             ],
                           ),
                         ),
                         if (widget.order.isB2C)
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
                             decoration: BoxDecoration(
                               color: AppTheme.primaryColor.withOpacity(0.1),
                               borderRadius: BorderRadius.circular(8),
@@ -457,22 +463,36 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                             children: [
                               Text(
                                 'Статус',
-                                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                                      color: AppTheme.textSecondary,
-                                    ),
+                                style: Theme.of(context).textTheme.labelMedium
+                                    ?.copyWith(color: AppTheme.textSecondary),
                               ),
                               const SizedBox(height: 8),
                               DropdownButtonFormField<String>(
                                 value: selectedStatus,
                                 decoration: const InputDecoration(
                                   border: OutlineInputBorder(),
-                                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                  contentPadding: EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 8,
+                                  ),
                                 ),
                                 items: const [
-                                  DropdownMenuItem(value: 'pending', child: Text('Ожидание')),
-                                  DropdownMenuItem(value: 'processing', child: Text('В работе')),
-                                  DropdownMenuItem(value: 'completed', child: Text('Завершен')),
-                                  DropdownMenuItem(value: 'cancelled', child: Text('Отменен')),
+                                  DropdownMenuItem(
+                                    value: 'pending',
+                                    child: Text('Ожидание'),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: 'processing',
+                                    child: Text('В работе'),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: 'completed',
+                                    child: Text('Завершен'),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: 'cancelled',
+                                    child: Text('Отменен'),
+                                  ),
                                 ],
                                 onChanged: (value) {
                                   setState(() {
@@ -490,14 +510,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                             children: [
                               Text(
                                 'Сумма заказа',
-                                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                                      color: AppTheme.textSecondary,
-                                    ),
+                                style: Theme.of(context).textTheme.labelMedium
+                                    ?.copyWith(color: AppTheme.textSecondary),
                               ),
                               const SizedBox(height: 4),
                               Text(
                                 '${numberFormat.format(widget.order.total)} ₸',
-                                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                style: Theme.of(context).textTheme.titleLarge
+                                    ?.copyWith(
                                       fontWeight: FontWeight.bold,
                                       color: AppTheme.primaryColor,
                                     ),
@@ -511,8 +531,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     Text(
                       'Дата создания: ${dateFormat.format(widget.order.createdAt)}',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: AppTheme.textSecondary,
-                          ),
+                        color: AppTheme.textSecondary,
+                      ),
                     ),
                   ],
                 ),
@@ -527,13 +547,15 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 total: widget.order.total,
                 payments: widget.order.payments,
                 paidAmount: widget.order.paidAmount,
-                dueAmount: widget.order.payments.isNotEmpty ||
+                dueAmount:
+                    widget.order.payments.isNotEmpty ||
                         widget.order.paidAmount > 0 ||
                         widget.order.paymentStatus == 'paid'
                     ? widget.order.dueAmount
                     : (widget.order.dueAmount > 0
-                        ? widget.order.dueAmount
-                        : widget.order.total),
+                          ? widget.order.dueAmount
+                          : widget.order.total),
+                items: widget.order.items ?? const [],
                 onChanged: widget.onPaymentsChanged,
               ),
             ],
@@ -552,16 +574,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                         children: [
                           Text(
                             'Заказ-наряд',
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                ),
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.bold),
                           ),
                           const Spacer(),
                           Text(
                             'Выполнено: ${(100 * _overallProgress()).toStringAsFixed(0)}%',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: AppTheme.textSecondary,
-                                ),
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: AppTheme.textSecondary),
                           ),
                         ],
                       ),
@@ -588,8 +608,15 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: ExpansionTile(
-                            tilePadding: const EdgeInsets.symmetric(horizontal: 16),
-                            childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                            tilePadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                            ),
+                            childrenPadding: const EdgeInsets.fromLTRB(
+                              16,
+                              0,
+                              16,
+                              12,
+                            ),
                             leading: Icon(
                               isComplete
                                   ? Icons.check_circle
@@ -603,16 +630,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                 Expanded(
                                   child: Text(
                                     stage.title,
-                                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                          fontWeight: FontWeight.w600,
-                                        ),
+                                    style: Theme.of(context).textTheme.bodyLarge
+                                        ?.copyWith(fontWeight: FontWeight.w600),
                                   ),
                                 ),
                                 Text(
                                   '($done/$total)',
-                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                        color: AppTheme.textSecondary,
-                                      ),
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(color: AppTheme.textSecondary),
                                 ),
                               ],
                             ),
@@ -632,7 +657,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                   padding: const EdgeInsets.only(bottom: 8),
                                   child: Text(
                                     'Операций пока нет.',
-                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    style: Theme.of(context).textTheme.bodySmall
+                                        ?.copyWith(
                                           color: AppTheme.textSecondary,
                                         ),
                                   ),
@@ -642,11 +668,16 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                   return CheckboxListTile(
                                     value: item.done,
                                     contentPadding: EdgeInsets.zero,
-                                    controlAffinity: ListTileControlAffinity.leading,
+                                    controlAffinity:
+                                        ListTileControlAffinity.leading,
                                     title: Text(item.title),
                                     onChanged: (value) {
                                       if (value == null) return;
-                                      _toggleStageItem(stage.id, item.id, value);
+                                      _toggleStageItem(
+                                        stage.id,
+                                        item.id,
+                                        value,
+                                      );
                                     },
                                   );
                                 }),
@@ -677,9 +708,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     children: [
                       Text(
                         'Клиент',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 12),
                       Text(
@@ -690,18 +720,16 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                         const SizedBox(height: 4),
                         Text(
                           widget.order.customer!['email'],
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: AppTheme.textSecondary,
-                              ),
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(color: AppTheme.textSecondary),
                         ),
                       ],
                       if (widget.order.customer!['phone'] != null) ...[
                         const SizedBox(height: 4),
                         Text(
                           widget.order.customer!['phone'],
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: AppTheme.textSecondary,
-                              ),
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(color: AppTheme.textSecondary),
                         ),
                       ],
                       if (widget.order.vehicle != null) ...[
@@ -740,7 +768,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               ),
 
             // Адрес доставки
-            if (widget.order.shippingAddress != null && widget.order.shippingAddress!.isNotEmpty) ...[
+            if (widget.order.shippingAddress != null &&
+                widget.order.shippingAddress!.isNotEmpty) ...[
               const SizedBox(height: 24),
               Card(
                 child: Padding(
@@ -754,9 +783,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                           const SizedBox(width: 8),
                           Text(
                             'Адрес доставки',
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                ),
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.bold),
                           ),
                         ],
                       ),
@@ -771,7 +799,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               ),
             ],
 
-            if (widget.order.works != null && widget.order.works!.isNotEmpty) ...[
+            if (widget.order.works != null &&
+                widget.order.works!.isNotEmpty) ...[
               const SizedBox(height: 24),
               _buildWorksCard(numberFormat),
             ],
@@ -788,8 +817,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     Text(
                       'Товары в заказе (${items.length})',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(height: 16),
                     ...items.map((orderItem) {
@@ -797,7 +826,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       final itemName = item != null && item['name'] != null
                           ? item['name'] as String
                           : 'Товар #${orderItem.itemId}';
-                      
+
                       // Получаем изображения
                       String? firstImage;
                       if (item != null) {
@@ -808,9 +837,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                           firstImage = item['imageUrl'] as String?;
                         }
                       }
-                      
-                      final itemSku = item != null ? item['sku'] as String? : null;
-                      
+
+                      final itemSku = item != null
+                          ? item['sku'] as String?
+                          : null;
+
                       // Debug
 
                       return Container(
@@ -843,7 +874,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                     height: 80,
                                     color: Colors.grey.shade200,
                                     child: const Center(
-                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
                                     ),
                                   ),
                                   errorWidget: (context, url, error) {
@@ -851,7 +884,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                       width: 80,
                                       height: 80,
                                       color: Colors.grey.shade200,
-                                      child: const Icon(Icons.image_not_supported, color: Colors.grey),
+                                      child: const Icon(
+                                        Icons.image_not_supported,
+                                        color: Colors.grey,
+                                      ),
                                     );
                                   },
                                 ),
@@ -864,7 +900,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                   color: Colors.grey.shade200,
                                   borderRadius: BorderRadius.circular(8),
                                 ),
-                                child: const Icon(Icons.inventory_2, color: Colors.grey),
+                                child: const Icon(
+                                  Icons.inventory_2,
+                                  color: Colors.grey,
+                                ),
                               ),
                             const SizedBox(width: 16),
                             // Информация о товаре
@@ -874,15 +913,20 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                 children: [
                                   Text(
                                     itemName,
-                                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                          fontWeight: FontWeight.bold,
-                                        ),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleSmall
+                                        ?.copyWith(fontWeight: FontWeight.bold),
                                   ),
-                                  if (itemSku != null && itemSku.isNotEmpty) ...[
+                                  if (itemSku != null &&
+                                      itemSku.isNotEmpty) ...[
                                     const SizedBox(height: 4),
                                     Text(
                                       'Артикул: $itemSku',
-                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
                                             color: AppTheme.textSecondary,
                                           ),
                                     ),
@@ -892,21 +936,30 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                     children: [
                                       Text(
                                         '${numberFormat.format(orderItem.priceAtTime)} ₸',
-                                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium
+                                            ?.copyWith(
                                               fontWeight: FontWeight.w600,
                                             ),
                                       ),
                                       const Text(' × '),
                                       Text(
                                         '${orderItem.quantity}',
-                                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium
+                                            ?.copyWith(
                                               fontWeight: FontWeight.w600,
                                             ),
                                       ),
                                       const Spacer(),
                                       Text(
                                         '${numberFormat.format(orderItem.subtotal)} ₸',
-                                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleSmall
+                                            ?.copyWith(
                                               fontWeight: FontWeight.bold,
                                               color: AppTheme.primaryColor,
                                             ),
@@ -926,7 +979,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             ),
 
             // Примечания
-            if (widget.order.notes != null && widget.order.notes!.isNotEmpty) ...[
+            if (widget.order.notes != null &&
+                widget.order.notes!.isNotEmpty) ...[
               const SizedBox(height: 24),
               Card(
                 child: Padding(
@@ -936,9 +990,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     children: [
                       Text(
                         'Примечания',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 12),
                       Text(
@@ -956,4 +1009,3 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     );
   }
 }
-

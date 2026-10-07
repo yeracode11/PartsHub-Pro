@@ -15,6 +15,8 @@ import {
 } from './entities/incoming-doc.entity';
 import { IncomingItem } from './entities/incoming-item.entity';
 import { Item } from '../items/entities/item.entity';
+import { InventoryService } from '../inventory/inventory.service';
+import { MovementType } from '../inventory/entities/inventory-movement.entity';
 import { CreateIncomingDocDto } from './dto/create-incoming-doc.dto';
 import { CreateIncomingItemDto } from './dto/create-incoming-item.dto';
 import { UpdateIncomingDocDto } from './dto/update-incoming-doc.dto';
@@ -55,6 +57,7 @@ export class IncomingService {
     @InjectRepository(Item)
     private readonly itemRepository: Repository<Item>,
     private readonly dataSource: DataSource,
+    private readonly inventoryService: InventoryService,
   ) {}
 
   // Генерация номера накладной
@@ -509,6 +512,7 @@ export class IncomingService {
   async processDocument(
     docId: string,
     organizationId: string,
+    userId?: string | null,
   ): Promise<IncomingDoc> {
     const doc = await this.findOne(docId, organizationId);
 
@@ -548,7 +552,7 @@ export class IncomingService {
         }
 
         for (const incomingItem of doc.items) {
-          await this.receiveLine(manager, organizationId, incomingItem);
+          await this.receiveLine(manager, organizationId, incomingItem, userId);
         }
       });
     } catch (error) {
@@ -571,6 +575,7 @@ export class IncomingService {
     manager: EntityManager,
     organizationId: string,
     line: IncomingItem,
+    userId?: string | null,
   ) {
     const cost = Number(line.purchasePrice);
     const oemNormalized = normalizeOem(line.oem);
@@ -586,7 +591,6 @@ export class IncomingService {
       if (!item) return;
 
       const patch: Partial<Item> = {
-        quantity: item.quantity + line.quantity,
         purchaseCost: averagePurchaseCost(
           {
             quantity: item.quantity,
@@ -603,6 +607,18 @@ export class IncomingService {
         patch.oemNormalized = oemNormalized;
       }
       await manager.update(Item, { id: item.id, organizationId }, patch);
+      await this.inventoryService.apply(
+        {
+          organizationId,
+          itemId: item.id,
+          type: MovementType.RECEIVING,
+          quantityDelta: line.quantity,
+          userId,
+          documentType: 'incoming_doc',
+          documentId: line.docId,
+        },
+        manager,
+      );
       return;
     }
 
@@ -614,7 +630,7 @@ export class IncomingService {
     // Старые клиенты не передают цену продажи — тогда как раньше берём закупочную.
     newItem.price = line.salePrice !== null ? Number(line.salePrice) : cost;
     newItem.purchaseCost = cost.toFixed(2);
-    newItem.quantity = line.quantity;
+    newItem.quantity = 0;
     newItem.condition = line.condition || 'used';
     newItem.oem = oemNormalized ? line.oem : null;
     newItem.oemNormalized = oemNormalized;
@@ -627,7 +643,20 @@ export class IncomingService {
     newItem.images = line.photos || [];
     newItem.warehouseCell = line.warehouseCell || null;
     newItem.syncedToB2C = true; // Автоматически синхронизируем в B2C
-    await manager.save(Item, newItem);
+    const saved = await manager.save(Item, newItem);
+    await this.inventoryService.apply(
+      {
+        organizationId,
+        itemId: saved.id,
+        type: MovementType.RECEIVING,
+        quantityDelta: line.quantity,
+        userId,
+        documentType: 'incoming_doc',
+        documentId: line.docId,
+        reason: 'приход',
+      },
+      manager,
+    );
   }
 
   // Удаление накладной

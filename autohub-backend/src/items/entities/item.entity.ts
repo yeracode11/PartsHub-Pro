@@ -1,4 +1,5 @@
 import {
+  AfterLoad,
   Entity,
   PrimaryGeneratedColumn,
   Column,
@@ -78,6 +79,21 @@ export class Item {
 
   @Column({ type: 'int', default: 0 })
   quantity: number;
+
+  /** Зарезервировано под заказ. Доступно = quantity − reservedQuantity. */
+  @Column({ type: 'int', default: 0 })
+  reservedQuantity: number;
+
+  /** Не колонка: считается при чтении из базы. */
+  available: number;
+
+  @AfterLoad()
+  fillAvailable() {
+    this.available = Number(this.quantity) - Number(this.reservedQuantity ?? 0);
+  }
+
+  @Column({ type: 'uuid', nullable: true })
+  locationId: string | null;
 
   @Column({ type: 'varchar', length: 50, nullable: true })
   condition: string | null; // new, used, refurbished

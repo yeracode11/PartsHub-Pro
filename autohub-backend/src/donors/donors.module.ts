@@ -5,9 +5,14 @@ import { DonorsService } from './donors.service';
 import { DonorVehicle } from './entities/donor-vehicle.entity';
 import { Item } from '../items/entities/item.entity';
 import { AuditModule } from '../audit/audit.module';
+import { InventoryModule } from '../inventory/inventory.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([DonorVehicle, Item]), AuditModule],
+  imports: [
+    TypeOrmModule.forFeature([DonorVehicle, Item]),
+    AuditModule,
+    InventoryModule,
+  ],
   controllers: [DonorsController],
   providers: [DonorsService],
 })

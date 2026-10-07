@@ -19,6 +19,7 @@ import { B2CModule } from './b2c/b2c.module';
 import { AutoDataModule } from './auto-data/auto-data.module';
 import { IncomingModule } from './incoming/incoming.module';
 import { WarehousesModule } from './warehouses/warehouses.module';
+import { InventoryModule } from './inventory/inventory.module';
 import { AdminModule } from './admin/admin.module';
 import { WorksModule } from './works/works.module';
 import { ScheduleModule } from './schedule/schedule.module';
@@ -37,8 +38,8 @@ const logger = new Logger('AppModule');
     TypeOrmModule.forRootAsync({
       useFactory: () => {
         // Явно преобразуем пароль в строку (критично для PostgreSQL)
-        const dbPassword = process.env.DB_PASSWORD 
-          ? String(process.env.DB_PASSWORD).trim() 
+        const dbPassword = process.env.DB_PASSWORD
+          ? String(process.env.DB_PASSWORD).trim()
           : '';
 
         // Используем отдельные переменные окружения для большей надежности
@@ -68,7 +69,9 @@ const logger = new Logger('AppModule');
             config.port = parseInt(url.port || '5432', 10);
             config.username = decodeURIComponent(url.username);
             // Пароль из URL - явно как строка
-            config.password = url.password ? String(decodeURIComponent(url.password)) : '';
+            config.password = url.password
+              ? String(decodeURIComponent(url.password))
+              : '';
             config.database = url.pathname.slice(1); // Убираем первый /
           } catch (error) {
             logger.error('Error parsing DATABASE_URL', error.stack);
@@ -87,7 +90,9 @@ const logger = new Logger('AppModule');
 
         // Критическая проверка: пароль должен быть строкой
         if (typeof config.password !== 'string') {
-          logger.error(`CRITICAL: password is not a string (${typeof config.password})`);
+          logger.error(
+            `CRITICAL: password is not a string (${typeof config.password})`,
+          );
           config.password = String(config.password || '');
         }
 
@@ -114,6 +119,7 @@ const logger = new Logger('AppModule');
     AutoDataModule,
     IncomingModule,
     WarehousesModule,
+    InventoryModule,
     WorksModule,
     ScheduleModule,
     PayrollModule,

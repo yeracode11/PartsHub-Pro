@@ -152,6 +152,7 @@ class ItemModel extends Equatable {
   final String? sku;
   final double price;
   final int quantity;
+  final int reservedQuantity;
   final String condition;
   final String? description;
   final String? imageUrl;
@@ -187,6 +188,7 @@ class ItemModel extends Equatable {
     this.sku,
     required this.price,
     required this.quantity,
+    this.reservedQuantity = 0,
     required this.condition,
     this.description,
     this.imageUrl,
@@ -210,6 +212,9 @@ class ItemModel extends Equatable {
        updatedAt = updatedAt ?? DateTime.now();
 
   bool get isArchived => status == 'archived';
+
+  /// Сколько можно продать: остаток минус резерв.
+  int get available => quantity - reservedQuantity;
 
   /// Совпадает ли деталь с запросом без сервера (офлайн-кэш).
   bool matchesQuery(String query) {
@@ -253,6 +258,7 @@ class ItemModel extends Equatable {
       sku: sku ?? this.sku,
       price: price ?? this.price,
       quantity: quantity ?? this.quantity,
+      reservedQuantity: reservedQuantity,
       condition: condition ?? this.condition,
       description: description ?? this.description,
       imageUrl: imageUrl ?? this.imageUrl,
@@ -283,6 +289,7 @@ class ItemModel extends Equatable {
       'sku': sku,
       'price': price,
       'quantity': quantity,
+      'reservedQuantity': reservedQuantity,
       'condition': condition,
       'description': description,
       'imageUrl': imageUrl,
@@ -345,6 +352,11 @@ class ItemModel extends Equatable {
         quantity: json['quantity'] is int
             ? json['quantity']
             : (json['quantity'] is num ? json['quantity'].toInt() : 0),
+        reservedQuantity: json['reservedQuantity'] is int
+            ? json['reservedQuantity']
+            : (json['reservedQuantity'] is num
+                  ? json['reservedQuantity'].toInt()
+                  : 0),
         condition: json['condition'] as String? ?? 'new',
         description: json['description'] as String?,
         imageUrl: json['imageUrl'] as String?,
@@ -386,6 +398,7 @@ class ItemModel extends Equatable {
     sku,
     price,
     quantity,
+    reservedQuantity,
     condition,
     description,
     imageUrl,

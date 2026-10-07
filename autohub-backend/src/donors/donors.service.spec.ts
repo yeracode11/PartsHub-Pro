@@ -6,6 +6,7 @@ import { DonorsService } from './donors.service';
 import { DonorStatus, DonorVehicle } from './entities/donor-vehicle.entity';
 import { Item } from '../items/entities/item.entity';
 import { AuditService } from '../audit/audit.service';
+import { InventoryService } from '../inventory/inventory.service';
 import { PartCompatibility } from '../items/entities/part-compatibility.entity';
 
 const ORG = '11111111-1111-1111-1111-111111111111';
@@ -114,6 +115,14 @@ describe('DonorsService', () => {
         { provide: getRepositoryToken(Item), useValue: itemRepo },
         { provide: DataSource, useValue: dataSource },
         { provide: AuditService, useValue: audit },
+        {
+          provide: InventoryService,
+          useValue: {
+            apply: jest.fn(async (change: { quantityDelta: number }) => ({
+              quantity: change.quantityDelta,
+            })),
+          },
+        },
       ],
     }).compile();
 

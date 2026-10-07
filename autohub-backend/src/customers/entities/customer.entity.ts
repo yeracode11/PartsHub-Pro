@@ -31,6 +31,12 @@ export class Customer {
   @Column({ type: 'varchar', length: 50, nullable: true })
   phone: string;
 
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  whatsappPhone: string | null;
+
+  @Column({ type: 'varchar', length: 200, nullable: true })
+  companyName: string | null;
+
   @Column({ type: 'varchar', length: 255, nullable: true })
   email: string;
 

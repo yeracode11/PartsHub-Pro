@@ -44,7 +44,12 @@ function setup(result: unknown = { id: 1, organizationId: ORG, price: '100' }) {
     manager: { transaction: jest.fn(async (cb) => cb(manager)) },
   };
   const audit = { record: jest.fn() };
-  const service = new ItemsService(repo as never, audit as never);
+  const inventory = { apply: jest.fn() };
+  const service = new ItemsService(
+    repo as never,
+    audit as never,
+    inventory as never,
+  );
   return { service, qb, repo, manager, audit };
 }
 

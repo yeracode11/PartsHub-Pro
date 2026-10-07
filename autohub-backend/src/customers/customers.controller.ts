@@ -73,7 +73,7 @@ export class CustomersController {
     if (!organizationId) {
       return { error: 'No active organization' } as any;
     }
-    return this.customersService.create(organizationId, data);
+    return this.customersService.create(organizationId, data, user?.id ?? user?.userId);
   }
 
   @Put(':id')
@@ -87,7 +87,20 @@ export class CustomersController {
     if (!organizationId) {
       return { error: 'No active organization' } as any;
     }
-    return this.customersService.update(+id, organizationId, data);
+    return this.customersService.update(
+      +id,
+      organizationId,
+      data,
+      user?.id ?? user?.userId,
+    );
+  }
+
+  @Get(':id/history')
+  async history(@Param('id') id: string, @CurrentUser() user: any) {
+    const organizationId = await this.resolveOrganizationId(user);
+    if (!organizationId) return [];
+    await this.customersService.findOne(+id, organizationId);
+    return this.customersService.history(+id, organizationId);
   }
 
   @Delete(':id')

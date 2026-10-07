@@ -4,9 +4,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { EntityManager, MoreThanOrEqual, Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { OrderItem } from './entities/order-item.entity';
 import { Item } from '../items/entities/item.entity';
+import { InventoryService } from '../inventory/inventory.service';
+import { MovementType } from '../inventory/entities/inventory-movement.entity';
 
 export const MAX_ORDER_LINES = 200;
 export const MAX_LINE_QUANTITY = 10000;
@@ -20,6 +22,7 @@ export class OrderItemsService {
     private readonly orderItemRepository: Repository<OrderItem>,
     @InjectRepository(Item)
     private readonly itemRepository: Repository<Item>,
+    private readonly inventoryService: InventoryService,
   ) {}
 
   /**
@@ -29,7 +32,7 @@ export class OrderItemsService {
     orderId: number,
     organizationId: string,
     items: OrderItemInput[],
-    options?: { skipQuantityCheck?: boolean },
+    options?: { skipQuantityCheck?: boolean; hold?: 'sale' | 'reserve' },
     manager?: EntityManager,
   ): Promise<OrderItem[]> {
     const lines = normalizeOrderItems(items);
@@ -47,22 +50,19 @@ export class OrderItemsService {
       }
 
       if (!options?.skipQuantityCheck) {
-        const result = await itemRepo
-          .createQueryBuilder()
-          .update(Item)
-          .set({ quantity: () => 'quantity - :qty' })
-          .where({
-            id: item.id,
+        const reserve = options?.hold === 'reserve';
+        await this.inventoryService.apply(
+          {
             organizationId,
-            quantity: MoreThanOrEqual(line.quantity),
-          })
-          .setParameter('qty', line.quantity)
-          .execute();
-        if (!result.affected) {
-          throw new BadRequestException(
-            `Недостаточно на складе: «${item.name}», доступно ${item.quantity}`,
-          );
-        }
+            itemId: item.id,
+            type: reserve ? MovementType.RESERVATION : MovementType.SALE,
+            quantityDelta: reserve ? 0 : -line.quantity,
+            reservedDelta: reserve ? line.quantity : 0,
+            documentType: 'order',
+            documentId: String(orderId),
+          },
+          em,
+        );
       }
 
       const priceAtTime = Number(item.price);
@@ -98,19 +98,72 @@ export class OrderItemsService {
   async deleteOrderItems(
     orderId: number,
     manager?: EntityManager,
+    hold: 'sale' | 'reserve' | 'none' = 'sale',
   ): Promise<void> {
     const em = manager ?? this.orderItemRepository.manager;
-    const orderItems = await this.getOrderItems(orderId, em);
-
-    for (const orderItem of orderItems) {
-      if (orderItem.item) {
-        await em
-          .getRepository(Item)
-          .increment({ id: orderItem.item.id }, 'quantity', orderItem.quantity);
-      }
-    }
-
+    await this.releaseLines(orderId, em, hold);
     await em.getRepository(OrderItem).delete({ orderId });
+  }
+
+  /** Снять удержание, строки заказа оставить. */
+  async releaseLines(
+    orderId: number,
+    manager: EntityManager | undefined,
+    hold: 'sale' | 'reserve' | 'none',
+  ) {
+    if (hold === 'none') return;
+    const em = manager ?? this.orderItemRepository.manager;
+    const orderItems = await this.getOrderItems(orderId, em);
+    for (const orderItem of orderItems) {
+      if (!orderItem.item?.organizationId) continue;
+      const reserve = hold === 'reserve';
+      await this.inventoryService.apply(
+        {
+          organizationId: orderItem.item.organizationId,
+          itemId: orderItem.item.id,
+          type: reserve ? MovementType.RESERVATION_RELEASE : MovementType.RETURN,
+          quantityDelta: reserve ? 0 : orderItem.quantity,
+          reservedDelta: reserve ? -orderItem.quantity : 0,
+          documentType: 'order',
+          documentId: String(orderId),
+          reason: reserve ? 'снятие резерва' : 'отмена заказа',
+        },
+        em,
+      );
+    }
+  }
+
+  /** Резерв становится продажей: остаток уменьшается, резерв снимается. */
+  async convertReserveToSale(orderId: number, manager?: EntityManager) {
+    const em = manager ?? this.orderItemRepository.manager;
+    const orderItems = await this.getOrderItems(orderId, em);
+    for (const orderItem of orderItems) {
+      if (!orderItem.item?.organizationId) continue;
+      const organizationId = orderItem.item.organizationId;
+      await this.inventoryService.apply(
+        {
+          organizationId,
+          itemId: orderItem.item.id,
+          type: MovementType.RESERVATION_RELEASE,
+          reservedDelta: -orderItem.quantity,
+          documentType: 'order',
+          documentId: String(orderId),
+          reason: 'резерв в продажу',
+        },
+        em,
+      );
+      await this.inventoryService.apply(
+        {
+          organizationId,
+          itemId: orderItem.item.id,
+          type: MovementType.SALE,
+          quantityDelta: -orderItem.quantity,
+          documentType: 'order',
+          documentId: String(orderId),
+        },
+        em,
+      );
+    }
   }
 
   async calculateOrderTotal(orderId: number): Promise<number> {

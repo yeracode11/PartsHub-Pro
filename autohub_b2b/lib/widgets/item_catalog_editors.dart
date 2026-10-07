@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 
 import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/models/item_model.dart';
+import 'package:autohub_b2b/services/api/api_client.dart';
+import 'package:autohub_b2b/services/api/api_user_message.dart';
 
 const _maxRows = 50;
 
@@ -280,30 +282,158 @@ class _CompatibilityDialog extends StatefulWidget {
 
 class _CompatibilityDialogState extends State<_CompatibilityDialog> {
   final _formKey = GlobalKey<FormState>();
-  late final _make = TextEditingController(text: widget.initial?.make);
-  late final _model = TextEditingController(text: widget.initial?.model);
-  final _generation = TextEditingController();
+  final _dio = ApiClient().dio;
   final _yearFrom = TextEditingController();
   final _yearTo = TextEditingController();
   final _body = TextEditingController();
   final _engine = TextEditingController();
   final _transmission = TextEditingController();
 
+  List<Map<String, dynamic>> _brands = [];
+  List<Map<String, dynamic>> _models = [];
+  List<Map<String, dynamic>> _generations = [];
+  String? _brandSlug;
+  String? _brandName;
+  String? _modelSlug;
+  String? _modelName;
+  Map<String, dynamic>? _generation;
+  bool _loadingBrands = true;
+  bool _loadingModels = false;
+  bool _loadingGenerations = false;
+  String? _catalogError;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBrands();
+  }
+
   @override
   void dispose() {
-    for (final c in [
-      _make,
-      _model,
-      _generation,
-      _yearFrom,
-      _yearTo,
-      _body,
-      _engine,
-      _transmission,
-    ]) {
+    for (final c in [_yearFrom, _yearTo, _body, _engine, _transmission]) {
       c.dispose();
     }
     super.dispose();
+  }
+
+  Map<String, dynamic>? _named(List<Map<String, dynamic>> list, String? name) {
+    final want = name?.trim().toLowerCase();
+    if (want == null || want.isEmpty) return null;
+    for (final row in list) {
+      if ((row['name'] as String?)?.toLowerCase() == want) return row;
+    }
+    return null;
+  }
+
+  Future<void> _loadBrands() async {
+    try {
+      final response = await _dio.get('/api/auto-data/brands');
+      final list = List<Map<String, dynamic>>.from(response.data as List);
+      if (!mounted) return;
+      final match = _named(list, widget.initial?.make);
+      setState(() {
+        _brands = list;
+        _loadingBrands = false;
+        _catalogError = list.isEmpty ? 'Справочник марок пуст' : null;
+        if (match != null) {
+          _brandSlug = match['slug'] as String;
+          _brandName = match['name'] as String;
+        }
+      });
+      if (_brandSlug != null) await _loadModels(_brandSlug!, keepInitial: true);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loadingBrands = false;
+        _catalogError = userFacingApiMessage(e, prefix: 'Марки не загрузились');
+      });
+    }
+  }
+
+  Future<void> _loadModels(String brandSlug, {bool keepInitial = false}) async {
+    setState(() {
+      _loadingModels = true;
+      _models = [];
+      _generations = [];
+      _modelSlug = null;
+      _modelName = null;
+      _generation = null;
+    });
+    try {
+      final response = await _dio.get(
+        '/api/auto-data/brands/$brandSlug/models',
+      );
+      final list = List<Map<String, dynamic>>.from(
+        response.data as List? ?? [],
+      );
+      if (!mounted) return;
+      final match = keepInitial ? _named(list, widget.initial?.model) : null;
+      setState(() {
+        _models = list;
+        _loadingModels = false;
+        if (match != null) {
+          _modelSlug = match['slug'] as String;
+          _modelName = match['name'] as String;
+        }
+      });
+      if (_modelSlug != null) {
+        await _loadGenerations(
+          brandSlug,
+          _modelSlug!,
+          keepInitial: keepInitial,
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loadingModels = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userFacingApiMessage(e, prefix: 'Модели не загрузились'),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _loadGenerations(
+    String brandSlug,
+    String modelSlug, {
+    bool keepInitial = false,
+  }) async {
+    setState(() {
+      _loadingGenerations = true;
+      _generations = [];
+      _generation = null;
+    });
+    try {
+      final response = await _dio.get(
+        '/api/auto-data/brands/$brandSlug/models/$modelSlug/generations',
+      );
+      final list = List<Map<String, dynamic>>.from(
+        response.data as List? ?? [],
+      );
+      if (!mounted) return;
+      setState(() {
+        _generations = list;
+        _loadingGenerations = false;
+        if (keepInitial) {
+          _generation = _named(list, widget.initial?.generation);
+          _applyGenerationYears(_generation);
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loadingGenerations = false);
+    }
+  }
+
+  void _applyGenerationYears(Map<String, dynamic>? generation) {
+    if (generation == null) return;
+    final from = generation['year_from'];
+    final to = generation['year_to'];
+    if (from != null) _yearFrom.text = '$from';
+    if (to != null) _yearTo.text = '$to';
   }
 
   String? _yearError(String? value) {
@@ -322,11 +452,12 @@ class _CompatibilityDialogState extends State<_CompatibilityDialog> {
 
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
+    if (_brandName == null || _modelName == null) return;
     Navigator.of(context).pop(
       ItemCompatibility(
-        make: _make.text.trim(),
-        model: _model.text.trim(),
-        generation: _optional(_generation),
+        make: _brandName!,
+        model: _modelName!,
+        generation: _generation?['name'] as String?,
         yearFrom: int.tryParse(_yearFrom.text),
         yearTo: int.tryParse(_yearTo.text),
         body: _optional(_body),
@@ -379,30 +510,115 @@ class _CompatibilityDialogState extends State<_CompatibilityDialog> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: _field(
-                        _make,
-                        'Марка',
-                        hint: 'Toyota',
-                        required: true,
+                if (_loadingBrands)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 24),
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                else if (_catalogError != null)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    child: Text(
+                      _catalogError!,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AppTheme.errorColor,
                       ),
                     ),
+                  )
+                else ...[
+                  DropdownButtonFormField<String>(
+                    initialValue: _brandSlug,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Марка *',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: [
+                      for (final brand in _brands)
+                        DropdownMenuItem(
+                          value: brand['slug'] as String,
+                          child: Text(brand['name'] as String),
+                        ),
+                    ],
+                    onChanged: (slug) {
+                      if (slug == null) return;
+                      setState(() {
+                        _brandSlug = slug;
+                        _brandName =
+                            _brands.firstWhere((b) => b['slug'] == slug)['name']
+                                as String;
+                      });
+                      _loadModels(slug);
+                    },
+                    validator: (v) => v == null ? 'Выберите марку' : null,
+                  ),
+                  if (_brandSlug != null) ...[
                     gap,
-                    Expanded(
-                      child: _field(
-                        _model,
-                        'Модель',
-                        hint: 'Camry',
-                        required: true,
+                    if (_loadingModels)
+                      const LinearProgressIndicator()
+                    else
+                      DropdownButtonFormField<String>(
+                        initialValue: _modelSlug,
+                        isExpanded: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Модель *',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: [
+                          for (final model in _models)
+                            DropdownMenuItem(
+                              value: model['slug'] as String,
+                              child: Text(model['name'] as String),
+                            ),
+                        ],
+                        onChanged: (slug) {
+                          if (slug == null || _brandSlug == null) return;
+                          setState(() {
+                            _modelSlug = slug;
+                            _modelName =
+                                _models.firstWhere(
+                                      (m) => m['slug'] == slug,
+                                    )['name']
+                                    as String;
+                          });
+                          _loadGenerations(_brandSlug!, slug);
+                        },
+                        validator: (v) => v == null ? 'Выберите модель' : null,
                       ),
+                  ],
+                  if (_modelSlug != null && _loadingGenerations) ...[
+                    gap,
+                    const LinearProgressIndicator(),
+                  ] else if (_generations.isNotEmpty) ...[
+                    gap,
+                    DropdownButtonFormField<String>(
+                      initialValue: _generation?['id']?.toString(),
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Поколение',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: [
+                        for (final generation in _generations)
+                          DropdownMenuItem(
+                            value: generation['id']?.toString(),
+                            child: Text(generation['name'] as String),
+                          ),
+                      ],
+                      onChanged: (id) {
+                        Map<String, dynamic>? picked;
+                        for (final generation in _generations) {
+                          if (generation['id']?.toString() == id) {
+                            picked = generation;
+                            break;
+                          }
+                        }
+                        setState(() => _generation = picked);
+                        _applyGenerationYears(picked);
+                      },
                     ),
                   ],
-                ),
-                gap,
-                _field(_generation, 'Поколение', hint: 'XV70'),
+                ],
                 gap,
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -433,7 +649,10 @@ class _CompatibilityDialogState extends State<_CompatibilityDialog> {
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Отмена'),
         ),
-        FilledButton(onPressed: _submit, child: const Text('Добавить')),
+        FilledButton(
+          onPressed: _brandName == null || _modelName == null ? null : _submit,
+          child: const Text('Добавить'),
+        ),
       ],
     );
   }

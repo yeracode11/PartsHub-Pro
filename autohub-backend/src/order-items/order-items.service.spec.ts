@@ -1,7 +1,7 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { MoreThanOrEqual } from 'typeorm';
 import { OrderItemsService, normalizeOrderItems } from './order-items.service';
 import { Item } from '../items/entities/item.entity';
+import { MovementType } from '../inventory/entities/inventory-movement.entity';
 
 describe('OrderItemsService.createOrderItems', () => {
   const stock = {
@@ -12,20 +12,22 @@ describe('OrderItemsService.createOrderItems', () => {
     quantity: 2,
   };
 
-  function setup(updateAffected: number) {
-    const execute = jest.fn().mockResolvedValue({ affected: updateAffected });
-    const where = jest.fn().mockReturnValue({
-      setParameter: jest.fn().mockReturnValue({ execute }),
-    });
+  function setup(enough: boolean) {
+    const inventory = {
+      apply: jest.fn(async () => {
+        if (!enough) {
+          throw new BadRequestException(
+            'Недостаточно на складе: «Фара», доступно 2',
+          );
+        }
+      }),
+    };
     const itemRepo = {
       findOne: jest.fn(async ({ where: w }) =>
         w.id === stock.id && w.organizationId === stock.organizationId
           ? stock
           : null,
       ),
-      createQueryBuilder: jest.fn(() => ({
-        update: () => ({ set: () => ({ where }) }),
-      })),
     };
     const orderItemRepo = {
       create: jest.fn((v) => v),
@@ -38,30 +40,38 @@ describe('OrderItemsService.createOrderItems', () => {
     const service = new OrderItemsService(
       orderItemRepo as never,
       { manager } as never,
+      inventory as never,
     );
-    return { service, itemRepo, orderItemRepo, where };
+    return { service, itemRepo, orderItemRepo, inventory };
   }
 
   it('does not find an item of another organization', async () => {
-    const { service, orderItemRepo } = setup(1);
+    const { service, orderItemRepo, inventory } = setup(true);
     await expect(
       service.createOrderItems(1, 'org-b', [{ itemId: 7, quantity: 1 }]),
     ).rejects.toThrow(NotFoundException);
     expect(orderItemRepo.save).not.toHaveBeenCalled();
+    expect(inventory.apply).not.toHaveBeenCalled();
   });
 
   it('decrements only when enough stock in the same organization', async () => {
-    const { service, where } = setup(1);
+    const { service, inventory } = setup(true);
     await service.createOrderItems(1, 'org-a', [{ itemId: 7, quantity: 2 }]);
-    expect(where).toHaveBeenCalledWith({
-      id: 7,
-      organizationId: 'org-a',
-      quantity: MoreThanOrEqual(2),
-    });
+    expect(inventory.apply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organizationId: 'org-a',
+        itemId: 7,
+        type: MovementType.SALE,
+        quantityDelta: -2,
+        documentType: 'order',
+        documentId: '1',
+      }),
+      expect.anything(),
+    );
   });
 
   it('rejects selling more than available', async () => {
-    const { service, orderItemRepo } = setup(0);
+    const { service, orderItemRepo } = setup(false);
     await expect(
       service.createOrderItems(1, 'org-a', [{ itemId: 7, quantity: 3 }]),
     ).rejects.toThrow(BadRequestException);
@@ -69,11 +79,11 @@ describe('OrderItemsService.createOrderItems', () => {
   });
 
   it('skips decrement for B2C requests but still checks organization', async () => {
-    const { service, itemRepo, orderItemRepo } = setup(0);
+    const { service, inventory, orderItemRepo } = setup(false);
     await service.createOrderItems(1, 'org-a', [{ itemId: 7, quantity: 5 }], {
       skipQuantityCheck: true,
     });
-    expect(itemRepo.createQueryBuilder).not.toHaveBeenCalled();
+    expect(inventory.apply).not.toHaveBeenCalled();
     expect(orderItemRepo.save).toHaveBeenCalledWith(
       expect.objectContaining({ itemId: 7, quantity: 5, subtotal: 5000 }),
     );

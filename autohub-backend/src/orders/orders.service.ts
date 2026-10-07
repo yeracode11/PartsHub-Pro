@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Order, OrderWorkStage } from './entities/order.entity';
@@ -12,6 +12,14 @@ import { TemplatesService } from '../whatsapp/templates.service';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { BusinessType } from '../common/enums/business-type.enum';
 import { WorksService, OrderWorkInput } from '../works/works.service';
+import { nextOrderNumber } from './order-number';
+import {
+  assertOrderTransition,
+  nextHold,
+  planStockChange,
+  StockHold,
+} from './order-status';
+import { ReservationsService } from './reservations.service';
 
 @Injectable()
 export class OrdersService {
@@ -32,6 +40,7 @@ export class OrdersService {
     private readonly worksService: WorksService,
     @InjectRepository(OrderPayment)
     private readonly paymentRepository: Repository<OrderPayment>,
+    private readonly reservationsService: ReservationsService,
   ) {}
 
   private readonly orderRelations = [
@@ -110,31 +119,6 @@ export class OrdersService {
     options?: { skipQuantityCheck?: boolean },
     actor?: { userId?: string; id?: string },
   ) {
-    // Генерируем номер заказа если не указан
-    if (!data.orderNumber) {
-      const year = new Date().getFullYear();
-      
-      // Находим максимальный номер заказа для этого года
-      const lastOrder = await this.orderRepository
-        .createQueryBuilder('order')
-        .where('order.organizationId = :organizationId', { organizationId })
-        .andWhere('order.orderNumber LIKE :pattern', { pattern: `ORD-${year}-%` })
-        .orderBy('order.orderNumber', 'DESC')
-        .getOne();
-      
-      let nextNumber = 1;
-      if (lastOrder && lastOrder.orderNumber) {
-        // Извлекаем номер из формата ORD-2025-001
-        const match = lastOrder.orderNumber.match(/ORD-\d{4}-(\d+)/);
-        if (match) {
-          nextNumber = parseInt(match[1], 10) + 1;
-        }
-      }
-      
-      data.orderNumber = `ORD-${year}-${String(nextNumber).padStart(3, '0')}`;
-    }
-
-    // Создаем заказ
     const isB2C = (data as any).isB2C || false;
     const actorUserId = actor?.userId || actor?.id || null;
     const isServiceOrg = await this.isServiceOrganization(organizationId);
@@ -143,8 +127,13 @@ export class OrdersService {
       data.customerId,
       data.vehicleId,
     );
+    const stockHold: StockHold = options?.skipQuantityCheck
+      ? 'none'
+      : data.status === 'reserved'
+        ? 'reserve'
+        : 'sale';
     const order = this.orderRepository.create({
-      orderNumber: data.orderNumber,
+      orderNumber: data.orderNumber || 'ORD-PENDING',
       organizationId,
       createdByUserId: actorUserId,
       customerId: link.customerId ?? undefined,
@@ -152,10 +141,11 @@ export class OrdersService {
       status: data.status || 'pending',
       paymentStatus: data.paymentStatus || 'pending',
       notes: data.notes,
-      shippingAddress: (data as any).shippingAddress || null, // Адрес доставки для B2C
+      shippingAddress: (data as any).shippingAddress || null,
       isB2C,
+      stockHold,
       reservedUntil: data.reservedUntil ? new Date(data.reservedUntil as any) : null,
-      totalAmount: 0, // Пока 0, посчитаем после добавления товаров
+      totalAmount: 0,
       workStages: isServiceOrg
         ? data.workStages && data.workStages.length > 0
           ? this.normalizeWorkStages(data.workStages)
@@ -165,15 +155,30 @@ export class OrdersService {
         : null,
     });
     const savedOrder = await this.orderRepository.manager.transaction(async (manager) => {
+      if (!data.orderNumber) {
+        order.orderNumber = await nextOrderNumber(manager, organizationId);
+      }
       const saved = await manager.getRepository(Order).save(order);
       if (data.items && data.items.length > 0) {
         await this.orderItemsService.createOrderItems(
           saved.id,
           organizationId,
           data.items,
-          options,
+          {
+            skipQuantityCheck: stockHold === 'none',
+            hold: stockHold === 'reserve' ? 'reserve' : 'sale',
+          },
           manager,
         );
+        if (stockHold === 'reserve') {
+          await this.reservationsService.replaceForOrder(manager, {
+            organizationId,
+            orderId: saved.id,
+            userId: actorUserId,
+            expiresAt: order.reservedUntil,
+            lines: data.items,
+          });
+        }
       }
       return saved;
     });
@@ -238,6 +243,12 @@ export class OrdersService {
     } = data as any;
     const previousStatus = existingOrder.status;
     const previousReservedUntil = existingOrder.reservedUntil;
+    const currentHold = (existingOrder.stockHold || 'sale') as StockHold;
+    const nextStatus =
+      typeof orderData.status === 'string' ? orderData.status : previousStatus;
+    if (typeof orderData.status === 'string') {
+      assertOrderTransition(previousStatus, nextStatus);
+    }
 
     if ('customerId' in orderData || 'vehicleId' in orderData) {
       const customerId =
@@ -262,6 +273,20 @@ export class OrdersService {
       orderData.reservedUntil = new Date(orderData.reservedUntil as any);
     }
 
+    const holdAfter: StockHold | null =
+      items && items.length > 0
+        ? nextStatus === 'cancelled'
+          ? 'none'
+          : currentHold === 'none'
+            ? 'none'
+            : nextStatus === 'reserved'
+              ? 'reserve'
+              : nextHold(currentHold, nextStatus)
+        : nextStatus !== previousStatus
+          ? nextHold(currentHold, nextStatus)
+          : null;
+    if (holdAfter) orderData.stockHold = holdAfter;
+
     // Обновляем основные поля заказа
     if (Object.keys(orderData).length > 0) {
       await this.orderRepository.update({ id, organizationId }, orderData);
@@ -282,14 +307,43 @@ export class OrdersService {
     // Если передали новые items, обновляем их
     if (items && items.length > 0) {
       await this.orderRepository.manager.transaction(async (manager) => {
-        await this.orderItemsService.deleteOrderItems(id, manager);
+        await this.orderItemsService.deleteOrderItems(id, manager, currentHold);
         await this.orderItemsService.createOrderItems(
           id,
           organizationId,
           items,
-          undefined,
+          {
+            skipQuantityCheck: holdAfter === 'none',
+            hold: holdAfter === 'reserve' ? 'reserve' : 'sale',
+          },
           manager,
         );
+        if (holdAfter === 'reserve') {
+          await this.reservationsService.replaceForOrder(manager, {
+            organizationId,
+            orderId: id,
+            userId: actor?.id ?? actor?.userId,
+            expiresAt: orderData.reservedUntil
+              ? new Date(orderData.reservedUntil)
+              : existingOrder.reservedUntil,
+            lines: items,
+          });
+        } else if (currentHold === 'reserve') {
+          await this.reservationsService.markConverted(id, organizationId, manager);
+        }
+      });
+    } else if (nextStatus !== previousStatus) {
+      const plan = planStockChange(currentHold, nextStatus);
+      await this.orderRepository.manager.transaction(async (manager) => {
+        if (plan === 'release') {
+          await this.orderItemsService.releaseLines(id, manager, 'reserve');
+          await this.reservationsService.cancelForOrder(id, organizationId, manager);
+        } else if (plan === 'restock') {
+          await this.orderItemsService.releaseLines(id, manager, 'sale');
+        } else if (plan === 'convert') {
+          await this.orderItemsService.convertReserveToSale(id, manager);
+          await this.reservationsService.markConverted(id, organizationId, manager);
+        }
       });
     }
 
@@ -341,8 +395,13 @@ export class OrdersService {
   }
 
   async remove(id: number, organizationId: string) {
-    await this.findOne(id, organizationId); // Проверка существования
-    await this.orderRepository.delete({ id, organizationId });
+    const existing = await this.findOne(id, organizationId);
+    const hold = (existing.stockHold || 'sale') as StockHold;
+    await this.orderRepository.manager.transaction(async (manager) => {
+      await this.orderItemsService.deleteOrderItems(id, manager, hold);
+      await this.reservationsService.cancelForOrder(id, organizationId, manager);
+      await manager.delete(Order, { id, organizationId });
+    });
     return { success: true };
   }
 
@@ -361,8 +420,27 @@ export class OrdersService {
   async addPayment(
     orderId: number,
     organizationId: string,
-    input: { amount?: number; method?: string },
+    input: { amount?: number; method?: string; idempotencyKey?: string },
     actor?: { id?: string },
+  ) {
+    return this.savePayment(orderId, organizationId, input, 'payment', actor?.id ?? null);
+  }
+
+  async refundPayment(
+    orderId: number,
+    organizationId: string,
+    input: { amount?: number; method?: string; idempotencyKey?: string },
+    userId?: string | null,
+  ) {
+    return this.savePayment(orderId, organizationId, input, 'refund', userId ?? null);
+  }
+
+  private async savePayment(
+    orderId: number,
+    organizationId: string,
+    input: { amount?: number; method?: string; idempotencyKey?: string },
+    kind: 'payment' | 'refund',
+    userId: string | null,
   ) {
     const order = await this.orderRepository.findOne({
       where: { id: orderId, organizationId },
@@ -371,26 +449,60 @@ export class OrdersService {
       throw new NotFoundException('Заказ не найден');
     }
 
+    const key =
+      typeof input.idempotencyKey === 'string' && input.idempotencyKey.trim()
+        ? input.idempotencyKey.trim().slice(0, 80)
+        : null;
+    if (key) {
+      const existing = await this.paymentRepository.findOne({
+        where: { organizationId, idempotencyKey: key },
+      });
+      if (existing) {
+        if (existing.orderId !== orderId) {
+          throw new ConflictException('Ключ оплаты уже использован');
+        }
+        return this.findOne(orderId, organizationId);
+      }
+    }
+
     const method = this.parsePaymentMethod(input.method);
     const amount = this.roundMoney(Number(input.amount));
     if (!Number.isFinite(amount) || amount <= 0) {
-      throw new BadRequestException('Укажите сумму оплаты');
+      throw new BadRequestException(
+        kind === 'refund' ? 'Укажите сумму возврата' : 'Укажите сумму оплаты',
+      );
     }
 
-    const due = await this.dueAmount(order);
-    if (amount > due + 0.001) {
-      throw new BadRequestException('Сумма больше остатка');
+    if (kind === 'payment') {
+      const due = await this.dueAmount(order);
+      if (amount > due + 0.001) {
+        throw new BadRequestException('Сумма больше остатка');
+      }
+    } else {
+      const paid = await this.paidAmount(order);
+      if (amount > paid + 0.001) {
+        throw new BadRequestException('Сумма больше уже оплаченного');
+      }
     }
 
-    await this.paymentRepository.save(
-      this.paymentRepository.create({
-        organizationId,
-        orderId,
-        amount,
-        method,
-        createdByUserId: actor?.id ?? null,
-      }),
-    );
+    try {
+      await this.paymentRepository.save(
+        this.paymentRepository.create({
+          organizationId,
+          orderId,
+          amount,
+          method,
+          kind,
+          idempotencyKey: key,
+          createdByUserId: userId,
+        }),
+      );
+    } catch (error) {
+      if (key && (error as { code?: string }).code === '23505') {
+        return this.findOne(orderId, organizationId);
+      }
+      throw error;
+    }
     await this.syncPaymentStatus(orderId, organizationId);
     return this.findOne(orderId, organizationId);
   }
@@ -418,9 +530,15 @@ export class OrdersService {
     let cash = 0;
     let card = 0;
     for (const row of rows) {
-      const amount = Number(row.amount);
-      if (row.method === 'card') card += amount;
-      else cash += amount;
+      if (this.signed(row) < 0 || row.kind === 'refund') {
+        const amount = Number(row.amount);
+        if (row.method === 'card') card -= amount;
+        else cash -= amount;
+      } else {
+        const amount = Number(row.amount);
+        if (row.method === 'card') card += amount;
+        else cash += amount;
+      }
     }
     return {
       cash: this.roundMoney(cash),
@@ -435,7 +553,7 @@ export class OrdersService {
       where: { orderId: order.id, organizationId: order.organizationId },
     });
     const paid = this.roundMoney(
-      payments.reduce((sum, payment) => sum + Number(payment.amount), 0),
+      payments.reduce((sum, payment) => sum + this.signed(payment), 0),
     );
     const total = Number(order.totalAmount);
     if (payments.length === 0 && order.paymentStatus === 'paid') {
@@ -454,7 +572,7 @@ export class OrdersService {
       where: { orderId, organizationId },
     });
     const paid = this.roundMoney(
-      payments.reduce((sum, payment) => sum + Number(payment.amount), 0),
+      payments.reduce((sum, payment) => sum + this.signed(payment), 0),
     );
     const total = Number(order.totalAmount);
     const paymentStatus =
@@ -481,10 +599,11 @@ export class OrdersService {
       id: payment.id,
       amount: Number(payment.amount),
       method: payment.method,
+      kind: payment.kind ?? 'payment',
       createdAt: payment.createdAt,
     }));
     const paidFromRows = this.roundMoney(
-      payments.reduce((sum, payment) => sum + payment.amount, 0),
+      payments.reduce((sum, payment) => sum + this.signed(payment), 0),
     );
     const total = Number(order.totalAmount);
     const paidAmount =
@@ -498,6 +617,20 @@ export class OrdersService {
   private parsePaymentMethod(method?: string): OrderPaymentMethod {
     if (method === 'cash' || method === 'card') return method;
     throw new BadRequestException('Укажите способ оплаты: нал или карта');
+  }
+
+  private signed(payment: { amount: number | string; kind?: string | null }) {
+    const amount = Number(payment.amount);
+    return payment.kind === 'refund' ? -amount : amount;
+  }
+
+  private async paidAmount(order: Order): Promise<number> {
+    const payments = await this.paymentRepository.find({
+      where: { orderId: order.id, organizationId: order.organizationId },
+    });
+    return this.roundMoney(
+      payments.reduce((sum, payment) => sum + this.signed(payment), 0),
+    );
   }
 
   private roundMoney(value: number): number {

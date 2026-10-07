@@ -1,11 +1,20 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
-import { WarehouseTransfer, TransferStatus } from './entities/warehouse-transfer.entity';
+import {
+  WarehouseTransfer,
+  TransferStatus,
+} from './entities/warehouse-transfer.entity';
 import { Item } from '../items/entities/item.entity';
 import { Warehouse } from './entities/warehouse.entity';
 import { CreateTransferDto } from './dto/create-transfer.dto';
 import { UpdateTransferStatusDto } from './dto/update-transfer-status.dto';
+import { InventoryService } from '../inventory/inventory.service';
+import { MovementType } from '../inventory/entities/inventory-movement.entity';
 
 @Injectable()
 export class TransfersService {
@@ -17,9 +26,14 @@ export class TransfersService {
     @InjectRepository(Warehouse)
     private warehousesRepository: Repository<Warehouse>,
     private dataSource: DataSource,
+    private readonly inventoryService: InventoryService,
   ) {}
 
-  async create(createTransferDto: CreateTransferDto, organizationId: string, userId: string): Promise<WarehouseTransfer> {
+  async create(
+    createTransferDto: CreateTransferDto,
+    organizationId: string,
+    userId: string,
+  ): Promise<WarehouseTransfer> {
     // Проверяем, что склады существуют
     const fromWarehouse = await this.warehousesRepository.findOne({
       where: { id: createTransferDto.fromWarehouseId, organizationId },
@@ -47,7 +61,9 @@ export class TransfersService {
     }
 
     // Проверяем достаточность количества
-    if (item.quantity < createTransferDto.quantity) {
+    const available =
+      Number(item.quantity) - Number(item.reservedQuantity ?? 0);
+    if (available < createTransferDto.quantity) {
       throw new BadRequestException('Insufficient quantity');
     }
 
@@ -63,15 +79,30 @@ export class TransfersService {
   async findAll(organizationId: string): Promise<WarehouseTransfer[]> {
     return this.transfersRepository.find({
       where: { organizationId },
-      relations: ['fromWarehouse', 'toWarehouse', 'item', 'createdBy', 'completedBy'],
+      relations: [
+        'fromWarehouse',
+        'toWarehouse',
+        'item',
+        'createdBy',
+        'completedBy',
+      ],
       order: { createdAt: 'DESC' },
     });
   }
 
-  async findOne(id: string, organizationId: string): Promise<WarehouseTransfer> {
+  async findOne(
+    id: string,
+    organizationId: string,
+  ): Promise<WarehouseTransfer> {
     const transfer = await this.transfersRepository.findOne({
       where: { id, organizationId },
-      relations: ['fromWarehouse', 'toWarehouse', 'item', 'createdBy', 'completedBy'],
+      relations: [
+        'fromWarehouse',
+        'toWarehouse',
+        'item',
+        'createdBy',
+        'completedBy',
+      ],
     });
 
     if (!transfer) {
@@ -89,7 +120,10 @@ export class TransfersService {
   ): Promise<WarehouseTransfer> {
     const transfer = await this.findOne(id, organizationId);
 
-    if (updateStatusDto.status === TransferStatus.COMPLETED && transfer.status !== TransferStatus.COMPLETED) {
+    if (
+      updateStatusDto.status === TransferStatus.COMPLETED &&
+      transfer.status !== TransferStatus.COMPLETED
+    ) {
       // Выполняем перемещение товара
       await this.completeTransfer(transfer, userId);
     }
@@ -104,7 +138,10 @@ export class TransfersService {
     return this.transfersRepository.save(transfer);
   }
 
-  private async completeTransfer(transfer: WarehouseTransfer, userId: string): Promise<void> {
+  private async completeTransfer(
+    transfer: WarehouseTransfer,
+    userId: string,
+  ): Promise<void> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -112,30 +149,51 @@ export class TransfersService {
     try {
       // Получаем товар
       const item = await queryRunner.manager.findOne(Item, {
-        where: { id: transfer.itemId },
+        where: {
+          id: transfer.itemId,
+          organizationId: transfer.organizationId,
+        },
       });
 
       if (!item) {
         throw new NotFoundException('Item not found');
       }
 
-      // Проверяем достаточность количества
-      if (item.quantity < transfer.quantity) {
-        throw new BadRequestException('Insufficient quantity for transfer');
-      }
+      const updated = await this.inventoryService.apply(
+        {
+          organizationId: transfer.organizationId,
+          itemId: item.id,
+          type: MovementType.TRANSFER,
+          quantityDelta: -transfer.quantity,
+          userId,
+          documentType: 'transfer',
+          documentId: transfer.id,
+          warehouseId: transfer.fromWarehouseId,
+        },
+        queryRunner.manager,
+      );
 
-      // Уменьшаем количество на текущем складе
-      item.quantity -= transfer.quantity;
-      await queryRunner.manager.save(Item, item);
-
-      // Если товар должен быть на целевом складе, обновляем его warehouseId
-      // Для упрощения, здесь мы просто обновляем склад товара
-      // В более сложной системе может потребоваться создание отдельных записей
-      // для одного товара на разных складах
-      if (item.quantity === 0) {
-        item.warehouseId = transfer.toWarehouseId;
-        item.quantity = transfer.quantity;
-        await queryRunner.manager.save(Item, item);
+      // Весь остаток уехал — карточка переезжает на склад назначения.
+      // Часть остатка остаётся на исходном складе, как и раньше.
+      if (updated.quantity === 0) {
+        await this.inventoryService.apply(
+          {
+            organizationId: transfer.organizationId,
+            itemId: item.id,
+            type: MovementType.TRANSFER,
+            quantityDelta: transfer.quantity,
+            userId,
+            documentType: 'transfer',
+            documentId: transfer.id,
+            warehouseId: transfer.toWarehouseId,
+          },
+          queryRunner.manager,
+        );
+        await queryRunner.manager.update(
+          Item,
+          { id: item.id, organizationId: transfer.organizationId },
+          { warehouseId: transfer.toWarehouseId },
+        );
       }
 
       await queryRunner.commitTransaction();
@@ -157,4 +215,3 @@ export class TransfersService {
     await this.transfersRepository.remove(transfer);
   }
 }
-

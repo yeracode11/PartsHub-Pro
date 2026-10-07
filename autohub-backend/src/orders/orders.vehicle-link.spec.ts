@@ -15,6 +15,7 @@ describe('OrdersService.resolveCustomerAndVehicle', () => {
     {} as any,
     {} as any,
     {} as any,
+    {} as any,
   );
 
   beforeEach(() => jest.resetAllMocks());

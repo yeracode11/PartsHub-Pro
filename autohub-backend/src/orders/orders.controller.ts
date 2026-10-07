@@ -10,6 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { OrdersService } from './orders.service';
+import { SaleReturnsService } from './sale-returns.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -20,6 +21,7 @@ import { OrganizationsService } from '../organizations/organizations.service';
 class PaymentBody {
   amount?: number;
   method?: string;
+  idempotencyKey?: string;
 }
 
 @Controller('api/orders')
@@ -28,6 +30,7 @@ export class OrdersController {
   constructor(
     private readonly ordersService: OrdersService,
     private readonly organizationsService: OrganizationsService,
+    private readonly saleReturnsService: SaleReturnsService,
   ) {}
 
   private async resolveOrganizationId(user: any): Promise<string | null> {
@@ -124,6 +127,44 @@ export class OrdersController {
       return { error: 'No active organization' } as any;
     }
     return this.ordersService.addPayment(+id, organizationId, body, user);
+  }
+
+  @Post(':id/refunds')
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  async refund(
+    @Param('id') id: string,
+    @CurrentUser() user: any,
+    @Body() body: PaymentBody,
+  ) {
+    const organizationId = await this.resolveOrganizationId(user);
+    if (!organizationId) {
+      return { error: 'No active organization' } as any;
+    }
+    return this.ordersService.refundPayment(
+      +id,
+      organizationId,
+      body,
+      user?.id ?? user?.userId ?? null,
+    );
+  }
+
+  @Post(':id/returns')
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  async openReturn(
+    @Param('id') id: string,
+    @CurrentUser() user: any,
+    @Body() body: never,
+  ) {
+    const organizationId = await this.resolveOrganizationId(user);
+    if (!organizationId) {
+      return { error: 'No active organization' } as any;
+    }
+    return this.saleReturnsService.open(
+      +id,
+      organizationId,
+      user?.id ?? user?.userId ?? null,
+      body,
+    );
   }
 
   @Delete(':id/payments/:paymentId')

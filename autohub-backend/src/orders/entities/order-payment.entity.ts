@@ -33,6 +33,13 @@ export class OrderPayment {
   @Column({ type: 'varchar', length: 20 })
   method: OrderPaymentMethod;
 
+  /** payment увеличивает оплату, refund уменьшает. Исходная оплата не удаляется. */
+  @Column({ type: 'varchar', length: 10, default: 'payment' })
+  kind: 'payment' | 'refund';
+
+  @Column({ type: 'varchar', length: 80, nullable: true })
+  idempotencyKey: string | null;
+
   @Column({ type: 'uuid', nullable: true })
   createdByUserId: string | null;
 

@@ -3,6 +3,8 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { CustomersService } from './customers.service';
 import { Customer } from './entities/customer.entity';
 
+import { AuditService } from '../audit/audit.service';
+
 describe('CustomersService', () => {
   let service: CustomersService;
 
@@ -23,6 +25,7 @@ describe('CustomersService', () => {
           provide: getRepositoryToken(Customer),
           useValue: mockCustomerRepository,
         },
+        { provide: AuditService, useValue: { record: jest.fn(), history: jest.fn() } },
       ],
     }).compile();
 

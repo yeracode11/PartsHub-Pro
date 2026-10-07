@@ -91,11 +91,16 @@ class _SalesScreenState extends State<SalesScreen> {
 
   Future<void> _loadToday() async {
     final now = DateTime.now();
-    final from = DateTime(now.year, now.month, now.day).toUtc().toIso8601String();
-    final to = DateTime(now.year, now.month, now.day)
-        .add(const Duration(days: 1))
-        .toUtc()
-        .toIso8601String();
+    final from = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).toUtc().toIso8601String();
+    final to = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).add(const Duration(days: 1)).toUtc().toIso8601String();
     try {
       final response = await dio.get(
         '/api/orders/payments/summary',
@@ -117,6 +122,7 @@ class _SalesScreenState extends State<SalesScreen> {
       if (raw is num) return raw.toDouble();
       return double.tryParse(raw?.toString() ?? '') ?? 0;
     }
+
     return 'Сегодня: нал ${money.format(value('cash'))} · карта ${money.format(value('card'))} · ${money.format(value('total'))} ₸';
   }
 
@@ -146,8 +152,9 @@ class _SalesScreenState extends State<SalesScreen> {
                       if (!isMobile)
                         Text(
                           'Продажи',
-                          style: Theme.of(context).textTheme.displayMedium
-                              ?.copyWith(fontSize: 28),
+                          style: Theme.of(
+                            context,
+                          ).textTheme.displayMedium?.copyWith(fontSize: 28),
                         ),
                       if (_today != null) ...[
                         if (!isMobile) const SizedBox(height: 4),
@@ -584,6 +591,18 @@ class _SalesScreenState extends State<SalesScreen> {
         color = Colors.teal;
         label = 'Готов к выдаче';
         break;
+      case 'picking':
+        color = Colors.indigo;
+        label = 'Сборка';
+        break;
+      case 'delivered':
+        color = Colors.blueGrey;
+        label = 'Выдан';
+        break;
+      case 'returned':
+        color = Colors.brown;
+        label = 'Возврат';
+        break;
       case 'cancelled':
         color = Colors.red;
         label = 'Отменен';
@@ -663,7 +682,11 @@ class _SalesScreenState extends State<SalesScreen> {
       } catch (e) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка загрузки товаров'))),
+            SnackBar(
+              content: Text(
+                userFacingApiMessage(e, prefix: 'Ошибка загрузки товаров'),
+              ),
+            ),
           );
         }
         return;
@@ -703,12 +726,11 @@ class _SalesScreenState extends State<SalesScreen> {
           final result = await Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) =>
-                  OrderDetailScreen(
-                    order: fullOrder,
-                    dio: dio,
-                    onPaymentsChanged: () => _loadOrders(silent: true),
-                  ),
+              builder: (context) => OrderDetailScreen(
+                order: fullOrder,
+                dio: dio,
+                onPaymentsChanged: () => _loadOrders(silent: true),
+              ),
             ),
           );
           // Если заказ был обновлен, перезагружаем список
@@ -726,7 +748,11 @@ class _SalesScreenState extends State<SalesScreen> {
           } catch (e) {
             if (context.mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка загрузки товаров'))),
+                SnackBar(
+                  content: Text(
+                    userFacingApiMessage(e, prefix: 'Ошибка загрузки товаров'),
+                  ),
+                ),
               );
             }
             return;
@@ -741,7 +767,7 @@ class _SalesScreenState extends State<SalesScreen> {
             availableItems: availableItems,
             dio: dio,
             onSuccess: _loadOrders,
-        onPaymentsChanged: () => _loadOrders(silent: true),
+            onPaymentsChanged: () => _loadOrders(silent: true),
           );
 
           if (isMobile) {
@@ -754,9 +780,13 @@ class _SalesScreenState extends State<SalesScreen> {
         }
       } catch (e) {
         if (context.mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка загрузки заказа'))));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                userFacingApiMessage(e, prefix: 'Ошибка загрузки заказа'),
+              ),
+            ),
+          );
         }
       }
     }
@@ -846,12 +876,16 @@ class _OrderDialogState extends State<_OrderDialog> {
     try {
       final results = await Future.wait([
         widget.dio.get('/api/works'),
-        widget.dio.get('/api/users/organization/${userData?['organizationId']}'),
+        widget.dio.get(
+          '/api/users/organization/${userData?['organizationId']}',
+        ),
       ]);
       if (!mounted) return;
       setState(() {
         _workCatalog = (results[0].data as List)
-            .map((item) => WorkCatalogModel.fromJson(item as Map<String, dynamic>))
+            .map(
+              (item) => WorkCatalogModel.fromJson(item as Map<String, dynamic>),
+            )
             .toList();
         _employees = (results[1].data as List).cast<Map<String, dynamic>>();
       });
@@ -1588,9 +1622,9 @@ class _OrderDialogState extends State<_OrderDialog> {
           children: [
             Text(
               'Работы',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
             OutlinedButton.icon(
               onPressed: _showAddWorkDialog,
@@ -1601,10 +1635,7 @@ class _OrderDialogState extends State<_OrderDialog> {
         ),
         const SizedBox(height: 8),
         if (selectedWorks.isEmpty)
-          Text(
-            'Работ пока нет',
-            style: TextStyle(color: Colors.grey.shade600),
-          )
+          Text('Работ пока нет', style: TextStyle(color: Colors.grey.shade600))
         else
           ...selectedWorks.asMap().entries.map(
             (entry) => _buildMobileWorkCard(entry.key),
@@ -1616,10 +1647,8 @@ class _OrderDialogState extends State<_OrderDialog> {
   Future<void> _showAddWorkDialog() async {
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
-      builder: (_) => _AddWorkDialog(
-        catalog: _workCatalog,
-        employees: _employees,
-      ),
+      builder: (_) =>
+          _AddWorkDialog(catalog: _workCatalog, employees: _employees),
     );
     if (result != null && mounted) {
       setState(() => selectedWorks.add(result));
@@ -1699,23 +1728,20 @@ class _OrderDialogState extends State<_OrderDialog> {
                     ),
                   ),
                   items: const [
-                    DropdownMenuItem(
-                      value: 'pending',
-                      child: Text('Ожидание'),
-                    ),
+                    DropdownMenuItem(value: 'pending', child: Text('Ожидание')),
                     DropdownMenuItem(
                       value: 'processing',
                       child: Text('В работе'),
                     ),
-                    DropdownMenuItem(
-                      value: 'reserved',
-                      child: Text('Бронь'),
-                    ),
+                    DropdownMenuItem(value: 'reserved', child: Text('Бронь')),
                     DropdownMenuItem(value: 'ready', child: Text('Готов')),
+                    DropdownMenuItem(value: 'picking', child: Text('Сборка')),
+                    DropdownMenuItem(value: 'delivered', child: Text('Выдан')),
                     DropdownMenuItem(
                       value: 'completed',
                       child: Text('Завершен'),
                     ),
+                    DropdownMenuItem(value: 'returned', child: Text('Возврат')),
                     DropdownMenuItem(
                       value: 'cancelled',
                       child: Text('Отменен'),
@@ -1743,13 +1769,15 @@ class _OrderDialogState extends State<_OrderDialog> {
                   total: widget.order!.total,
                   payments: widget.order!.payments,
                   paidAmount: widget.order!.paidAmount,
-                  dueAmount: widget.order!.payments.isNotEmpty ||
+                  dueAmount:
+                      widget.order!.payments.isNotEmpty ||
                           widget.order!.paidAmount > 0 ||
                           widget.order!.paymentStatus == 'paid'
                       ? widget.order!.dueAmount
                       : (widget.order!.dueAmount > 0
-                          ? widget.order!.dueAmount
-                          : widget.order!.total),
+                            ? widget.order!.dueAmount
+                            : widget.order!.total),
+                  items: widget.order!.items ?? const [],
                   onChanged: widget.onPaymentsChanged,
                 ),
               ],
@@ -2034,10 +2062,7 @@ class _OrderDialogState extends State<_OrderDialog> {
                     border: OutlineInputBorder(),
                   ),
                   items: const [
-                    DropdownMenuItem(
-                      value: 'pending',
-                      child: Text('Ожидание'),
-                    ),
+                    DropdownMenuItem(value: 'pending', child: Text('Ожидание')),
                     DropdownMenuItem(
                       value: 'processing',
                       child: Text('В работе'),
@@ -2050,10 +2075,13 @@ class _OrderDialogState extends State<_OrderDialog> {
                       value: 'ready',
                       child: Text('Готов к выдаче'),
                     ),
+                    DropdownMenuItem(value: 'picking', child: Text('Сборка')),
+                    DropdownMenuItem(value: 'delivered', child: Text('Выдан')),
                     DropdownMenuItem(
                       value: 'completed',
                       child: Text('Завершен'),
                     ),
+                    DropdownMenuItem(value: 'returned', child: Text('Возврат')),
                     DropdownMenuItem(
                       value: 'cancelled',
                       child: Text('Отменен'),
@@ -2080,13 +2108,15 @@ class _OrderDialogState extends State<_OrderDialog> {
                     total: widget.order!.total,
                     payments: widget.order!.payments,
                     paidAmount: widget.order!.paidAmount,
-                    dueAmount: widget.order!.payments.isNotEmpty ||
+                    dueAmount:
+                        widget.order!.payments.isNotEmpty ||
                             widget.order!.paidAmount > 0 ||
                             widget.order!.paymentStatus == 'paid'
                         ? widget.order!.dueAmount
                         : (widget.order!.dueAmount > 0
-                            ? widget.order!.dueAmount
-                            : widget.order!.total),
+                              ? widget.order!.dueAmount
+                              : widget.order!.total),
+                    items: widget.order!.items ?? const [],
                     onChanged: widget.onPaymentsChanged,
                   ),
                 ],
@@ -2210,10 +2240,16 @@ class _OrderDialogState extends State<_OrderDialog> {
       'total': totalAmount,
       'paidAmount': widget.order?.paidAmount ?? 0,
       'dueAmount': totalAmount - (widget.order?.paidAmount ?? 0),
-      'customer': customer == null ? widget.order?.customer : {'id': customer.id, 'name': customer.name},
+      'customer': customer == null
+          ? widget.order?.customer
+          : {'id': customer.id, 'name': customer.name},
       'vehicle': vehicle == null
           ? widget.order?.vehicle
-          : {'brand': vehicle.brand, 'model': vehicle.model, 'plateNumber': vehicle.plateNumber},
+          : {
+              'brand': vehicle.brand,
+              'model': vehicle.model,
+              'plateNumber': vehicle.plateNumber,
+            },
       'items': [
         for (var i = 0; i < selectedItems.length; i++)
           {
@@ -2221,7 +2257,8 @@ class _OrderDialogState extends State<_OrderDialog> {
             'itemId': selectedItems[i]['id'],
             'quantity': selectedItems[i]['quantity'],
             'priceAtTime': selectedItems[i]['price'],
-            'subtotal': (double.tryParse('${selectedItems[i]['price']}') ?? 0) *
+            'subtotal':
+                (double.tryParse('${selectedItems[i]['price']}') ?? 0) *
                 ((selectedItems[i]['quantity'] as num?)?.toInt() ?? 0),
             'item': {'name': selectedItems[i]['name']},
           },
@@ -2233,20 +2270,24 @@ class _OrderDialogState extends State<_OrderDialog> {
             'name': selectedWorks[i]['name'],
             'normHours': selectedWorks[i]['normHours'],
             'pricePerHour': selectedWorks[i]['pricePerHour'],
-            'subtotal': ((selectedWorks[i]['normHours'] as num?)?.toDouble() ?? 0) *
+            'subtotal':
+                ((selectedWorks[i]['normHours'] as num?)?.toDouble() ?? 0) *
                 ((selectedWorks[i]['pricePerHour'] as num?)?.toDouble() ?? 0),
             'performerId': selectedWorks[i]['performerId'],
             'performer': {'name': selectedWorks[i]['performerName']},
             'done': selectedWorks[i]['done'] == true,
           },
       ],
-      'payments': widget.order?.payments
-              .map((payment) => {
-                    'id': payment.id,
-                    'amount': payment.amount,
-                    'method': payment.method,
-                    'createdAt': payment.createdAt?.toIso8601String(),
-                  })
+      'payments':
+          widget.order?.payments
+              .map(
+                (payment) => {
+                  'id': payment.id,
+                  'amount': payment.amount,
+                  'method': payment.method,
+                  'createdAt': payment.createdAt?.toIso8601String(),
+                },
+              )
               .toList() ??
           [],
       'createdAt': widget.order?.createdAt.toIso8601String() ?? now,
@@ -2272,8 +2313,8 @@ class _OrderDialogState extends State<_OrderDialog> {
               result.queued
                   ? offlineSavedMessage
                   : widget.isEdit
-                      ? 'Заказ обновлен'
-                      : 'Заказ создан',
+                  ? 'Заказ обновлен'
+                  : 'Заказ создан',
             ),
             backgroundColor: Colors.green,
           ),
@@ -2282,7 +2323,10 @@ class _OrderDialogState extends State<_OrderDialog> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка')), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text(userFacingApiMessage(e, prefix: 'Ошибка')),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
@@ -2329,9 +2373,15 @@ class _AddWorkDialogState extends State<_AddWorkDialog> {
     final name = _name.text.trim();
     final hours = double.tryParse(_hours.text.replaceAll(',', '.'));
     final rate = double.tryParse(_rate.text.replaceAll(',', '.'));
-    if (name.isEmpty || hours == null || hours <= 0 || rate == null || rate < 0) {
+    if (name.isEmpty ||
+        hours == null ||
+        hours <= 0 ||
+        rate == null ||
+        rate < 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Проверьте название, нормо-часы и ставку')),
+        const SnackBar(
+          content: Text('Проверьте название, нормо-часы и ставку'),
+        ),
       );
       return;
     }
@@ -2390,7 +2440,9 @@ class _AddWorkDialogState extends State<_AddWorkDialog> {
                 Expanded(
                   child: TextField(
                     controller: _hours,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
                     decoration: const InputDecoration(
                       labelText: 'Нормо-часы',
                       border: OutlineInputBorder(),
@@ -2401,7 +2453,9 @@ class _AddWorkDialogState extends State<_AddWorkDialog> {
                 Expanded(
                   child: TextField(
                     controller: _rate,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
                     decoration: const InputDecoration(
                       labelText: 'Ставка, ₸/н·ч',
                       border: OutlineInputBorder(),
@@ -2420,7 +2474,10 @@ class _AddWorkDialogState extends State<_AddWorkDialog> {
                   border: OutlineInputBorder(),
                 ),
                 items: [
-                  const DropdownMenuItem(value: null, child: Text('Не назначен')),
+                  const DropdownMenuItem(
+                    value: null,
+                    child: Text('Не назначен'),
+                  ),
                   ...widget.employees.map(
                     (employee) => DropdownMenuItem(
                       value: employee['id']?.toString(),

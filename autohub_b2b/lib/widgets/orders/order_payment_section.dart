@@ -18,6 +18,7 @@ class OrderPaymentSection extends StatefulWidget {
     required this.payments,
     required this.paidAmount,
     required this.dueAmount,
+    this.items = const [],
     this.onChanged,
   });
 
@@ -27,6 +28,7 @@ class OrderPaymentSection extends StatefulWidget {
   final List<OrderPaymentModel> payments;
   final double paidAmount;
   final double dueAmount;
+  final List<OrderItemModel> items;
   final VoidCallback? onChanged;
 
   @override
@@ -59,7 +61,9 @@ class _OrderPaymentSectionState extends State<OrderPaymentSection> {
 
   Future<void> _takePayment() async {
     final amountController = TextEditingController(
-      text: _due > 0 ? _due.toStringAsFixed(_due == _due.roundToDouble() ? 0 : 2) : '',
+      text: _due > 0
+          ? _due.toStringAsFixed(_due == _due.roundToDouble() ? 0 : 2)
+          : '',
     );
     var method = 'cash';
     final accepted = await showDialog<bool>(
@@ -73,7 +77,9 @@ class _OrderPaymentSectionState extends State<OrderPaymentSection> {
               TextField(
                 controller: amountController,
                 autofocus: true,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
                 inputFormatters: [
                   FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
                 ],
@@ -140,24 +146,22 @@ class _OrderPaymentSectionState extends State<OrderPaymentSection> {
       final result = await OfflineQueue().send(
         method: 'POST',
         path: '/api/orders/${widget.orderId}/payments',
-        body: {'amount': amount, 'method': method},
+        body: {
+          'amount': amount,
+          'method': method,
+          'idempotencyKey': 'pay-${widget.orderId}-$paymentId',
+        },
         entity: 'payment',
         localId: '$paymentId',
-        snapshot: {
-          'orderId': widget.orderId,
-          'payment': payment,
-        },
+        snapshot: {'orderId': widget.orderId, 'payment': payment},
       );
       if (!mounted) return;
       if (result.queued) {
-        await _apply(_localOrder([
-          ..._payments.map(_paymentJson),
-          payment,
-        ]));
+        await _apply(_localOrder([..._payments.map(_paymentJson), payment]));
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text(offlineSavedMessage)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text(offlineSavedMessage)));
       } else {
         await _apply(Map<String, dynamic>.from(result.data as Map));
       }
@@ -203,14 +207,16 @@ class _OrderPaymentSectionState extends State<OrderPaymentSection> {
       );
       if (!mounted) return;
       if (result.queued) {
-        await _apply(_localOrder([
-          for (final item in _payments)
-            if (item.id != payment.id) _paymentJson(item),
-        ]));
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text(offlineSavedMessage)),
+        await _apply(
+          _localOrder([
+            for (final item in _payments)
+              if (item.id != payment.id) _paymentJson(item),
+          ]),
         );
+        if (!mounted) return;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text(offlineSavedMessage)));
       } else {
         await _apply(Map<String, dynamic>.from(result.data as Map));
       }
@@ -240,7 +246,11 @@ class _OrderPaymentSectionState extends State<OrderPaymentSection> {
     return {
       'id': widget.orderId,
       'status': 'pending',
-      'paymentStatus': paid <= 0 ? 'unpaid' : due <= 0.009 ? 'paid' : 'partial',
+      'paymentStatus': paid <= 0
+          ? 'unpaid'
+          : due <= 0.009
+          ? 'paid'
+          : 'partial',
       'total': widget.total,
       'paidAmount': paid,
       'dueAmount': due < 0 ? 0 : due,
@@ -251,10 +261,110 @@ class _OrderPaymentSectionState extends State<OrderPaymentSection> {
   }
 
   void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
-  String _money(double value) => NumberFormat('#,##0.##', 'ru_RU').format(value);
+  String _money(double value) =>
+      NumberFormat('#,##0.##', 'ru_RU').format(value);
+
+  Future<void> _returnItem() async {
+    final lines = widget.items;
+    if (lines.isEmpty) return;
+    var itemId = lines.first.itemId;
+    var resolution = 'restock';
+    final qty = TextEditingController(text: '1');
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Возврат'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<int>(
+                initialValue: itemId,
+                decoration: const InputDecoration(labelText: 'Деталь'),
+                items: lines
+                    .map(
+                      (line) => DropdownMenuItem(
+                        value: line.itemId,
+                        child: Text(
+                          line.item?['name']?.toString() ??
+                              'Товар ${line.itemId}',
+                        ),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) {
+                  if (value != null) itemId = value;
+                },
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: qty,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Количество'),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                initialValue: resolution,
+                decoration: const InputDecoration(labelText: 'Что сделать'),
+                items: const [
+                  DropdownMenuItem(
+                    value: 'restock',
+                    child: Text('Вернуть на склад'),
+                  ),
+                  DropdownMenuItem(value: 'write_off', child: Text('Списать')),
+                ],
+                onChanged: (value) {
+                  if (value != null) resolution = value;
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Отмена'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Оформить'),
+            ),
+          ],
+        );
+      },
+    );
+    final quantity = int.tryParse(qty.text.trim());
+    qty.dispose();
+    if (accepted != true || !mounted) return;
+    if (quantity == null || quantity <= 0) {
+      _showError('Укажите количество');
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      await widget.dio.post(
+        '/api/orders/${widget.orderId}/returns',
+        data: {
+          'itemId': itemId,
+          'quantity': quantity,
+          'resolution': resolution,
+        },
+      );
+      if (!mounted) return;
+      widget.onChanged?.call();
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Возврат записан')));
+    } catch (e) {
+      if (mounted) _showError(userFacingApiMessage(e, prefix: 'Ошибка'));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -290,9 +400,20 @@ class _OrderPaymentSectionState extends State<OrderPaymentSection> {
         const SizedBox(height: 8),
         Align(
           alignment: Alignment.centerLeft,
-          child: FilledButton(
-            onPressed: _busy || _due <= 0 ? null : _takePayment,
-            child: Text(_due <= 0 ? 'Оплачено' : 'Принять оплату'),
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              FilledButton(
+                onPressed: _busy || _due <= 0 ? null : _takePayment,
+                child: Text(_due <= 0 ? 'Оплачено' : 'Принять оплату'),
+              ),
+              if (widget.items.isNotEmpty)
+                OutlinedButton(
+                  onPressed: _busy ? null : _returnItem,
+                  child: const Text('Возврат'),
+                ),
+            ],
           ),
         ),
       ],
@@ -316,7 +437,9 @@ class _MethodButton extends StatelessWidget {
     return OutlinedButton(
       onPressed: onTap,
       style: OutlinedButton.styleFrom(
-        backgroundColor: selected ? AppTheme.primaryColor.withOpacity(0.08) : null,
+        backgroundColor: selected
+            ? AppTheme.primaryColor.withOpacity(0.08)
+            : null,
         side: BorderSide(
           color: selected ? AppTheme.primaryColor : AppTheme.borderColor,
         ),

@@ -34,6 +34,10 @@ export class Order {
   @Column({ type: 'varchar', length: 50 })
   orderNumber: string; // ORD-2025-001
 
+  /** sale — остаток уже списан, reserve — только резерв, none — склад не трогали. */
+  @Column({ type: 'varchar', length: 10, default: 'sale' })
+  stockHold: 'sale' | 'reserve' | 'none';
+
   @Column({ type: 'int', nullable: true })
   customerId: number;
 

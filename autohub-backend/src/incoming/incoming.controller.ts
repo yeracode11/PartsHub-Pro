@@ -193,7 +193,11 @@ export class IncomingController {
     if (!organizationId) {
       throw new Error('No active organization');
     }
-    return this.incomingService.processDocument(id, organizationId);
+    return this.incomingService.processDocument(
+      id,
+      organizationId,
+      user?.id ?? user?.userId ?? null,
+    );
   }
 
   // Удаление накладной

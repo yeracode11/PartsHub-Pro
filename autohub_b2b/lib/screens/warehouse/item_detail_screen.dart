@@ -7,6 +7,7 @@ import 'package:autohub_b2b/screens/warehouse/item_edit_screen.dart';
 import 'package:autohub_b2b/models/label_product_model.dart';
 import 'package:autohub_b2b/screens/warehouse/label_print_screen.dart';
 import 'package:autohub_b2b/widgets/donor_origin_tile.dart';
+import 'package:autohub_b2b/services/api/api_user_message.dart';
 import 'package:autohub_b2b/services/service_locator.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -191,7 +192,9 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                 Expanded(
                   child: _buildInfoItem(
                     'На складе',
-                    '${item.quantity} шт.',
+                    item.reservedQuantity > 0
+                        ? '${item.quantity} · доступно ${item.available}'
+                        : '${item.quantity} шт.',
                     Icons.warehouse,
                   ),
                 ),
@@ -264,6 +267,16 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                 SizedBox(
                   width: 180,
                   child: OutlinedButton.icon(
+                    onPressed: item.id == null || item.quantity <= 0
+                        ? null
+                        : () => _writeOff(context),
+                    icon: const Icon(Icons.remove_circle_outline),
+                    label: const Text('Списать'),
+                  ),
+                ),
+                SizedBox(
+                  width: 180,
+                  child: OutlinedButton.icon(
                     onPressed: () {
                       Navigator.push(
                         context,
@@ -282,6 +295,91 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _writeOff(BuildContext context) async {
+    final qty = TextEditingController(text: '1');
+    final note = TextEditingController();
+    var reason = 'damaged';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Списание'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: qty,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Количество'),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                initialValue: reason,
+                decoration: const InputDecoration(labelText: 'Причина'),
+                items: const [
+                  DropdownMenuItem(value: 'damaged', child: Text('Повреждено')),
+                  DropdownMenuItem(value: 'lost', child: Text('Утеря')),
+                  DropdownMenuItem(value: 'defect', child: Text('Брак')),
+                  DropdownMenuItem(value: 'other', child: Text('Другое')),
+                ],
+                onChanged: (value) {
+                  if (value != null) reason = value;
+                },
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: note,
+                decoration: const InputDecoration(labelText: 'Комментарий'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Отмена'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Списать'),
+            ),
+          ],
+        );
+      },
+    );
+    final quantity = int.tryParse(qty.text.trim());
+    final comment = note.text.trim();
+    qty.dispose();
+    note.dispose();
+    if (confirmed != true || !context.mounted) return;
+    if (quantity == null || quantity <= 0) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Укажите количество')));
+      return;
+    }
+    try {
+      await ApiClient().dio.post(
+        '/api/write-offs',
+        data: {
+          'itemId': item.id,
+          'quantity': quantity,
+          'reason': reason,
+          if (comment.isNotEmpty) 'note': comment,
+        },
+      );
+      await _loadFull();
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Списано')));
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(userFacingApiMessage(e))));
+    }
   }
 
   Future<void> _copySku(BuildContext context, String sku) async {
@@ -321,6 +419,10 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
             _buildDetailRow('ID товара', item.id?.toString() ?? '—'),
             _buildDetailRow('Цена', '${currencyFormat.format(item.price)} ₸'),
             _buildDetailRow('Количество', '${item.quantity} шт.'),
+            if (item.reservedQuantity > 0) ...[
+              _buildDetailRow('В резерве', '${item.reservedQuantity} шт.'),
+              _buildDetailRow('Доступно', '${item.available} шт.'),
+            ],
             _buildDetailRow('Состояние', _getConditionText(item.condition)),
             if (item.sku != null && item.sku!.isNotEmpty)
               _buildDetailRow('Артикул (SKU)', item.sku!),
