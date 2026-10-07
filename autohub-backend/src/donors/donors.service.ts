@@ -20,6 +20,7 @@ import {
 } from './donor-economics';
 import { AuditService, diffFields } from '../audit/audit.service';
 import { InventoryService } from '../inventory/inventory.service';
+import { VehicleReferenceService } from '../vehicle-reference/vehicle-reference.service';
 import { MovementType } from '../inventory/entities/inventory-movement.entity';
 import { normalizeOem } from '../items/oem';
 import { PartCompatibility } from '../items/entities/part-compatibility.entity';
@@ -108,6 +109,7 @@ export class DonorsService {
     private readonly dataSource: DataSource,
     private readonly auditService: AuditService,
     private readonly inventoryService: InventoryService,
+    private readonly vehicleReference: VehicleReferenceService,
   ) {}
 
   async findAll(
@@ -246,7 +248,7 @@ export class DonorsService {
       );
     }
     const donor = this.donorRepository.create({
-      ...this.normalize(dto),
+      ...(await this.withCatalog(dto)),
       organizationId,
       status,
     });
@@ -275,7 +277,7 @@ export class DonorsService {
     actorId?: string | null,
   ) {
     const donor = await this.getDonor(id, organizationId);
-    const data = this.normalize(dto);
+    const data = await this.withCatalog(dto);
 
     const status = parseDonorStatus(dto.status);
     if (status) {
@@ -435,6 +437,39 @@ export class DonorsService {
       throw new NotFoundException(`Донор #${id} не найден`);
     }
     return donor;
+  }
+
+  /** Подставляет канонические названия из общего справочника, если марка нашлась. */
+  private async withCatalog(dto: CreateDonorDto | UpdateDonorDto) {
+    const data = this.normalize(dto);
+    if (dto.makeId && dto.modelId) {
+      const link = await this.vehicleReference.resolveLink(
+        dto.makeId,
+        dto.modelId,
+        dto.generationId,
+      );
+      data.makeId = link.makeId;
+      data.modelId = link.modelId;
+      data.generationId = link.generationId;
+      data.brand = link.make;
+      data.model = link.model;
+      data.generation = link.generation;
+      return data;
+    }
+    const matched = await this.vehicleReference.matchText(
+      data.brand,
+      data.model,
+      data.generation,
+    );
+    if (matched) {
+      data.makeId = matched.makeId;
+      data.modelId = matched.modelId;
+      data.generationId = matched.generationId;
+      data.brand = matched.make;
+      data.model = matched.model;
+      if (matched.generationId) data.generation = matched.generation;
+    }
+    return data;
   }
 
   /** Только поля карточки; статус и даты разбора меняются через planStatusChange. */

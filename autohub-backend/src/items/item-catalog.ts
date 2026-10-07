@@ -43,6 +43,9 @@ export interface CompatibilityInput {
   body: string | null;
   engine: string | null;
   transmission: string | null;
+  makeId?: number | null;
+  modelId?: number | null;
+  generationId?: number | null;
 }
 
 export interface ItemCatalogInput {
@@ -153,20 +156,35 @@ function parseCrossReferences(value: unknown) {
   return [...byNumber.values()];
 }
 
+function positiveId(value: unknown) {
+  const id = Number(value);
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
+
 function parseCompatibility(value: unknown) {
   const list = relationList(value, 'Применимость');
   if (!list) return undefined;
   return list.map((raw) => {
     const row = asRecord(raw, 'Применимость');
+    const makeId = positiveId(row.makeId);
+    const modelId = positiveId(row.modelId);
+    const generationId = positiveId(row.generationId);
     const fit: CompatibilityInput = {
-      make: requiredText(row.make, 'Марка', 50),
-      model: requiredText(row.model, 'Модель', 80),
+      make: makeId
+        ? (optionalText(row.make, 'Марка', 50) ?? '—')
+        : requiredText(row.make, 'Марка', 50),
+      model: modelId
+        ? (optionalText(row.model, 'Модель', 80) ?? '—')
+        : requiredText(row.model, 'Модель', 80),
       generation: optionalText(row.generation, 'Поколение', 50) ?? null,
       yearFrom: optionalYear(row.yearFrom, 'Год с'),
       yearTo: optionalYear(row.yearTo, 'Год по'),
       body: optionalText(row.body, 'Кузов', 50) ?? null,
       engine: optionalText(row.engine, 'Двигатель', 80) ?? null,
       transmission: optionalText(row.transmission, 'КПП', 20) ?? null,
+      makeId,
+      modelId,
+      generationId,
     };
     if (fit.yearFrom && fit.yearTo && fit.yearFrom > fit.yearTo) {
       throw new BadRequestException('«Год с» позже, чем «Год по»');

@@ -7,6 +7,7 @@ import 'package:autohub_b2b/screens/warehouse/item_edit_screen.dart';
 import 'package:autohub_b2b/models/label_product_model.dart';
 import 'package:autohub_b2b/screens/warehouse/label_print_screen.dart';
 import 'package:autohub_b2b/widgets/donor_origin_tile.dart';
+import 'package:autohub_b2b/widgets/item_listings_section.dart';
 import 'package:autohub_b2b/services/api/api_user_message.dart';
 import 'package:autohub_b2b/services/service_locator.dart';
 import 'package:flutter/services.dart';
@@ -67,6 +68,10 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
             _buildQuickActions(context),
             const SizedBox(height: 16),
             DonorOriginTile(item: item),
+            if (item.id != null) ...[
+              const SizedBox(height: 16),
+              ItemListingsSection(itemId: item.id!),
+            ],
 
             // Детали товара
             _buildDetailsCard(currencyFormat),

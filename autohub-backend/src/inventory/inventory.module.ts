@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Item } from '../items/entities/item.entity';
 import { Warehouse } from '../warehouses/entities/warehouse.entity';
 import { AuditModule } from '../audit/audit.module';
+import { ListingsModule } from '../listings/listings.module';
 import { StockService } from './stock.service';
 import { InventoryService } from './inventory.service';
 import { WarehouseLocationsService } from './warehouse-locations.service';
@@ -32,6 +33,7 @@ import {
       StocktakingLine,
     ]),
     AuditModule,
+    ListingsModule,
   ],
   controllers: [
     WarehouseLocationsController,

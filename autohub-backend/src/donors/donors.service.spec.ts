@@ -7,6 +7,7 @@ import { DonorStatus, DonorVehicle } from './entities/donor-vehicle.entity';
 import { Item } from '../items/entities/item.entity';
 import { AuditService } from '../audit/audit.service';
 import { InventoryService } from '../inventory/inventory.service';
+import { VehicleReferenceService } from '../vehicle-reference/vehicle-reference.service';
 import { PartCompatibility } from '../items/entities/part-compatibility.entity';
 
 const ORG = '11111111-1111-1111-1111-111111111111';
@@ -122,6 +123,10 @@ describe('DonorsService', () => {
               quantity: change.quantityDelta,
             })),
           },
+        },
+        {
+          provide: VehicleReferenceService,
+          useValue: { matchText: jest.fn(async () => null), resolveLink: jest.fn() },
         },
       ],
     }).compile();

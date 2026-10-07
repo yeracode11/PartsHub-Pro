@@ -23,6 +23,7 @@ import {
 import { normalizeOem } from './oem';
 import { AuditService, diffFields } from '../audit/audit.service';
 import { InventoryService } from '../inventory/inventory.service';
+import { VehicleReferenceService } from '../vehicle-reference/vehicle-reference.service';
 import { MovementType } from '../inventory/entities/inventory-movement.entity';
 
 export interface ItemReadOptions {
@@ -57,6 +58,7 @@ export class ItemsService {
     private readonly itemRepository: Repository<Item>,
     private readonly auditService: AuditService,
     private readonly inventoryService: InventoryService,
+    private readonly vehicleReference: VehicleReferenceService,
   ) {}
 
   async getPopularItems(organizationId: string, limit: number) {
@@ -421,14 +423,15 @@ export class ItemsService {
     if (input.compatibility) {
       await manager.delete(PartCompatibility, { itemId, organizationId });
       if (input.compatibility.length > 0) {
-        await manager.insert(
-          PartCompatibility,
-          input.compatibility.map((fit) => ({
-            ...fit,
+        const rows: Array<Record<string, unknown>> = [];
+        for (const fit of input.compatibility) {
+          rows.push({
+            ...(await this.vehicleReference.attachCompatibility(fit)),
             itemId,
             organizationId,
-          })),
-        );
+          });
+        }
+        await manager.insert(PartCompatibility, rows);
       }
     }
   }
@@ -461,8 +464,15 @@ export class ItemsService {
       .createQueryBuilder('item')
       .leftJoinAndSelect('item.organization', 'organization')
       .where('item.quantity > 0') // Только товары в наличии
-      .andWhere('item.status = :active', { active: ItemStatus.ACTIVE });
-    // Временно убираем проверку synced для показа всех товаров
+      .andWhere('item.status = :active', { active: ItemStatus.ACTIVE })
+      .andWhere(
+        `NOT EXISTS (
+          SELECT 1 FROM listings l
+          WHERE l."itemId" = item.id
+            AND l.channel = 'catalog'
+            AND l.status IN ('paused', 'archived')
+        )`,
+      );
 
     if (options.category && options.category !== 'Все') {
       queryBuilder.andWhere('item.category = :category', {

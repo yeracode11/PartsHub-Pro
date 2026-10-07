@@ -7,6 +7,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, Repository } from 'typeorm';
 import { Item } from '../items/entities/item.entity';
 import { AuditService, diffFields } from '../audit/audit.service';
+import { ListingsService } from '../listings/listings.service';
 import { nextStock } from './stock-balance';
 import {
   InventoryMovement,
@@ -38,6 +39,7 @@ export class InventoryService {
     private readonly movementRepository: Repository<InventoryMovement>,
     private readonly dataSource: DataSource,
     private readonly auditService: AuditService,
+    private readonly listingsService: ListingsService,
   ) {}
 
   /**
@@ -135,6 +137,12 @@ export class InventoryService {
         ),
       },
       manager,
+    );
+
+    await this.listingsService.markStale(
+      manager,
+      change.organizationId,
+      item.id,
     );
 
     item.quantity = next.quantity;

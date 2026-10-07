@@ -327,8 +327,10 @@ class _CompatibilityDialogState extends State<_CompatibilityDialog> {
 
   Future<void> _loadBrands() async {
     try {
-      final response = await _dio.get('/api/auto-data/brands');
-      final list = List<Map<String, dynamic>>.from(response.data as List);
+      final response = await _dio.get('/api/vehicles/makes');
+      final list = List<Map<String, dynamic>>.from(
+        (response.data['items'] as List?) ?? [],
+      );
       if (!mounted) return;
       final match = _named(list, widget.initial?.make);
       setState(() {
@@ -360,11 +362,16 @@ class _CompatibilityDialogState extends State<_CompatibilityDialog> {
       _generation = null;
     });
     try {
+      final brand = _brands.cast<Map<String, dynamic>?>().firstWhere(
+        (row) => row?['slug'] == brandSlug,
+        orElse: () => null,
+      );
+      if (brand == null) return;
       final response = await _dio.get(
-        '/api/auto-data/brands/$brandSlug/models',
+        '/api/vehicles/makes/${brand['id']}/models',
       );
       final list = List<Map<String, dynamic>>.from(
-        response.data as List? ?? [],
+        (response.data['items'] as List?) ?? [],
       );
       if (!mounted) return;
       final match = keepInitial ? _named(list, widget.initial?.model) : null;
@@ -407,12 +414,27 @@ class _CompatibilityDialogState extends State<_CompatibilityDialog> {
       _generation = null;
     });
     try {
+      final model = _models.cast<Map<String, dynamic>?>().firstWhere(
+        (row) => row?['slug'] == modelSlug,
+        orElse: () => null,
+      );
+      if (model == null) {
+        if (mounted) setState(() => _loadingGenerations = false);
+        return;
+      }
       final response = await _dio.get(
-        '/api/auto-data/brands/$brandSlug/models/$modelSlug/generations',
+        '/api/vehicles/models/${model['id']}/generations',
       );
-      final list = List<Map<String, dynamic>>.from(
-        response.data as List? ?? [],
-      );
+      final list =
+          List<Map<String, dynamic>>.from(
+            (response.data['items'] as List?) ?? [],
+          ).map((row) {
+            return {
+              ...row,
+              'year_from': row['yearFrom'],
+              'year_to': row['yearTo'],
+            };
+          }).toList();
       if (!mounted) return;
       setState(() {
         _generations = list;
@@ -430,8 +452,8 @@ class _CompatibilityDialogState extends State<_CompatibilityDialog> {
 
   void _applyGenerationYears(Map<String, dynamic>? generation) {
     if (generation == null) return;
-    final from = generation['year_from'];
-    final to = generation['year_to'];
+    final from = generation['year_from'] ?? generation['yearFrom'];
+    final to = generation['year_to'] ?? generation['yearTo'];
     if (from != null) _yearFrom.text = '$from';
     if (to != null) _yearTo.text = '$to';
   }
@@ -458,6 +480,19 @@ class _CompatibilityDialogState extends State<_CompatibilityDialog> {
         make: _brandName!,
         model: _modelName!,
         generation: _generation?['name'] as String?,
+        makeId:
+            _brands.cast<Map<String, dynamic>?>().firstWhere(
+                  (row) => row?['slug'] == _brandSlug,
+                  orElse: () => null,
+                )?['id']
+                as int?,
+        modelId:
+            _models.cast<Map<String, dynamic>?>().firstWhere(
+                  (row) => row?['slug'] == _modelSlug,
+                  orElse: () => null,
+                )?['id']
+                as int?,
+        generationId: _generation?['id'] as int?,
         yearFrom: int.tryParse(_yearFrom.text),
         yearTo: int.tryParse(_yearTo.text),
         body: _optional(_body),

@@ -33,6 +33,18 @@ export class CreateDonorDto {
   model: string;
 
   @IsOptional()
+  @IsInt()
+  makeId?: number;
+
+  @IsOptional()
+  @IsInt()
+  modelId?: number;
+
+  @IsOptional()
+  @IsInt()
+  generationId?: number;
+
+  @IsOptional()
   @IsString()
   @MaxLength(50)
   generation?: string;

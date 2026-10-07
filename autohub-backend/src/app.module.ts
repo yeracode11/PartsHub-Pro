@@ -20,6 +20,8 @@ import { AutoDataModule } from './auto-data/auto-data.module';
 import { IncomingModule } from './incoming/incoming.module';
 import { WarehousesModule } from './warehouses/warehouses.module';
 import { InventoryModule } from './inventory/inventory.module';
+import { ListingsModule } from './listings/listings.module';
+import { VehicleReferenceModule } from './vehicle-reference/vehicle-reference.module';
 import { AdminModule } from './admin/admin.module';
 import { WorksModule } from './works/works.module';
 import { ScheduleModule } from './schedule/schedule.module';
@@ -120,6 +122,8 @@ const logger = new Logger('AppModule');
     IncomingModule,
     WarehousesModule,
     InventoryModule,
+    ListingsModule,
+    VehicleReferenceModule,
     WorksModule,
     ScheduleModule,
     PayrollModule,

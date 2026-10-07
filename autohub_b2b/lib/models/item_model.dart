@@ -50,6 +50,9 @@ class ItemCompatibility extends Equatable {
   final String? body;
   final String? engine;
   final String? transmission;
+  final int? makeId;
+  final int? modelId;
+  final int? generationId;
 
   const ItemCompatibility({
     required this.make,
@@ -60,6 +63,9 @@ class ItemCompatibility extends Equatable {
     this.body,
     this.engine,
     this.transmission,
+    this.makeId,
+    this.modelId,
+    this.generationId,
   });
 
   /// «Toyota Camry XV70 2018–2024»
@@ -88,6 +94,9 @@ class ItemCompatibility extends Equatable {
         body: _text(json['body']),
         engine: _text(json['engine']),
         transmission: _text(json['transmission']),
+        makeId: _int(json['makeId']),
+        modelId: _int(json['modelId']),
+        generationId: _int(json['generationId']),
       );
 
   Map<String, dynamic> toJson() => {
@@ -99,6 +108,9 @@ class ItemCompatibility extends Equatable {
     'body': body,
     'engine': engine,
     'transmission': transmission,
+    if (makeId != null) 'makeId': makeId,
+    if (modelId != null) 'modelId': modelId,
+    if (generationId != null) 'generationId': generationId,
   };
 
   @override
@@ -111,6 +123,9 @@ class ItemCompatibility extends Equatable {
     body,
     engine,
     transmission,
+    makeId,
+    modelId,
+    generationId,
   ];
 }
 

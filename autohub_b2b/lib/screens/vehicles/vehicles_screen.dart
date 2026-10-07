@@ -107,11 +107,7 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
   }
 
   Future<void> _showVehicleDialog(VehicleModel? vehicle) async {
-    await showVehicleDialog(
-      context,
-      vehicle: vehicle,
-      onSave: _loadVehicles,
-    );
+    await showVehicleDialog(context, vehicle: vehicle, onSave: _loadVehicles);
   }
 
   Future<void> _deleteVehicle(VehicleModel vehicle) async {
@@ -623,8 +619,8 @@ class _VehicleDialogState extends State<VehicleDialog> {
   Future<void> _loadBrands() async {
     setState(() => isLoadingBrands = true);
     try {
-      final res = await dio.get('/api/auto-data/brands');
-      final data = res.data;
+      final res = await dio.get('/api/vehicles/makes');
+      final data = res.data is Map ? res.data['items'] : res.data;
 
       if (mounted) {
         setState(() {
@@ -675,7 +671,9 @@ class _VehicleDialogState extends State<VehicleDialog> {
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(userFacingApiMessage(e, prefix: 'Ошибка загрузки марок')),
+            content: Text(
+              userFacingApiMessage(e, prefix: 'Ошибка загрузки марок'),
+            ),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 5),
           ),
@@ -696,9 +694,16 @@ class _VehicleDialogState extends State<VehicleDialog> {
       selectedGeneration = null;
     });
     try {
-      final res = await dio.get('/api/auto-data/brands/$brandSlug/models');
+      final brand = brands.cast<Map<String, dynamic>?>().firstWhere(
+        (row) => row?['slug'] == brandSlug,
+        orElse: () => null,
+      );
+      if (brand == null) return;
+      final res = await dio.get('/api/vehicles/makes/${brand['id']}/models');
       setState(() {
-        models = List<Map<String, dynamic>>.from(res.data ?? []);
+        models = List<Map<String, dynamic>>.from(
+          (res.data is Map ? res.data['items'] : res.data) ?? [],
+        );
         // Если редактируем и есть модель, пытаемся найти её в списке
         if (widget.vehicle != null && widget.vehicle!.model.isNotEmpty) {
           final foundModel = models.firstWhere(
@@ -716,9 +721,13 @@ class _VehicleDialogState extends State<VehicleDialog> {
       });
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка загрузки моделей'))));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              userFacingApiMessage(e, prefix: 'Ошибка загрузки моделей'),
+            ),
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => isLoadingModels = false);
@@ -732,16 +741,32 @@ class _VehicleDialogState extends State<VehicleDialog> {
       selectedGeneration = null;
     });
     try {
-      final res = await dio.get(
-        '/api/auto-data/brands/$brandSlug/models/$modelSlug/generations',
+      final model = models.cast<Map<String, dynamic>?>().firstWhere(
+        (row) => row?['slug'] == modelSlug,
+        orElse: () => null,
       );
+      if (model == null) return;
+      final res = await dio.get(
+        '/api/vehicles/models/${model['id']}/generations',
+      );
+      final raw = res.data is Map ? res.data['items'] : res.data;
       setState(() {
-        generations = List<Map<String, dynamic>>.from(res.data ?? []);
+        generations = List<Map<String, dynamic>>.from(raw ?? []).map((row) {
+          return {
+            ...row,
+            'year_from': row['yearFrom'],
+            'year_to': row['yearTo'],
+          };
+        }).toList();
       });
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка загрузки поколений'))),
+          SnackBar(
+            content: Text(
+              userFacingApiMessage(e, prefix: 'Ошибка загрузки поколений'),
+            ),
+          ),
         );
       }
     } finally {
@@ -889,8 +914,9 @@ class _VehicleDialogState extends State<VehicleDialog> {
         decoration: const InputDecoration(labelText: 'Владелец *'),
         items: customers.map((customer) {
           final phone = customer['phone'] as String?;
-          final phoneSuffix =
-              (phone != null && phone.isNotEmpty) ? ' ($phone)' : '';
+          final phoneSuffix = (phone != null && phone.isNotEmpty)
+              ? ' ($phone)'
+              : '';
           return DropdownMenuItem<int>(
             value: customer['id'] as int,
             child: Text('${customer['name']}$phoneSuffix'),

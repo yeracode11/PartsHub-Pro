@@ -7,12 +7,14 @@ import { PartCrossReference } from './entities/part-cross-reference.entity';
 import { PartCompatibility } from './entities/part-compatibility.entity';
 import { AuditModule } from '../audit/audit.module';
 import { InventoryModule } from '../inventory/inventory.module';
+import { VehicleReferenceModule } from '../vehicle-reference/vehicle-reference.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Item, PartCrossReference, PartCompatibility]),
     AuditModule,
     InventoryModule,
+    VehicleReferenceModule,
   ],
   controllers: [ItemsController],
   providers: [ItemsService],

@@ -1,60 +1,43 @@
-import { Controller, Get, Param, UseGuards, HttpException, HttpStatus, Logger } from '@nestjs/common';
-import { AutoDataService, KolesaGeneration, KolesaListItem } from './auto-data.service';
+import { Controller, Get, NotFoundException, Param, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { VehicleReferenceService } from '../vehicle-reference/vehicle-reference.service';
 
+/** Старый путь приложения. Данные берутся из локального справочника, не из Kolesa. */
 @Controller('api/auto-data')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class AutoDataController {
-  private readonly logger = new Logger(AutoDataController.name);
-
-  constructor(private readonly autoDataService: AutoDataService) {}
+  constructor(private readonly catalog: VehicleReferenceService) {}
 
   @Get('brands')
-  async getBrands(): Promise<KolesaListItem[]> {
-    try {
-      const brands = await this.autoDataService.getBrands();
-      this.logger.log(`✅ Successfully fetched ${brands?.length || 0} brands from Kolesa.kz`);
-      return brands || [];
-    } catch (error: any) {
-      this.logger.warn(`⚠️ Error fetching brands from Kolesa.kz: ${error.message}. Using static list.`);
-      // Возвращаем статический список популярных марок
-      const staticBrands = this.autoDataService.getStaticBrands();
-      this.logger.log(`✅ Returning ${staticBrands.length} static brands`);
-      return staticBrands;
-    }
+  async getBrands() {
+    const items = await this.catalog.listMakes();
+    return items.map((item) => ({ name: item.name, slug: item.slug }));
   }
 
   @Get('brands/:brandSlug/models')
-  async getModels(@Param('brandSlug') brandSlug: string): Promise<KolesaListItem[]> {
-    try {
-      const models = await this.autoDataService.getModels(brandSlug);
-      this.logger.log(`✅ Successfully fetched ${models?.length || 0} models for brand: ${brandSlug} from Kolesa.kz`);
-      return models || [];
-    } catch (error: any) {
-      this.logger.warn(`⚠️ Error fetching models for ${brandSlug}: ${error.message}. Using static list.`);
-      // Возвращаем статический список моделей для марки
-      const staticModels = this.autoDataService.getStaticModels(brandSlug);
-      this.logger.log(`✅ Returning ${staticModels.length} static models for ${brandSlug}`);
-      return staticModels;
-    }
+  async getModels(@Param('brandSlug') brandSlug: string) {
+    const make = await this.catalog.findMakeBySlug(brandSlug);
+    if (!make) throw new NotFoundException('Марка не найдена');
+    const items = await this.catalog.listModels(make.id);
+    return items.map((item) => ({ name: item.name, slug: item.slug }));
   }
 
   @Get('brands/:brandSlug/models/:modelSlug/generations')
   async getGenerations(
     @Param('brandSlug') brandSlug: string,
     @Param('modelSlug') modelSlug: string,
-  ): Promise<KolesaGeneration[]> {
-    try {
-      const generations = await this.autoDataService.getGenerations(brandSlug, modelSlug);
-      this.logger.log(`✅ Successfully fetched ${generations?.length || 0} generations for ${brandSlug}/${modelSlug}`);
-      return generations || [];
-    } catch (error: any) {
-      this.logger.warn(`⚠️ Error fetching generations for ${brandSlug}/${modelSlug}: ${error.message}. Returning empty array.`);
-      // Поколения не критичны, возвращаем пустой массив
-      return [];
-    }
+  ) {
+    const make = await this.catalog.findMakeBySlug(brandSlug);
+    if (!make) return [];
+    const model = await this.catalog.findModelBySlug(make.id, modelSlug);
+    if (!model) return [];
+    const items = await this.catalog.listGenerations(model.id);
+    return items.map((item) => ({
+      name: item.name,
+      slug: item.slug,
+      year_from: item.yearFrom,
+      year_to: item.yearTo,
+    }));
   }
 }
-
-

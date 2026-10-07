@@ -1,13 +1,9 @@
 import { Module } from '@nestjs/common';
 import { AutoDataController } from './auto-data.controller';
-import { AutoDataService } from './auto-data.service';
+import { VehicleReferenceModule } from '../vehicle-reference/vehicle-reference.module';
 
 @Module({
-  imports: [],
+  imports: [VehicleReferenceModule],
   controllers: [AutoDataController],
-  providers: [AutoDataService],
-  exports: [AutoDataService],
 })
 export class AutoDataModule {}
-
-

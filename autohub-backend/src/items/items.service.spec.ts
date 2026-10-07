@@ -45,10 +45,12 @@ function setup(result: unknown = { id: 1, organizationId: ORG, price: '100' }) {
   };
   const audit = { record: jest.fn() };
   const inventory = { apply: jest.fn() };
+  const catalog = { attachCompatibility: jest.fn(async (fit) => fit) };
   const service = new ItemsService(
     repo as never,
     audit as never,
     inventory as never,
+    catalog as never,
   );
   return { service, qb, repo, manager, audit };
 }

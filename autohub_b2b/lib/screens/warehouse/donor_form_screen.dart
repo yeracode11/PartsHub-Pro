@@ -8,6 +8,7 @@ import 'package:autohub_b2b/screens/warehouse/donors_screen.dart'
     show formatMoney;
 import 'package:autohub_b2b/services/api/api_user_message.dart';
 import 'package:autohub_b2b/services/donor_service.dart';
+import 'package:autohub_b2b/widgets/vehicle_reference_fields.dart';
 
 /// Покупка машины на разбор или правка её данных и расходов.
 class DonorFormScreen extends StatefulWidget {
@@ -24,6 +25,9 @@ class _DonorFormScreenState extends State<DonorFormScreen> {
   final _service = DonorService();
   final _dateFormat = DateFormat('dd.MM.yyyy');
 
+  int? _makeId;
+  int? _modelId;
+  int? _generationId;
   late final TextEditingController _brand;
   late final TextEditingController _model;
   late final TextEditingController _generation;
@@ -158,6 +162,9 @@ class _DonorFormScreenState extends State<DonorFormScreen> {
       'brand': _brand.text.trim(),
       'model': _model.text.trim(),
       'generation': text(_generation),
+      if (_makeId != null) 'makeId': _makeId,
+      if (_modelId != null) 'modelId': _modelId,
+      if (_generationId != null) 'generationId': _generationId,
       'year': number(_year),
       'vin': text(_vin),
       'engine': text(_engine),
@@ -251,19 +258,26 @@ class _DonorFormScreenState extends State<DonorFormScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     _section('Машина'),
-                    _row([
-                      _field(_brand, 'Марка *', required: true),
-                      _field(_model, 'Модель *', required: true),
-                    ]),
-                    _row([
-                      _field(_generation, 'Поколение', hint: 'XV70, E90'),
-                      _field(
-                        _year,
-                        'Год',
-                        digitsOnly: true,
-                        validator: _validateYear,
-                      ),
-                    ]),
+                    VehicleReferenceFields(
+                      initialMake: widget.donor?.brand,
+                      initialModel: widget.donor?.model,
+                      initialGeneration: widget.donor?.generation,
+                      onChanged: (selection) {
+                        _makeId = selection?.makeId;
+                        _modelId = selection?.modelId;
+                        _generationId = selection?.generationId;
+                        _brand.text = selection?.make ?? '';
+                        _model.text = selection?.model ?? '';
+                        _generation.text = selection?.generation ?? '';
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    _field(
+                      _year,
+                      'Год',
+                      digitsOnly: true,
+                      validator: _validateYear,
+                    ),
                     _field(
                       _vin,
                       'VIN или номер кузова',

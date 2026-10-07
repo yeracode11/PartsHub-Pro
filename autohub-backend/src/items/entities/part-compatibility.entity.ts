@@ -53,4 +53,13 @@ export class PartCompatibility {
 
   @Column({ type: 'varchar', length: 20, nullable: true })
   transmission: string | null;
+
+  @Column({ type: 'int', nullable: true })
+  makeId: number | null;
+
+  @Column({ type: 'int', nullable: true })
+  modelId: number | null;
+
+  @Column({ type: 'int', nullable: true })
+  generationId: number | null;
 }

@@ -59,6 +59,16 @@ export class DonorVehicle {
   @Column({ type: 'varchar', length: 50, nullable: true })
   generation: string | null; // XV70, E90
 
+  /** Ссылка на общий справочник. Текст brand/model/generation остаётся для старых клиентов. */
+  @Column({ type: 'int', nullable: true })
+  makeId: number | null;
+
+  @Column({ type: 'int', nullable: true })
+  modelId: number | null;
+
+  @Column({ type: 'int', nullable: true })
+  generationId: number | null;
+
   @Column({ type: 'varchar', length: 50, nullable: true })
   body: string | null; // седан, ACV40
 
