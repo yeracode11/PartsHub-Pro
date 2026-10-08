@@ -3,8 +3,7 @@ import 'package:flutter/services.dart';
 
 import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/models/item_model.dart';
-import 'package:autohub_b2b/services/api/api_client.dart';
-import 'package:autohub_b2b/services/api/api_user_message.dart';
+import 'package:autohub_b2b/widgets/vehicle_reference_fields.dart';
 
 const _maxRows = 50;
 
@@ -282,30 +281,36 @@ class _CompatibilityDialog extends StatefulWidget {
 
 class _CompatibilityDialogState extends State<_CompatibilityDialog> {
   final _formKey = GlobalKey<FormState>();
-  final _dio = ApiClient().dio;
   final _yearFrom = TextEditingController();
   final _yearTo = TextEditingController();
   final _body = TextEditingController();
   final _engine = TextEditingController();
   final _transmission = TextEditingController();
 
-  List<Map<String, dynamic>> _brands = [];
-  List<Map<String, dynamic>> _models = [];
-  List<Map<String, dynamic>> _generations = [];
-  String? _brandSlug;
-  String? _brandName;
-  String? _modelSlug;
-  String? _modelName;
-  Map<String, dynamic>? _generation;
-  bool _loadingBrands = true;
-  bool _loadingModels = false;
-  bool _loadingGenerations = false;
-  String? _catalogError;
+  VehicleSelection? _car;
 
   @override
   void initState() {
     super.initState();
-    _loadBrands();
+    final initial = widget.initial;
+    if (initial == null) return;
+    _yearFrom.text = initial.yearFrom?.toString() ?? '';
+    _yearTo.text = initial.yearTo?.toString() ?? '';
+    _body.text = initial.body ?? '';
+    _engine.text = initial.engine ?? '';
+    _transmission.text = initial.transmission ?? '';
+    if (initial.make.isNotEmpty && initial.model.isNotEmpty) {
+      _car = VehicleSelection(
+        makeId: initial.makeId ?? 0,
+        make: initial.make,
+        modelId: initial.modelId ?? 0,
+        model: initial.model,
+        generationId: initial.generationId,
+        generation: initial.generation,
+        yearFrom: initial.yearFrom,
+        yearTo: initial.yearTo,
+      );
+    }
   }
 
   @override
@@ -314,148 +319,6 @@ class _CompatibilityDialogState extends State<_CompatibilityDialog> {
       c.dispose();
     }
     super.dispose();
-  }
-
-  Map<String, dynamic>? _named(List<Map<String, dynamic>> list, String? name) {
-    final want = name?.trim().toLowerCase();
-    if (want == null || want.isEmpty) return null;
-    for (final row in list) {
-      if ((row['name'] as String?)?.toLowerCase() == want) return row;
-    }
-    return null;
-  }
-
-  Future<void> _loadBrands() async {
-    try {
-      final response = await _dio.get('/api/vehicles/makes');
-      final list = List<Map<String, dynamic>>.from(
-        (response.data['items'] as List?) ?? [],
-      );
-      if (!mounted) return;
-      final match = _named(list, widget.initial?.make);
-      setState(() {
-        _brands = list;
-        _loadingBrands = false;
-        _catalogError = list.isEmpty ? 'Справочник марок пуст' : null;
-        if (match != null) {
-          _brandSlug = match['slug'] as String;
-          _brandName = match['name'] as String;
-        }
-      });
-      if (_brandSlug != null) await _loadModels(_brandSlug!, keepInitial: true);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _loadingBrands = false;
-        _catalogError = userFacingApiMessage(e, prefix: 'Марки не загрузились');
-      });
-    }
-  }
-
-  Future<void> _loadModels(String brandSlug, {bool keepInitial = false}) async {
-    setState(() {
-      _loadingModels = true;
-      _models = [];
-      _generations = [];
-      _modelSlug = null;
-      _modelName = null;
-      _generation = null;
-    });
-    try {
-      final brand = _brands.cast<Map<String, dynamic>?>().firstWhere(
-        (row) => row?['slug'] == brandSlug,
-        orElse: () => null,
-      );
-      if (brand == null) return;
-      final response = await _dio.get(
-        '/api/vehicles/makes/${brand['id']}/models',
-      );
-      final list = List<Map<String, dynamic>>.from(
-        (response.data['items'] as List?) ?? [],
-      );
-      if (!mounted) return;
-      final match = keepInitial ? _named(list, widget.initial?.model) : null;
-      setState(() {
-        _models = list;
-        _loadingModels = false;
-        if (match != null) {
-          _modelSlug = match['slug'] as String;
-          _modelName = match['name'] as String;
-        }
-      });
-      if (_modelSlug != null) {
-        await _loadGenerations(
-          brandSlug,
-          _modelSlug!,
-          keepInitial: keepInitial,
-        );
-      }
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _loadingModels = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            userFacingApiMessage(e, prefix: 'Модели не загрузились'),
-          ),
-        ),
-      );
-    }
-  }
-
-  Future<void> _loadGenerations(
-    String brandSlug,
-    String modelSlug, {
-    bool keepInitial = false,
-  }) async {
-    setState(() {
-      _loadingGenerations = true;
-      _generations = [];
-      _generation = null;
-    });
-    try {
-      final model = _models.cast<Map<String, dynamic>?>().firstWhere(
-        (row) => row?['slug'] == modelSlug,
-        orElse: () => null,
-      );
-      if (model == null) {
-        if (mounted) setState(() => _loadingGenerations = false);
-        return;
-      }
-      final response = await _dio.get(
-        '/api/vehicles/models/${model['id']}/generations',
-      );
-      final list =
-          List<Map<String, dynamic>>.from(
-            (response.data['items'] as List?) ?? [],
-          ).map((row) {
-            return {
-              ...row,
-              'year_from': row['yearFrom'],
-              'year_to': row['yearTo'],
-            };
-          }).toList();
-      if (!mounted) return;
-      setState(() {
-        _generations = list;
-        _loadingGenerations = false;
-        if (keepInitial) {
-          _generation = _named(list, widget.initial?.generation);
-          _applyGenerationYears(_generation);
-        }
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _loadingGenerations = false);
-    }
-  }
-
-  void _applyGenerationYears(Map<String, dynamic>? generation) {
-    if (generation == null) return;
-    final from = generation['year_from'] ?? generation['yearFrom'];
-    final to = generation['year_to'] ?? generation['yearTo'];
-    if (from != null) _yearFrom.text = '$from';
-    if (to != null) _yearTo.text = '$to';
   }
 
   String? _yearError(String? value) {
@@ -474,25 +337,16 @@ class _CompatibilityDialogState extends State<_CompatibilityDialog> {
 
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
-    if (_brandName == null || _modelName == null) return;
+    final car = _car;
+    if (car == null) return;
     Navigator.of(context).pop(
       ItemCompatibility(
-        make: _brandName!,
-        model: _modelName!,
-        generation: _generation?['name'] as String?,
-        makeId:
-            _brands.cast<Map<String, dynamic>?>().firstWhere(
-                  (row) => row?['slug'] == _brandSlug,
-                  orElse: () => null,
-                )?['id']
-                as int?,
-        modelId:
-            _models.cast<Map<String, dynamic>?>().firstWhere(
-                  (row) => row?['slug'] == _modelSlug,
-                  orElse: () => null,
-                )?['id']
-                as int?,
-        generationId: _generation?['id'] as int?,
+        make: car.make,
+        model: car.model,
+        generation: car.generation,
+        makeId: car.makeId > 0 ? car.makeId : null,
+        modelId: car.modelId > 0 ? car.modelId : null,
+        generationId: car.generationId,
         yearFrom: int.tryParse(_yearFrom.text),
         yearTo: int.tryParse(_yearTo.text),
         body: _optional(_body),
@@ -545,115 +399,18 @@ class _CompatibilityDialogState extends State<_CompatibilityDialog> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (_loadingBrands)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 24),
-                    child: Center(child: CircularProgressIndicator()),
-                  )
-                else if (_catalogError != null)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    child: Text(
-                      _catalogError!,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppTheme.errorColor,
-                      ),
-                    ),
-                  )
-                else ...[
-                  DropdownButtonFormField<String>(
-                    initialValue: _brandSlug,
-                    isExpanded: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Марка *',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: [
-                      for (final brand in _brands)
-                        DropdownMenuItem(
-                          value: brand['slug'] as String,
-                          child: Text(brand['name'] as String),
-                        ),
-                    ],
-                    onChanged: (slug) {
-                      if (slug == null) return;
-                      setState(() {
-                        _brandSlug = slug;
-                        _brandName =
-                            _brands.firstWhere((b) => b['slug'] == slug)['name']
-                                as String;
-                      });
-                      _loadModels(slug);
-                    },
-                    validator: (v) => v == null ? 'Выберите марку' : null,
-                  ),
-                  if (_brandSlug != null) ...[
-                    gap,
-                    if (_loadingModels)
-                      const LinearProgressIndicator()
-                    else
-                      DropdownButtonFormField<String>(
-                        initialValue: _modelSlug,
-                        isExpanded: true,
-                        decoration: const InputDecoration(
-                          labelText: 'Модель *',
-                          border: OutlineInputBorder(),
-                        ),
-                        items: [
-                          for (final model in _models)
-                            DropdownMenuItem(
-                              value: model['slug'] as String,
-                              child: Text(model['name'] as String),
-                            ),
-                        ],
-                        onChanged: (slug) {
-                          if (slug == null || _brandSlug == null) return;
-                          setState(() {
-                            _modelSlug = slug;
-                            _modelName =
-                                _models.firstWhere(
-                                      (m) => m['slug'] == slug,
-                                    )['name']
-                                    as String;
-                          });
-                          _loadGenerations(_brandSlug!, slug);
-                        },
-                        validator: (v) => v == null ? 'Выберите модель' : null,
-                      ),
-                  ],
-                  if (_modelSlug != null && _loadingGenerations) ...[
-                    gap,
-                    const LinearProgressIndicator(),
-                  ] else if (_generations.isNotEmpty) ...[
-                    gap,
-                    DropdownButtonFormField<String>(
-                      initialValue: _generation?['id']?.toString(),
-                      isExpanded: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Поколение',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: [
-                        for (final generation in _generations)
-                          DropdownMenuItem(
-                            value: generation['id']?.toString(),
-                            child: Text(generation['name'] as String),
-                          ),
-                      ],
-                      onChanged: (id) {
-                        Map<String, dynamic>? picked;
-                        for (final generation in _generations) {
-                          if (generation['id']?.toString() == id) {
-                            picked = generation;
-                            break;
-                          }
-                        }
-                        setState(() => _generation = picked);
-                        _applyGenerationYears(picked);
-                      },
-                    ),
-                  ],
-                ],
+                VehicleReferenceFields(
+                  initialMake: _car?.make,
+                  initialModel: _car?.model,
+                  initialGeneration: _car?.generation,
+                  onChanged: (selection) {
+                    setState(() => _car = selection);
+                    final from = selection?.yearFrom;
+                    final to = selection?.yearTo;
+                    if (from != null) _yearFrom.text = '$from';
+                    if (to != null) _yearTo.text = '$to';
+                  },
+                ),
                 gap,
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -685,7 +442,7 @@ class _CompatibilityDialogState extends State<_CompatibilityDialog> {
           child: const Text('Отмена'),
         ),
         FilledButton(
-          onPressed: _brandName == null || _modelName == null ? null : _submit,
+          onPressed: _car == null ? null : _submit,
           child: const Text('Добавить'),
         ),
       ],

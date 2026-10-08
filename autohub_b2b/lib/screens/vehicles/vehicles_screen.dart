@@ -9,6 +9,7 @@ import 'package:autohub_b2b/models/vehicle_model.dart';
 import 'package:dio/dio.dart';
 import 'package:autohub_b2b/screens/vehicles/vehicle_detail_screen.dart';
 import 'package:autohub_b2b/services/api/api_user_message.dart';
+import 'package:autohub_b2b/widgets/vehicle_reference_fields.dart';
 
 class VehiclesScreen extends StatefulWidget {
   const VehiclesScreen({super.key});
@@ -157,340 +158,196 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.of(context).size.width < 768;
-    final padding = isMobile ? 16.0 : 24.0;
+    final wide = MediaQuery.of(context).size.width >= 768;
 
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
-      body: Column(
-        children: [
-          // Заголовок и поиск
-          Container(
-            padding: EdgeInsets.all(padding),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 10,
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
+      body: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Автомобили',
+                          style: Theme.of(context).textTheme.headlineSmall
+                              ?.copyWith(fontWeight: FontWeight.w600),
+                        ),
+                        if (!isLoading && !isForbidden && !isOffline)
                           Text(
-                            '🚗 Автомобили',
-                            style: Theme.of(context).textTheme.headlineMedium
-                                ?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: isMobile ? 20 : 24,
-                                ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Всего: ${filteredVehicles.length}',
-                            style: TextStyle(
+                            searchQuery.isEmpty
+                                ? '${vehicles.length}'
+                                : '${filteredVehicles.length} из ${vehicles.length}',
+                            style: const TextStyle(
                               color: AppTheme.textSecondary,
                               fontSize: 14,
                             ),
                           ),
-                        ],
-                      ),
-                    ),
-                    if (!isMobile)
-                      ElevatedButton.icon(
-                        onPressed: _showAddVehicleDialog,
-                        icon: const Icon(Icons.add),
-                        label: const Text('Добавить авто'),
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 24,
-                            vertical: 16,
-                          ),
-                        ),
-                      )
-                    else
-                      IconButton(
-                        icon: const Icon(Icons.add),
-                        onPressed: _showAddVehicleDialog,
-                        tooltip: 'Добавить авто',
-                      ),
-                  ],
-                ),
-                SizedBox(height: isMobile ? 12 : 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        onChanged: _filterVehicles,
-                        decoration: InputDecoration(
-                          hintText: 'Поиск по марке, номеру, VIN...',
-                          prefixIcon: const Icon(Icons.search),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          contentPadding: EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: isMobile ? 12 : 16,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-
-          // Список автомобилей
-          Expanded(
-            child: isForbidden
-                ? UnauthorizedPlaceholder(
-                    message: forbiddenMessage,
-                    isForbidden: false,
-                  )
-                : isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : isOffline
-                ? OfflinePlaceholder(onRetry: _loadVehicles)
-                : filteredVehicles.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.directions_car_outlined,
-                          size: 64,
-                          color: Colors.grey.shade400,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          searchQuery.isEmpty
-                              ? 'Нет автомобилей'
-                              : 'Ничего не найдено',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: AppTheme.textSecondary,
-                          ),
-                        ),
                       ],
                     ),
-                  )
-                : LayoutBuilder(
-                    builder: (context, constraints) {
-                      final crossAxisCount = isMobile ? 1 : 3;
-                      // Увеличиваем aspectRatio для мобильных, чтобы карточки были выше
-                      final aspectRatio = isMobile ? 1.3 : 1.5;
-
-                      return GridView.builder(
-                        padding: EdgeInsets.all(padding),
-                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: crossAxisCount,
-                          childAspectRatio: aspectRatio,
-                          crossAxisSpacing: isMobile ? 0 : 16,
-                          mainAxisSpacing: isMobile ? 12 : 16,
-                        ),
-                        itemCount: filteredVehicles.length,
-                        itemBuilder: (context, index) {
-                          final vehicle = filteredVehicles[index];
-                          return _buildVehicleCard(vehicle);
-                        },
-                      );
-                    },
                   ),
-          ),
-        ],
+                  if (wide)
+                    FilledButton.icon(
+                      onPressed: _showAddVehicleDialog,
+                      icon: const Icon(Icons.add),
+                      label: const Text('Добавить'),
+                    )
+                  else
+                    IconButton(
+                      icon: const Icon(Icons.add),
+                      onPressed: _showAddVehicleDialog,
+                      tooltip: 'Добавить',
+                      style: IconButton.styleFrom(
+                        minimumSize: const Size(44, 44),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: _VehicleSearch(),
+            ),
+            Expanded(child: _listBody()),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildVehicleCard(VehicleModel vehicle) {
-    final isMobile = MediaQuery.of(context).size.width < 768;
-
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: vehicle.needsService
-            ? const BorderSide(color: Colors.orange, width: 2)
-            : BorderSide.none,
-      ),
-      child: InkWell(
-        onTap: () => _openVehicleDetail(vehicle),
-        borderRadius: BorderRadius.circular(12),
+  Widget _listBody() {
+    if (isForbidden) {
+      return UnauthorizedPlaceholder(
+        message: forbiddenMessage,
+        isForbidden: false,
+      );
+    }
+    if (isLoading) return const Center(child: CircularProgressIndicator());
+    if (isOffline) return OfflinePlaceholder(onRetry: _loadVehicles);
+    if (filteredVehicles.isEmpty) {
+      return Center(
         child: Padding(
-          padding: EdgeInsets.all(isMobile ? 10 : 16),
+          padding: const EdgeInsets.all(24),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Заголовок и действия
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      vehicle.displayName,
-                      style: TextStyle(
-                        fontSize: isMobile ? 15 : 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  PopupMenuButton(
-                    iconSize: isMobile ? 18 : 24,
-                    itemBuilder: (context) => [
-                      const PopupMenuItem(
-                        value: 'edit',
-                        child: Row(
-                          children: [
-                            Icon(Icons.edit, size: 18),
-                            SizedBox(width: 8),
-                            Text('Редактировать'),
-                          ],
-                        ),
-                      ),
-                      const PopupMenuItem(
-                        value: 'delete',
-                        child: Row(
-                          children: [
-                            Icon(Icons.delete, size: 18, color: Colors.red),
-                            SizedBox(width: 8),
-                            Text(
-                              'Удалить',
-                              style: TextStyle(color: Colors.red),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                    onSelected: (value) {
-                      if (value == 'edit') {
-                        _showEditVehicleDialog(vehicle);
-                      } else if (value == 'delete') {
-                        _deleteVehicle(vehicle);
-                      }
-                    },
-                  ),
-                ],
+              Text(
+                searchQuery.isEmpty ? 'Нет автомобилей' : 'Ничего не найдено',
+                style: const TextStyle(color: AppTheme.textSecondary),
               ),
-              SizedBox(height: isMobile ? 4 : 8),
-
-              // Госномер
-              Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: isMobile ? 8 : 12,
-                  vertical: isMobile ? 3 : 6,
+              if (searchQuery.isEmpty) ...[
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: _showAddVehicleDialog,
+                  child: const Text('Добавить'),
                 ),
-                decoration: BoxDecoration(
-                  color: Colors.black,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  vehicle.plateNumber,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: isMobile ? 13 : 16,
-                    letterSpacing: 1.5,
-                  ),
-                ),
-              ),
-              SizedBox(height: isMobile ? 6 : 12),
-
-              // Информация
-              _buildInfoRow(
-                Icons.person,
-                vehicle.customerName,
-                isMobile: isMobile,
-              ),
-              SizedBox(height: isMobile ? 1 : 4),
-              _buildInfoRow(
-                Icons.speed,
-                '${vehicle.currentMileage} км',
-                isMobile: isMobile,
-              ),
-              SizedBox(height: isMobile ? 1 : 4),
-              _buildInfoRow(
-                Icons.local_gas_station,
-                '${vehicle.fuelTypeDisplay} • ${vehicle.transmissionDisplay}',
-                isMobile: isMobile,
-              ),
-
-              SizedBox(height: isMobile ? 6 : 12),
-
-              // Статус ТО
-              if (vehicle.needsService)
-                Container(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: isMobile ? 10 : 12,
-                    vertical: isMobile ? 4 : 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.shade100,
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.warning,
-                        size: isMobile ? 14 : 16,
-                        color: Colors.orange.shade700,
-                      ),
-                      SizedBox(width: isMobile ? 3 : 4),
-                      Text(
-                        'Требуется ТО',
-                        style: TextStyle(
-                          color: Colors.orange.shade700,
-                          fontWeight: FontWeight.bold,
-                          fontSize: isMobile ? 11 : 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              else if (vehicle.nextServiceDate != null)
-                Text(
-                  'ТО через ${vehicle.daysUntilService} дней',
-                  style: TextStyle(
-                    color: AppTheme.textSecondary,
-                    fontSize: isMobile ? 11 : 12,
-                  ),
-                ),
+              ],
             ],
           ),
         ),
+      );
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(8, 0, 8, 24),
+      itemCount: filteredVehicles.length,
+      separatorBuilder: (_, _) => const Divider(height: 1, indent: 16, endIndent: 16),
+      itemBuilder: (context, index) => _VehicleRow(
+        vehicle: filteredVehicles[index],
+        onOpen: () => _openVehicleDetail(filteredVehicles[index]),
+        onEdit: () => _showEditVehicleDialog(filteredVehicles[index]),
+        onDelete: () => _deleteVehicle(filteredVehicles[index]),
       ),
     );
   }
+}
 
-  Widget _buildInfoRow(IconData icon, String text, {bool isMobile = false}) {
-    return Row(
-      children: [
-        Icon(icon, size: isMobile ? 14 : 16, color: AppTheme.textSecondary),
-        SizedBox(width: isMobile ? 6 : 8),
-        Expanded(
-          child: Text(
-            text,
-            style: TextStyle(
-              fontSize: isMobile ? 12 : 13,
-              color: AppTheme.textSecondary,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
+class _VehicleSearch extends StatefulWidget {
+  const _VehicleSearch();
+
+  @override
+  State<_VehicleSearch> createState() => _VehicleSearchState();
+}
+
+class _VehicleSearchState extends State<_VehicleSearch> {
+  @override
+  Widget build(BuildContext context) {
+    final screen = context.findAncestorStateOfType<_VehiclesScreenState>();
+    return TextField(
+      onChanged: screen?._filterVehicles,
+      decoration: const InputDecoration(
+        hintText: 'Марка, номер или VIN',
+        prefixIcon: Icon(Icons.search),
+        border: OutlineInputBorder(),
+        isDense: true,
+      ),
+    );
+  }
+}
+
+class _VehicleRow extends StatelessWidget {
+  const _VehicleRow({
+    required this.vehicle,
+    required this.onOpen,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  final VehicleModel vehicle;
+  final VoidCallback onOpen;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final service = vehicle.needsService
+        ? 'Нужно ТО'
+        : vehicle.nextServiceDate != null
+        ? 'ТО через ${vehicle.daysUntilService} дн.'
+        : null;
+
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      minVerticalPadding: 12,
+      title: Text(
+        vehicle.displayName,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(fontWeight: FontWeight.w600),
+      ),
+      subtitle: Text(
+        [
+          vehicle.plateNumber,
+          vehicle.customerName,
+          '${vehicle.currentMileage} км',
+          if (service != null) service,
+        ].join(' · '),
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: vehicle.needsService
+              ? AppTheme.errorColor
+              : AppTheme.textSecondary,
         ),
-      ],
+      ),
+      onTap: onOpen,
+      trailing: PopupMenuButton<String>(
+        tooltip: 'Действия',
+        itemBuilder: (context) => const [
+          PopupMenuItem(value: 'edit', child: Text('Изменить')),
+          PopupMenuItem(value: 'delete', child: Text('Удалить')),
+        ],
+        onSelected: (value) {
+          if (value == 'edit') onEdit();
+          if (value == 'delete') onDelete();
+        },
+      ),
     );
   }
 }
@@ -555,20 +412,9 @@ class _VehicleDialogState extends State<VehicleDialog> {
   List<Map<String, dynamic>> customers = [];
   bool isLoadingCustomers = true;
 
-  // Kolesa.kz данные
-  List<Map<String, dynamic>> brands = [];
-  List<Map<String, dynamic>> models = [];
-  List<Map<String, dynamic>> generations = [];
-
-  String? selectedBrandSlug;
   String? selectedBrandName;
-  String? selectedModelSlug;
   String? selectedModelName;
   Map<String, dynamic>? selectedGeneration;
-
-  bool isLoadingBrands = false;
-  bool isLoadingModels = false;
-  bool isLoadingGenerations = false;
 
   @override
   void initState() {
@@ -601,7 +447,6 @@ class _VehicleDialogState extends State<VehicleDialog> {
     }
 
     _loadCustomers();
-    _loadBrands();
   }
 
   Future<void> _loadCustomers() async {
@@ -613,164 +458,6 @@ class _VehicleDialogState extends State<VehicleDialog> {
       });
     } catch (e) {
       setState(() => isLoadingCustomers = false);
-    }
-  }
-
-  Future<void> _loadBrands() async {
-    setState(() => isLoadingBrands = true);
-    try {
-      final res = await dio.get('/api/vehicles/makes');
-      final data = res.data is Map ? res.data['items'] : res.data;
-
-      if (mounted) {
-        setState(() {
-          // Проверяем, что данные есть и это массив
-          if (data != null && data is List) {
-            brands = List<Map<String, dynamic>>.from(data);
-          } else {
-            brands = [];
-            if (data != null) {}
-          }
-
-          // Если редактируем и есть марка, пытаемся найти её в списке
-          if (widget.vehicle != null &&
-              widget.vehicle!.brand.isNotEmpty &&
-              brands.isNotEmpty) {
-            try {
-              final foundBrand = brands.firstWhere(
-                (b) =>
-                    (b['name'] as String).toLowerCase() ==
-                    widget.vehicle!.brand.toLowerCase(),
-                orElse: () => {},
-              );
-              if (foundBrand.isNotEmpty) {
-                selectedBrandSlug = foundBrand['slug'] as String;
-                selectedBrandName = foundBrand['name'] as String;
-                _loadModels(selectedBrandSlug!);
-              }
-            } catch (e) {}
-          }
-        });
-
-        if (brands.isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Марки не загружены. Проверьте подключение к серверу.',
-              ),
-              backgroundColor: Colors.orange,
-              duration: Duration(seconds: 3),
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          brands = [];
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              userFacingApiMessage(e, prefix: 'Ошибка загрузки марок'),
-            ),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 5),
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => isLoadingBrands = false);
-    }
-  }
-
-  Future<void> _loadModels(String brandSlug) async {
-    setState(() {
-      isLoadingModels = true;
-      models = [];
-      generations = [];
-      selectedModelSlug = null;
-      selectedModelName = null;
-      selectedGeneration = null;
-    });
-    try {
-      final brand = brands.cast<Map<String, dynamic>?>().firstWhere(
-        (row) => row?['slug'] == brandSlug,
-        orElse: () => null,
-      );
-      if (brand == null) return;
-      final res = await dio.get('/api/vehicles/makes/${brand['id']}/models');
-      setState(() {
-        models = List<Map<String, dynamic>>.from(
-          (res.data is Map ? res.data['items'] : res.data) ?? [],
-        );
-        // Если редактируем и есть модель, пытаемся найти её в списке
-        if (widget.vehicle != null && widget.vehicle!.model.isNotEmpty) {
-          final foundModel = models.firstWhere(
-            (m) =>
-                (m['name'] as String).toLowerCase() ==
-                widget.vehicle!.model.toLowerCase(),
-            orElse: () => {},
-          );
-          if (foundModel.isNotEmpty) {
-            selectedModelSlug = foundModel['slug'] as String;
-            selectedModelName = foundModel['name'] as String;
-            _loadGenerations(brandSlug, selectedModelSlug!);
-          }
-        }
-      });
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              userFacingApiMessage(e, prefix: 'Ошибка загрузки моделей'),
-            ),
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => isLoadingModels = false);
-    }
-  }
-
-  Future<void> _loadGenerations(String brandSlug, String modelSlug) async {
-    setState(() {
-      isLoadingGenerations = true;
-      generations = [];
-      selectedGeneration = null;
-    });
-    try {
-      final model = models.cast<Map<String, dynamic>?>().firstWhere(
-        (row) => row?['slug'] == modelSlug,
-        orElse: () => null,
-      );
-      if (model == null) return;
-      final res = await dio.get(
-        '/api/vehicles/models/${model['id']}/generations',
-      );
-      final raw = res.data is Map ? res.data['items'] : res.data;
-      setState(() {
-        generations = List<Map<String, dynamic>>.from(raw ?? []).map((row) {
-          return {
-            ...row,
-            'year_from': row['yearFrom'],
-            'year_to': row['yearTo'],
-          };
-        }).toList();
-      });
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              userFacingApiMessage(e, prefix: 'Ошибка загрузки поколений'),
-            ),
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => isLoadingGenerations = false);
     }
   }
 
@@ -929,105 +616,28 @@ class _VehicleDialogState extends State<VehicleDialog> {
       ),
     const SizedBox(height: 16),
 
-    // Марка
-    if (isLoadingBrands)
-      const LinearProgressIndicator()
-    else
-      DropdownButtonFormField<String>(
-        value: selectedBrandSlug,
-        decoration: const InputDecoration(labelText: 'Марка *'),
-        hint: const Text('Выберите марку'),
-        items: brands.map((brand) {
-          return DropdownMenuItem<String>(
-            value: brand['slug'] as String,
-            child: Text(brand['name'] as String),
-          );
-        }).toList(),
-        onChanged: (value) {
-          if (value == null) return;
-          setState(() {
-            selectedBrandSlug = value;
-            selectedBrandName =
-                brands.firstWhere((b) => b['slug'] == value)['name'] as String;
-            models = [];
-            generations = [];
-            selectedModelSlug = null;
-            selectedModelName = null;
-            selectedGeneration = null;
-          });
-          _loadModels(value);
-        },
-        validator: (value) => value == null ? 'Выберите марку' : null,
-      ),
-    const SizedBox(height: 16),
-
-    // Модель
-    if (selectedBrandSlug == null)
-      const SizedBox.shrink()
-    else if (isLoadingModels)
-      const LinearProgressIndicator()
-    else
-      DropdownButtonFormField<String>(
-        value: selectedModelSlug,
-        decoration: const InputDecoration(labelText: 'Модель *'),
-        hint: const Text('Выберите модель'),
-        items: models.map((model) {
-          return DropdownMenuItem<String>(
-            value: model['slug'] as String,
-            child: Text(model['name'] as String),
-          );
-        }).toList(),
-        onChanged: (value) {
-          if (value == null || selectedBrandSlug == null) return;
-          setState(() {
-            selectedModelSlug = value;
-            selectedModelName =
-                models.firstWhere((m) => m['slug'] == value)['name'] as String;
-            generations = [];
-            selectedGeneration = null;
-          });
-          _loadGenerations(selectedBrandSlug!, value);
-        },
-        validator: (value) => value == null ? 'Выберите модель' : null,
-      ),
-    const SizedBox(height: 16),
-
-    // Поколение
-    if (selectedModelSlug == null)
-      const SizedBox.shrink()
-    else if (isLoadingGenerations)
-      const LinearProgressIndicator()
-    else if (generations.isEmpty)
-      const SizedBox.shrink()
-    else
-      DropdownButtonFormField<Map<String, dynamic>>(
-        value: selectedGeneration,
-        decoration: const InputDecoration(labelText: 'Поколение'),
-        hint: const Text('Выберите поколение (необязательно)'),
-        items: generations.map((gen) {
-          final yearFrom = gen['year_from'] as int?;
-          final yearTo = gen['year_to'] as int?;
-          final yearText = yearFrom != null
-              ? ' (${yearFrom}${yearTo != null ? '–$yearTo' : '–н.в.'})'
-              : '';
-          return DropdownMenuItem<Map<String, dynamic>>(
-            value: gen,
-            child: Text('${gen['name']}$yearText'),
-          );
-        }).toList(),
-        onChanged: (value) {
-          setState(() {
-            selectedGeneration = value;
-            // Автоматически заполняем год из поколения, если поле пустое
-            if (value != null && value['year_from'] != null) {
-              final yearFrom = value['year_from'] as int;
-              if (_yearController.text.isEmpty || _yearController.text == '0') {
-                _yearController.text = yearFrom.toString();
-              }
-            }
-          });
-        },
-      ),
+    VehicleReferenceFields(
+      initialMake: selectedBrandName,
+      initialModel: selectedModelName,
+      initialGeneration: selectedGeneration?['name'] as String?,
+      onChanged: (selection) {
+        setState(() {
+          selectedBrandName = selection?.make;
+          selectedModelName = selection?.model;
+          selectedGeneration = selection?.generation == null
+              ? null
+              : {
+                  'name': selection!.generation,
+                  'year_from': selection.yearFrom,
+                  'year_to': selection.yearTo,
+                };
+          if (selection?.yearFrom != null &&
+              (_yearController.text.isEmpty || _yearController.text == '0')) {
+            _yearController.text = '${selection!.yearFrom}';
+          }
+        });
+      },
+    ),
     const SizedBox(height: 16),
 
     // Год и цвет

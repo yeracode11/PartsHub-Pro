@@ -4,11 +4,9 @@ import { VehicleMake } from './entities/vehicle-make.entity';
 import { VehicleModel } from './entities/vehicle-model.entity';
 import { VehicleGeneration } from './entities/vehicle-generation.entity';
 import { VehicleReferenceService } from './vehicle-reference.service';
-import { VehicleReferenceController } from './vehicle-reference.controller';
 
 @Module({
   imports: [TypeOrmModule.forFeature([VehicleMake, VehicleModel, VehicleGeneration])],
-  controllers: [VehicleReferenceController],
   providers: [VehicleReferenceService],
   exports: [VehicleReferenceService],
 })

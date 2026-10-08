@@ -8,6 +8,7 @@ import {
   Param,
   Query,
   UseGuards,
+  NotFoundException,
 } from '@nestjs/common';
 import { VehiclesService } from './vehicles.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -72,10 +73,11 @@ export class VehiclesController {
   @Get(':id')
   @Roles(UserRole.OWNER, UserRole.MANAGER)
   async findOne(@CurrentUser() user: any, @Param('id') id: string) {
-    return await this.vehiclesService.findOne(
-      parseInt(id, 10),
-      user.organizationId,
-    );
+    const vehicleId = Number(id);
+    if (!Number.isInteger(vehicleId)) {
+      throw new NotFoundException('Автомобиль не найден');
+    }
+    return await this.vehiclesService.findOne(vehicleId, user.organizationId);
   }
 
   /**
