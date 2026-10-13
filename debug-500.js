@@ -3,7 +3,7 @@ const { DataSource } = require('typeorm');
 
 const dataSource = new DataSource({
   type: 'postgres',
-  url: process.env.DATABASE_URL || 'postgresql://eracode:erasoft123@localhost:5432/autohubdb',
+  url: process.env.DATABASE_URL,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : undefined,
   synchronize: false,
 });
