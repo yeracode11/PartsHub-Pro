@@ -24,11 +24,6 @@ class SecureStorageService {
     return prefs.getString(_keyAuthToken);
   }
 
-  Future<String?> getRefreshToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_keyRefreshToken);
-  }
-
   Future<void> saveUserData(Map<String, dynamic> userData) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyUserData, jsonEncode(userData));

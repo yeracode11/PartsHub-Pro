@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:flutter/services.dart';
 
 /// Сервис для работы со сканером штрих-кодов
 /// 

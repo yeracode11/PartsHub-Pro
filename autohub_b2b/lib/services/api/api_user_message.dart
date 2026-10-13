@@ -1,5 +1,4 @@
 import 'package:dio/dio.dart';
-import 'package:flutter/material.dart';
 
 import 'package:autohub_b2b/services/api/api_exception.dart';
 import 'package:autohub_b2b/services/hardware/ble_esc_pos_session.dart';
@@ -141,17 +140,3 @@ String userFacingApiMessage(
   return resolved;
 }
 
-void showApiErrorSnackBar(
-  BuildContext context,
-  Object error, {
-  String? prefix,
-  Color backgroundColor = Colors.red,
-}) {
-  if (!context.mounted) return;
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text(userFacingApiMessage(error, prefix: prefix)),
-      backgroundColor: backgroundColor,
-    ),
-  );
-}

@@ -1,6 +1,7 @@
 import 'package:printing/printing.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io' show Platform, Socket, InternetAddress;
@@ -53,7 +54,7 @@ class ThermalPrinterService {
         final printers = await Printing.listPrinters();
         
         if (printers.isEmpty) {
-          print('⚠️ Принтеры не найдены в системе');
+          debugPrint('⚠️ Принтеры не найдены в системе');
           return false;
         }
 
@@ -75,15 +76,14 @@ class ThermalPrinterService {
         // Сохраняем настройки принтера
         await savePrinterSettings();
         
-        print('✅ Подключено к принтеру: $_printerName');
         return true;
       }
 
       // Мобильные: системный список принтеров недоступен как на desktop; этикетки — PDF или WiFi TCP.
-      print('⚠️ На мобильных: этикетка PDF из карточки товара или Wi‑Fi‑принтер (раздел ниже)');
+      debugPrint('⚠️ На мобильных: этикетка PDF из карточки товара или Wi‑Fi‑принтер (раздел ниже)');
       return false;
     } catch (e) {
-      print('❌ Ошибка подключения к принтеру: $e');
+      debugPrint('❌ Ошибка подключения к принтеру: $e');
       _isConnected = false;
       _printerName = null;
       return false;
@@ -108,7 +108,7 @@ class ThermalPrinterService {
   /// Проверка подключения и геттеры
   bool get isConnected => _isConnected;
   String? get printerName => _printerName;
-  String? get connectedPrinterName => _printerName; // Алиас для удобства
+ // Алиас для удобства
 
   /// Загрузка шрифта с поддержкой кириллицы
   /// 
@@ -126,14 +126,11 @@ class ThermalPrinterService {
     }
     
     try {
-      print('📝 Загрузка кириллического шрифта Roboto...');
       final fontData = await rootBundle.load("assets/fonts/Roboto-Regular.ttf");
       _cyrillicFont = pw.Font.ttf(fontData);
-      print('✅ Кириллический шрифт Roboto загружен успешно');
       return _cyrillicFont;
     } catch (e) {
-      print('⚠️ Не удалось загрузить шрифт из assets: $e');
-      print('   На Windows будет использован системный шрифт');
+      debugPrint('⚠️ Не удалось загрузить шрифт из assets: $e');
       return null;
     }
   }
@@ -153,9 +150,6 @@ class ThermalPrinterService {
     int quantity = 1,
     bool useDialog = false, // Новый параметр для использования диалога
   }) async {
-    print('🖨️ Начало печати этикетки...');
-    print('   Товар: $itemName');
-    print('   Метод: ${useDialog ? "диалог" : "прямая печать"}');
     
     // Даём UI время на обновление перед тяжёлой операцией
     await Future.delayed(Duration.zero);
@@ -272,30 +266,22 @@ class ThermalPrinterService {
 
       // На macOS используем sharePdf для открытия в Preview
       // Это предотвращает зависание UI
-      print('🖨️ Отправка на печать...');
       
       if (Platform.isMacOS) {
-        print('📋 Открытие PDF в Preview (macOS)');
-        print('   Используйте ⌘P для печати из Preview');
         
         // Генерируем PDF и открываем через Preview
         final pdfBytes = await pdf.save();
-        print('✅ PDF сгенерирован (${pdfBytes.length} байт)');
         
         await Printing.sharePdf(
           bytes: pdfBytes,
           filename: 'label_${itemName.replaceAll(' ', '_')}.pdf',
         );
         
-        print('✅ PDF открыт в Preview');
       } else {
         // Для Windows/Linux - сохраняем PDF и печатаем
-        print('📄 Генерация PDF...');
         final pdfBytes = await pdf.save();
-        print('✅ PDF сгенерирован (${pdfBytes.length} байт)');
         
         if (_selectedPrinter != null && !useDialog) {
-          print('🎯 Прямая печать на $_printerName');
           await Printing.directPrintPdf(
             printer: _selectedPrinter!,
             onLayout: (PdfPageFormat format) async => pdfBytes,
@@ -308,22 +294,16 @@ class ThermalPrinterService {
         }
       }
 
-      print('✅ Наклейка отправлена на печать');
-      print('   Товар: $itemName');
-      print('   Артикул: $sku');
-      print('   Цена: $price ₸');
-      print('   Количество: $quantity');
       
       return true;
     } catch (e) {
-      print('❌ Ошибка печати наклейки: $e');
+      debugPrint('❌ Ошибка печати наклейки: $e');
       return false;
     }
   }
 
   /// Печать тестовой страницы
   Future<bool> printTestPage() async {
-    print('🖨️ Начало тестовой печати...');
     
     // Даём UI время на обновление перед тяжёлой операцией
     await Future.delayed(Duration.zero);
@@ -412,27 +392,20 @@ class ThermalPrinterService {
       );
 
       // Простой подход для macOS
-      print('🖨️ Отправка тестовой страницы...');
       
       if (Platform.isMacOS) {
         // На macOS используем sharePdf - открывает в Preview
-        print('📋 Открытие PDF в Preview (macOS)...');
-        print('   Используйте ⌘P для печати из Preview');
         
         final pdfBytes = await pdf.save();
-        print('📄 PDF сгенерирован: ${pdfBytes.length} байт');
         
         await Printing.sharePdf(
           bytes: pdfBytes,
           filename: 'test_printer_${paperWidthMm.toInt()}x${paperHeightMm.toInt()}mm.pdf',
         );
         
-        print('✅ PDF открыт в Preview');
       } else {
         // Для Windows/Linux
-        print('📄 Генерация PDF...');
         final pdfBytes = await pdf.save();
-        print('✅ PDF готов (${pdfBytes.length} байт)');
         
         if (_selectedPrinter != null) {
           await Printing.directPrintPdf(
@@ -447,10 +420,9 @@ class ThermalPrinterService {
         }
       }
 
-      print('✅ Тестовая страница отправлена на печать');
       return true;
     } catch (e) {
-      print('❌ Ошибка печати тестовой страницы: $e');
+      debugPrint('❌ Ошибка печати тестовой страницы: $e');
       return false;
     }
   }
@@ -605,7 +577,7 @@ class ThermalPrinterService {
             });
           }
         } catch (e) {
-          print('⚠️ Ошибка получения AirPrint принтеров на iOS: $e');
+          debugPrint('⚠️ Ошибка получения AirPrint принтеров на iOS: $e');
         }
       }
 
@@ -645,13 +617,13 @@ class ThermalPrinterService {
             });
           }
         } catch (e) {
-          print('⚠️ Ошибка получения системных принтеров: $e');
+          debugPrint('⚠️ Ошибка получения системных принтеров: $e');
         }
       }
 
       return allPrinters;
     } catch (e) {
-      print('❌ Ошибка получения списка принтеров: $e');
+      debugPrint('❌ Ошибка получения списка принтеров: $e');
       return [];
     }
   }
@@ -762,6 +734,4 @@ class ThermalPrinterService {
     };
   }
 
-  /// Геттеры для расширенной информации
-  String? get connectedPrinterUrl => _printerUrl;
 }

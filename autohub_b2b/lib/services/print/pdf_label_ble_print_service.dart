@@ -3,7 +3,6 @@ import 'package:image/image.dart';
 import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
 
-import 'package:autohub_b2b/models/label_size_preset.dart';
 import 'package:autohub_b2b/services/pdf/label_pdf_service.dart';
 
 /// Растрирует уже сгенерированный этикеточный PDF и собирает поток ESC/POS с картинками GS (v0) через [Generator].
@@ -30,10 +29,6 @@ class PdfLabelBlePrintService {
     final wMm = f.width / PdfPageFormat.mm;
     return wMm <= 54 ? PaperSize.mm58 : PaperSize.mm80;
   }
-
-  /// Fallback по пресету (до генерации страницы).
-  static PaperSize paperSizeForPreset(LabelSizePreset preset) =>
-      paperSizeForPageFormat(preset.toPdfPageFormat());
 
   /// DPI растра: ниже для длинных этикеток, чтобы объём данных по BLE оставался разумным.
   static double rasterDpiFor(LabelPdfResult result) {

@@ -20,16 +20,6 @@ class WarehouseService {
   }
 
   // Получить склад по ID
-  Future<Warehouse> getWarehouse(String id) async {
-    try {
-      final response = await _apiClient.dio.get('/api/warehouses/$id');
-      return Warehouse.fromJson(response.data);
-    } on DioException {
-      rethrow;
-    } catch (e) {
-      rethrow;
-    }
-  }
 
   // Создать новый склад
   Future<Warehouse> createWarehouse({
@@ -158,14 +148,5 @@ class WarehouseService {
   }
 
   // Удалить перемещение
-  Future<void> deleteTransfer(String id) async {
-    try {
-      await _apiClient.dio.delete('/api/warehouse-transfers/$id');
-    } on DioException {
-      rethrow;
-    } catch (e) {
-      rethrow;
-    }
-  }
 }
 

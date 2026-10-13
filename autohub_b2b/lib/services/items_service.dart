@@ -26,22 +26,5 @@ class ItemsService {
   }
 
   // Найти товар ТОЛЬКО по артикулу (SKU)
-  Future<ItemModel?> findItemByCode(String code) async {
-    try {
-      // Ищем ТОЛЬКО по SKU (артикулу), не по ID
-      final response = await _apiClient.dio.get('/api/items', queryParameters: {
-        'sku': code.trim(), // Точный поиск по артикулу
-      });
-      final List<dynamic> data = response.data;
-
-      if (data.isNotEmpty) {
-        final item = ItemModel.fromJson(data[0]);
-        return item;
-      }
-      return null;
-    } catch (e) {
-      return null;
-    }
-  }
 }
 

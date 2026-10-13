@@ -49,8 +49,6 @@ class BleEscPosSession {
   bool get isReady =>
       _device != null && _device!.isConnected && _writeCharacteristic != null;
 
-  bool get writeUsesWithoutResponse => _writeWithoutResponse;
-
   /// Циклически перебираются все подходящие UUID записи см. [bleWriteProfileCaption].
   bool get canCycleBleWriteProfile => _bleWriteProfilePool.length > 1;
 

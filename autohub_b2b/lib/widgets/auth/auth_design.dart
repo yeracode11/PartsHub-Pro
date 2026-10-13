@@ -23,8 +23,6 @@ abstract final class AuthDesign {
   static const BorderRadius fieldRadius = BorderRadius.all(Radius.circular(12));
   static const BorderRadius panelRadius = BorderRadius.all(Radius.circular(16));
 
-  static bool isCompact(double width) => width < breakpointCompact;
-
   static bool isDesktop(double width) => width >= breakpointMedium;
 
   static double horizontalPadding(double width) {

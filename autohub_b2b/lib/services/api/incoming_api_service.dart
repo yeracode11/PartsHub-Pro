@@ -237,17 +237,6 @@ class IncomingApiService {
     return IncomingDocModel.fromJson(json);
   }
 
-  /// Удалить накладную
-  Future<void> deleteDocument(String id) async {
-    await OfflineQueue().send(
-      method: 'DELETE',
-      path: '/api/incoming/$id',
-      entity: 'incoming',
-      snapshot: {'id': id, 'remove': true},
-      localId: id,
-    );
-  }
-
   Future<List<IncomingDocModel>> _localDocuments() async {
     final docs = <IncomingDocModel>[];
     for (final json in await OfflineQueue().incomingLocals()) {

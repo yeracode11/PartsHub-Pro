@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart';
 import 'package:autohub_b2b/models/item_model.dart';
@@ -212,17 +211,6 @@ class ItemsRepository {
     } catch (e) {
       debugPrint('[ItemsRepo] Cache write failed: $e');
     }
-  }
-
-  Future<void> enqueueOfflineCreate(Map<String, dynamic> data) async {
-    await _db.insertSyncItem(
-      SyncQueueCompanion.insert(
-        syncTableName: 'items',
-        operation: 'create',
-        recordId: 0,
-        data: jsonEncode(data),
-      ),
-    );
   }
 
   ItemModel _mapDriftToModel(Item row) {

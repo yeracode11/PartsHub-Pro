@@ -33,18 +33,6 @@ class CustomerModel extends Equatable {
   bool get hasVehicles => vehicles.isNotEmpty;
   int get vehiclesCount => vehicles.length;
 
-  String? get primaryCarDisplay {
-    if (vehicles.isNotEmpty) {
-      final v = vehicles.first;
-      final plate = v.plateNumber.isNotEmpty ? ' (${v.plateNumber})' : '';
-      return '${v.brand} ${v.model}$plate';
-    }
-    if (carBrand != null && carBrand!.isNotEmpty) {
-      return '$carBrand ${carModel ?? ''}'.trim();
-    }
-    return null;
-  }
-
   CustomerModel copyWith({
     int? id,
     String? name,
