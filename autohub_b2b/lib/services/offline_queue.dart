@@ -237,6 +237,14 @@ class OfflineQueue {
     return node;
   }
 
+  /// Удалить локальные копии списков, черновики и соответствия id (смена организации).
+  Future<void> clearCache() {
+    return _synchronized(() async {
+      final file = await _cacheFile();
+      if (await file.exists()) await file.delete();
+    });
+  }
+
   Future<File> _cacheFile() async {
     final folder = await getApplicationDocumentsDirectory();
     return File(p.join(folder.path, 'offline_cache.json'));

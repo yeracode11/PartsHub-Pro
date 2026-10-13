@@ -53,34 +53,8 @@ class UserApiService {
     }
   }
 
-  UserRole _parseRole(String? role) {
-    switch (role) {
-      case 'owner':
-        return UserRole.owner;
-      case 'manager':
-        return UserRole.manager;
-      case 'storekeeper':
-        return UserRole.storekeeper;
-      case 'worker':
-        return UserRole.worker;
-      case 'sto':
-        return UserRole.sto;
-      default:
-        return UserRole.owner;
-    }
-  }
+  UserRole _parseRole(String? role) => UserRole.parse(role);
 
-  BusinessType _parseBusinessType(String? type) {
-    switch (type) {
-      case 'service':
-        return BusinessType.service;
-      case 'dismantler':
-        return BusinessType.dismantler;
-      case 'carwash':
-        return BusinessType.carwash;
-      default:
-        return BusinessType.service;
-    }
-  }
+  BusinessType _parseBusinessType(String? type) => BusinessType.parse(type);
 }
 

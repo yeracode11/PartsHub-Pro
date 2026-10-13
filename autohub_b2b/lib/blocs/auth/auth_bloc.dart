@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:autohub_b2b/services/local_data_guard.dart';
 import 'package:autohub_b2b/blocs/auth/auth_event.dart';
 import 'package:autohub_b2b/blocs/auth/auth_state.dart';
 import 'package:autohub_b2b/models/user_model.dart';
@@ -91,6 +92,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             //
           }
 
+          await LocalDataGuard.ensureOwner(
+            userData['organizationId']?.toString(),
+            trustUnknownOwner: true,
+          );
           emit(AuthAuthenticated(userModel));
           unawaited(ServiceLocator().syncService.syncAll());
         } catch (e) {
@@ -136,6 +141,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         createdAt: DateTime.now(),
       );
       
+      // До сохранения токена и синхронизации: кэш и офлайн-очередь другой
+      // организации не должны уйти на сервер с токеном этого пользователя.
+      await LocalDataGuard.ensureOwner(
+        jwtData['user']['organizationId']?.toString(),
+      );
+
       // Шаг 4: Сохраняем JWT токены и полные данные пользователя
       await _storage.saveUserData({
         'uid': userModel.uid,
@@ -177,36 +188,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     }
   }
 
-  UserRole _parseRole(String? role) {
-    switch (role) {
-      case 'owner':
-        return UserRole.owner;
-      case 'manager':
-        return UserRole.manager;
-      case 'storekeeper':
-        return UserRole.storekeeper;
-      case 'worker':
-        return UserRole.worker;
-      case 'sto':
-        return UserRole.sto;
-      default:
-        return UserRole.owner;
-    }
-  }
+  UserRole _parseRole(String? role) => UserRole.parse(role);
 
-  BusinessType _parseBusinessType(String? type) {
-    switch (type) {
-      case 'service':
-        return BusinessType.service;
-      case 'parts': // соответствует backend BusinessType.PARTS
-      case 'dismantler': // совместимость со старым значением
-        return BusinessType.dismantler;
-      case 'carwash':
-        return BusinessType.carwash;
-      default:
-        return BusinessType.service;
-    }
-  }
+  BusinessType _parseBusinessType(String? type) => BusinessType.parse(type);
 
   Future<void> _onSignUpRequested(
       AuthSignUpRequested event, Emitter<AuthState> emit) async {
@@ -244,6 +228,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         createdAt: DateTime.now(),
       );
       
+      // Новая организация: локальные данные прежней на устройстве не нужны.
+      await LocalDataGuard.ensureOwner(
+        registerData['user']['organizationId']?.toString(),
+      );
+
       // Сохраняем JWT токены и полные данные пользователя
       await _storage.saveUserData({
         'uid': userModel.uid,

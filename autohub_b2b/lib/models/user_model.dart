@@ -21,12 +21,38 @@ enum UserRole {
         return 'СТО';
     }
   }
+
+  /// Роль из ответа API ('worker') или из сохранённой сессии ('UserRole.worker').
+  /// Раньше сохранённое значение не распознавалось, и после перезапуска
+  /// любой сотрудник становился владельцем.
+  static UserRole parse(String? value) {
+    final name = value?.split('.').last.trim().toLowerCase();
+    for (final role in UserRole.values) {
+      if (role.name == name) return role;
+    }
+    return UserRole.owner;
+  }
 }
 
 enum BusinessType {
   dismantler,
   service,
   carwash;
+
+  /// Тип из API ('parts', 'service', 'carwash') или из сохранённой сессии
+  /// ('BusinessType.dismantler'). Раньше сохранённое значение не распознавалось,
+  /// и после перезапуска авторазбор становился автосервисом.
+  static BusinessType parse(String? value) {
+    switch (value?.split('.').last.trim().toLowerCase()) {
+      case 'parts': // backend BusinessType.PARTS
+      case 'dismantler':
+        return BusinessType.dismantler;
+      case 'carwash':
+        return BusinessType.carwash;
+      default:
+        return BusinessType.service;
+    }
+  }
 
   String get displayName {
     switch (this) {

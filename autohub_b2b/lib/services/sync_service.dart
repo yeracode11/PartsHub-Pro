@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart';
+import 'package:autohub_b2b/services/local_data_guard.dart';
 import 'package:autohub_b2b/services/database/database.dart';
 import 'package:autohub_b2b/services/api/api_client.dart';
 import 'package:autohub_b2b/services/auth/secure_storage_service.dart';
@@ -51,6 +52,14 @@ class SyncService {
     debugPrint('[Sync] Starting full sync...');
 
     try {
+      // Синхронизацию запускают и main(), и восстановление сети — раньше, чем AuthBloc.
+      // Поэтому проверка владельца здесь: очередь и кэш другой организации стираются
+      // до отправки, иначе её офлайн-изменения ушли бы с токеном текущего пользователя.
+      final userData = await SecureStorageService().getUserData();
+      await LocalDataGuard.ensureOwner(
+        userData?['organizationId']?.toString(),
+        trustUnknownOwner: true,
+      );
       await _pushChanges();
       await _pullItems();
       await _pullOrders();

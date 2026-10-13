@@ -110,6 +110,14 @@ class AppDatabase extends _$AppDatabase {
   @override
   int get schemaVersion => 1;
 
+  /// Стереть все данные организации на устройстве (кэш и офлайн-очередь).
+  /// Вызывается при входе в другую организацию — см. LocalDataGuard.
+  Future<void> clearOrganizationData() => transaction(() async {
+    for (final table in allTables) {
+      await delete(table).go();
+    }
+  });
+
   // Queries for Items
   Future<List<Item>> getAllItems() => select(items).get();
   Future<List<Item>> getItemsByCategory(String category) =>
