@@ -65,7 +65,7 @@ class _MetaWhatsAppConnectScreenState
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(_describeError(e)),
-          backgroundColor: Colors.red,
+          backgroundColor: AppTheme.errorColor,
           duration: const Duration(seconds: 6),
         ),
       );

@@ -438,7 +438,7 @@ class _MethodButton extends StatelessWidget {
       onPressed: onTap,
       style: OutlinedButton.styleFrom(
         backgroundColor: selected
-            ? AppTheme.primaryColor.withOpacity(0.08)
+            ? AppTheme.primaryColor.withValues(alpha: 0.08)
             : null,
         side: BorderSide(
           color: selected ? AppTheme.primaryColor : AppTheme.borderColor,

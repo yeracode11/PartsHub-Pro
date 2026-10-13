@@ -72,7 +72,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
   Future<void> _connectWifi() async {
     final ip = _ipController.text.trim();
     if (ip.isEmpty) {
-      _showSnack('Введите IP-адрес принтера', Colors.orange);
+      _showSnack('Введите IP-адрес принтера', AppTheme.warningColor);
       return;
     }
     final port = int.tryParse(_portController.text.trim()) ?? 9100;
@@ -84,13 +84,13 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
         setState(() => _isConnectingWifi = false);
         _showSnack(
           ok ? 'Подключено к $ip:$port' : 'Не удалось подключиться к $ip:$port',
-          ok ? Colors.green : Colors.red,
+          ok ? AppTheme.successColor : AppTheme.errorColor,
         );
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isConnectingWifi = false);
-        _showSnack(userFacingApiMessage(e), Colors.red);
+        _showSnack(userFacingApiMessage(e), AppTheme.errorColor);
       }
     }
   }
@@ -107,13 +107,13 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
         setState(() => _connectingAddress = null);
         _showSnack(
           ok ? 'Подключено: ${printer['name']}' : 'Не удалось подключиться',
-          ok ? Colors.green : Colors.red,
+          ok ? AppTheme.successColor : AppTheme.errorColor,
         );
       }
     } catch (e) {
       if (mounted) {
         setState(() => _connectingAddress = null);
-        _showSnack(userFacingApiMessage(e), Colors.red);
+        _showSnack(userFacingApiMessage(e), AppTheme.errorColor);
       }
     }
   }
@@ -121,7 +121,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
   Future<void> _disconnect() async {
     await _printer.disconnect(clearSettings: true);
     setState(() {});
-    _showSnack('Принтер отключён', Colors.green);
+    _showSnack('Принтер отключён', AppTheme.successColor);
   }
 
   Future<void> _testPrint() async {
@@ -132,13 +132,13 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
         setState(() => _isPrinting = false);
         _showSnack(
           ok ? 'Тестовая страница отправлена' : 'Ошибка печати',
-          ok ? Colors.green : Colors.red,
+          ok ? AppTheme.successColor : AppTheme.errorColor,
         );
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isPrinting = false);
-        _showSnack(userFacingApiMessage(e), Colors.red);
+        _showSnack(userFacingApiMessage(e), AppTheme.errorColor);
       }
     }
   }
@@ -390,13 +390,13 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                   height: 48,
                   decoration: BoxDecoration(
                     color: connected
-                        ? Colors.green.withOpacity(0.1)
-                        : Colors.grey.withOpacity(0.1),
+                        ? AppTheme.successColor.withValues(alpha: 0.1)
+                        : Colors.grey.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(
                     connected ? Icons.print : Icons.print_disabled,
-                    color: connected ? Colors.green : Colors.grey,
+                    color: connected ? AppTheme.successColor : Colors.grey,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -427,7 +427,9 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                 if (connected)
                   TextButton(
                     onPressed: _disconnect,
-                    style: TextButton.styleFrom(foregroundColor: Colors.red),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppTheme.errorColor,
+                    ),
                     child: const Text('Отключить'),
                   ),
               ],
@@ -463,7 +465,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
       children: [
         Row(
           children: [
-            const Icon(Icons.wifi, color: Colors.orange, size: 20),
+            const Icon(Icons.wifi, color: AppTheme.warningColor, size: 20),
             const SizedBox(width: 8),
             const Expanded(
               child: Text(
@@ -482,7 +484,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
         ),
         const SizedBox(height: 12),
         Card(
-          color: isWifiConnected ? Colors.green.shade50 : null,
+          color: isWifiConnected ? AppTheme.successSoft : null,
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -551,7 +553,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                           children: [
                             const Icon(
                               Icons.check_circle,
-                              color: Colors.green,
+                              color: AppTheme.successColor,
                               size: 20,
                             ),
                             const SizedBox(width: 8),
@@ -559,7 +561,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                               child: Text(
                                 'Подключён',
                                 style: TextStyle(
-                                  color: Colors.green,
+                                  color: AppTheme.successColor,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
@@ -615,12 +617,14 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
           final isConnecting = _connectingAddress == printer['name'];
 
           return Card(
-            color: isCurrent ? Colors.green.shade50 : null,
+            color: isCurrent ? AppTheme.successSoft : null,
             margin: const EdgeInsets.only(bottom: 8),
             child: ListTile(
               leading: Icon(
                 isCurrent ? Icons.check_circle : Icons.print,
-                color: isCurrent ? Colors.green : AppTheme.primaryColor,
+                color: isCurrent
+                    ? AppTheme.successColor
+                    : AppTheme.primaryColor,
               ),
               title: Text(
                 printer['name'] ?? 'Принтер',
@@ -634,11 +638,13 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                     : (printer['connectionType'] ?? printer['url'] ?? ''),
                 style: TextStyle(
                   fontSize: 12,
-                  color: isCurrent ? Colors.green : AppTheme.textSecondary,
+                  color: isCurrent
+                      ? AppTheme.successColor
+                      : AppTheme.textSecondary,
                 ),
               ),
               trailing: isCurrent
-                  ? const Icon(Icons.check, color: Colors.green)
+                  ? const Icon(Icons.check, color: AppTheme.successColor)
                   : isConnecting
                   ? const SizedBox(
                       width: 24,

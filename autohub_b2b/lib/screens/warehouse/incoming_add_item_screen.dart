@@ -153,7 +153,7 @@ class _IncomingAddItemScreenState extends State<IncomingAddItemScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Товар найден: ${foundItem.name}'),
-              backgroundColor: Colors.green,
+              backgroundColor: AppTheme.successColor,
               duration: const Duration(seconds: 2),
             ),
           );
@@ -168,7 +168,7 @@ class _IncomingAddItemScreenState extends State<IncomingAddItemScreen> {
               content: Text(
                 'Товар с артикулом "$barcode" не найден. Заполните данные вручную.',
               ),
-              backgroundColor: Colors.orange,
+              backgroundColor: AppTheme.warningColor,
               duration: const Duration(seconds: 3),
             ),
           );
@@ -267,7 +267,7 @@ class _IncomingAddItemScreenState extends State<IncomingAddItemScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(userFacingApiMessage(e, prefix: 'Ошибка добавления')),
-            backgroundColor: Colors.red,
+            backgroundColor: AppTheme.errorColor,
           ),
         );
       }
@@ -307,11 +307,11 @@ class _IncomingAddItemScreenState extends State<IncomingAddItemScreen> {
         title: const Text('Добавить позицию'),
         actions: [
           if (!_isAuthRequired)
-            IconButton(
-              icon: const Icon(Icons.save),
+            FilledButton(
               onPressed: _isLoading ? null : _saveItem,
-              tooltip: 'Сохранить',
+              child: const Text('Сохранить'),
             ),
+          const SizedBox(width: 12),
         ],
       ),
       body: _isAuthRequired
@@ -757,7 +757,7 @@ class _IncomingAddItemScreenState extends State<IncomingAddItemScreen> {
                 content: Text(
                   'Не удалось подключиться к принтеру. Проверьте подключение.',
                 ),
-                backgroundColor: Colors.red,
+                backgroundColor: AppTheme.errorColor,
               ),
             );
           }
@@ -800,7 +800,7 @@ class _IncomingAddItemScreenState extends State<IncomingAddItemScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Напечатано наклеек: $quantity'),
-              backgroundColor: Colors.green,
+              backgroundColor: AppTheme.successColor,
             ),
           );
         }
@@ -809,7 +809,7 @@ class _IncomingAddItemScreenState extends State<IncomingAddItemScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Ошибка печати. Проверьте подключение принтера.'),
-              backgroundColor: Colors.red,
+              backgroundColor: AppTheme.errorColor,
             ),
           );
         }
@@ -820,7 +820,7 @@ class _IncomingAddItemScreenState extends State<IncomingAddItemScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(userFacingApiMessage(e, prefix: 'Ошибка печати')),
-            backgroundColor: Colors.red,
+            backgroundColor: AppTheme.errorColor,
           ),
         );
       }

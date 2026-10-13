@@ -393,7 +393,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('SKU скопирован'),
-        backgroundColor: Colors.green,
+        backgroundColor: AppTheme.successColor,
       ),
     );
   }
@@ -405,10 +405,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Детали',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
+            const Text('Детали', style: AppTheme.sectionTitle),
             const SizedBox(height: 16),
             if (item.description != null && item.description!.isNotEmpty) ...[
               Text(
@@ -488,10 +485,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
               children: [
                 Icon(Icons.warehouse, color: AppTheme.primaryColor),
                 SizedBox(width: 8),
-                Text(
-                  'Складская информация',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
+                Text('Складская информация', style: AppTheme.sectionTitle),
               ],
             ),
             const SizedBox(height: 16),

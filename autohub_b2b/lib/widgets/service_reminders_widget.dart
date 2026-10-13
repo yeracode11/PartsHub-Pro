@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/services/api/api_client.dart';
 import 'package:autohub_b2b/models/vehicle_model.dart';
-import 'package:dio/dio.dart';
 
 class ServiceRemindersWidget extends StatefulWidget {
   const ServiceRemindersWidget({super.key});
@@ -86,7 +85,7 @@ class _ServiceRemindersWidgetState extends State<ServiceRemindersWidget> {
               children: [
                 Icon(
                   Icons.warning_amber,
-                  color: Colors.orange.shade700,
+                  color: AppTheme.warningColor,
                   size: 24,
                 ),
                 const SizedBox(width: 12),
@@ -104,14 +103,14 @@ class _ServiceRemindersWidgetState extends State<ServiceRemindersWidget> {
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.orange.shade100,
+                    color: AppTheme.warningSoft,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
                     '${upcomingService.length}',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
-                      color: Colors.orange.shade700,
+                      color: AppTheme.warningColor,
                     ),
                   ),
                 ),
@@ -132,13 +131,13 @@ class _ServiceRemindersWidgetState extends State<ServiceRemindersWidget> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: vehicle.needsService
-            ? Colors.red.shade50
-            : Colors.orange.shade50,
+            ? AppTheme.errorSoft
+            : AppTheme.warningSoft,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: vehicle.needsService
-              ? Colors.red.shade300
-              : Colors.orange.shade300,
+              ? AppTheme.errorBorder
+              : AppTheme.warningBorder,
         ),
       ),
       child: Row(
@@ -146,8 +145,8 @@ class _ServiceRemindersWidgetState extends State<ServiceRemindersWidget> {
           Icon(
             Icons.directions_car,
             color: vehicle.needsService
-                ? Colors.red.shade700
-                : Colors.orange.shade700,
+                ? AppTheme.errorColor
+                : AppTheme.warningColor,
             size: 32,
           ),
           const SizedBox(width: 16),
@@ -161,8 +160,8 @@ class _ServiceRemindersWidgetState extends State<ServiceRemindersWidget> {
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
                     color: vehicle.needsService
-                        ? Colors.red.shade700
-                        : Colors.orange.shade700,
+                        ? AppTheme.errorColor
+                        : AppTheme.warningColor,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -197,8 +196,8 @@ class _ServiceRemindersWidgetState extends State<ServiceRemindersWidget> {
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
                     color: vehicle.needsService
-                        ? Colors.red.shade700
-                        : Colors.orange.shade700,
+                        ? AppTheme.errorColor
+                        : AppTheme.warningColor,
                   ),
                 ),
               if (vehicle.kmUntilService != null)

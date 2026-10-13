@@ -209,7 +209,7 @@ class _OnboardingPage extends StatelessWidget {
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: model.gradient.colors.first.withOpacity(0.35),
+                  color: model.gradient.colors.first.withValues(alpha: 0.35),
                   blurRadius: isMobile ? 32 : 24,
                   offset: Offset(0, isMobile ? 12 : 8),
                 ),

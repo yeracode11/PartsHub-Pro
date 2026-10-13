@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:autohub_b2b/widgets/add_action_button.dart';
+import 'package:autohub_b2b/widgets/shell_actions.dart';
+import 'package:autohub_b2b/core/theme.dart';
 import '../../models/warehouse_model.dart';
 import '../../services/warehouse_service.dart';
 import 'package:autohub_b2b/widgets/unauthorized_placeholder.dart';
@@ -140,6 +143,23 @@ class _WarehousesScreenState extends State<WarehousesScreen> {
     }
   }
 
+  Widget _warehouseMenu(Warehouse warehouse) {
+    return PopupMenuButton<String>(
+      tooltip: 'Действия',
+      onSelected: (value) {
+        if (value == 'edit') _showWarehouseDialog(warehouse);
+        if (value == 'delete') _deleteWarehouse(warehouse);
+      },
+      itemBuilder: (context) => const [
+        PopupMenuItem(value: 'edit', child: Text('Изменить')),
+        PopupMenuItem(
+          value: 'delete',
+          child: Text('Удалить', style: TextStyle(color: AppTheme.errorColor)),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isForbidden) {
@@ -153,148 +173,124 @@ class _WarehousesScreenState extends State<WarehousesScreen> {
       );
     }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Склады'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadWarehouses,
-          ),
-        ],
+    final wide = AddActionButton.isWide(context);
+    final actions = <Widget>[
+      IconButton(
+        icon: const Icon(Icons.refresh),
+        tooltip: 'Обновить',
+        onPressed: _loadWarehouses,
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _isOffline
-          ? OfflinePlaceholder(onRetry: _loadWarehouses)
-          : _warehouses.isEmpty
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.warehouse, size: 64, color: Colors.grey[400]),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Нет складов',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.titleLarge?.copyWith(color: Colors.grey[600]),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text('Нажмите + чтобы добавить первый склад'),
-                ],
-              ),
-            )
-          : LayoutBuilder(
-              builder: (context, constraints) {
-                final isMobile = constraints.maxWidth < 768;
-
-                if (isMobile) {
-                  return ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _warehouses.length,
-                    itemBuilder: (context, index) {
-                      final warehouse = _warehouses[index];
-                      final itemsCount = _itemsCounts[warehouse.id] ?? 0;
-
-                      return Card(
-                        child: ListTile(
-                          title: Text(warehouse.name),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              if (warehouse.address != null)
-                                Text('Адрес: ${warehouse.address}'),
-                              Text('Товаров: $itemsCount'),
-                              if (!warehouse.isActive)
-                                const Text(
-                                  'Неактивен',
-                                  style: TextStyle(color: Colors.red),
-                                ),
-                            ],
-                          ),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                icon: const Icon(Icons.edit, size: 20),
-                                onPressed: () =>
-                                    _showWarehouseDialog(warehouse),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.delete, size: 20),
-                                color: Colors.red,
-                                onPressed: () => _deleteWarehouse(warehouse),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  );
-                }
-
-                // Desktop layout
-                return SingleChildScrollView(
-                  padding: const EdgeInsets.all(24),
-                  child: DataTable(
-                    columns: const [
-                      DataColumn(label: Text('Название')),
-                      DataColumn(label: Text('Адрес')),
-                      DataColumn(label: Text('Телефон')),
-                      DataColumn(label: Text('Контакт')),
-                      DataColumn(label: Text('Товаров')),
-                      DataColumn(label: Text('Статус')),
-                      DataColumn(label: Text('Действия')),
-                    ],
-                    rows: _warehouses.map((warehouse) {
-                      final itemsCount = _itemsCounts[warehouse.id] ?? 0;
-
-                      return DataRow(
-                        cells: [
-                          DataCell(Text(warehouse.name)),
-                          DataCell(Text(warehouse.address ?? '-')),
-                          DataCell(Text(warehouse.phone ?? '-')),
-                          DataCell(Text(warehouse.contactPerson ?? '-')),
-                          DataCell(Text(itemsCount.toString())),
-                          DataCell(
-                            warehouse.isActive
-                                ? const Chip(
-                                    label: Text('Активен'),
-                                    backgroundColor: Colors.green,
-                                  )
-                                : const Chip(
-                                    label: Text('Неактивен'),
-                                    backgroundColor: Colors.red,
-                                  ),
-                          ),
-                          DataCell(
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.edit, size: 20),
-                                  onPressed: () =>
-                                      _showWarehouseDialog(warehouse),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.delete, size: 20),
-                                  color: Colors.red,
-                                  onPressed: () => _deleteWarehouse(warehouse),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      );
-                    }).toList(),
-                  ),
-                );
-              },
-            ),
-      floatingActionButton: FloatingActionButton(
+      AddActionButton(
         onPressed: () => _showWarehouseDialog(),
-        child: const Icon(Icons.add),
+        tooltip: 'Добавить',
+      ),
+    ];
+
+    return ShellActions(
+      actions: wide ? const [] : actions,
+      child: Scaffold(
+        // На телефоне шапка одна — оболочки; кнопки уходят в неё через ShellActions.
+        appBar: wide
+            ? AppBar(
+                title: const Text('Склады'),
+                actions: [...actions, const SizedBox(width: 8)],
+              )
+            : null,
+        body: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : _isOffline
+            ? OfflinePlaceholder(onRetry: _loadWarehouses)
+            : _warehouses.isEmpty
+            ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.warehouse, size: 64, color: Colors.grey[400]),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Нет складов',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.titleLarge?.copyWith(color: Colors.grey[600]),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text('Добавьте первый склад'),
+                  ],
+                ),
+              )
+            : LayoutBuilder(
+                builder: (context, constraints) {
+                  final isMobile = constraints.maxWidth < 768;
+
+                  if (isMobile) {
+                    return ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: _warehouses.length,
+                      itemBuilder: (context, index) {
+                        final warehouse = _warehouses[index];
+                        final itemsCount = _itemsCounts[warehouse.id] ?? 0;
+
+                        return Card(
+                          child: ListTile(
+                            title: Text(warehouse.name),
+                            subtitle: Text(
+                              [
+                                if (warehouse.address != null &&
+                                    warehouse.address!.isNotEmpty)
+                                  warehouse.address!,
+                                'Товаров: $itemsCount',
+                                if (!warehouse.isActive) 'Неактивен',
+                              ].join(' · '),
+                            ),
+                            onTap: () => _showWarehouseDialog(warehouse),
+                            trailing: _warehouseMenu(warehouse),
+                          ),
+                        );
+                      },
+                    );
+                  }
+
+                  // Desktop layout
+                  return SingleChildScrollView(
+                    padding: const EdgeInsets.all(24),
+                    child: DataTable(
+                      columns: const [
+                        DataColumn(label: Text('Название')),
+                        DataColumn(label: Text('Адрес')),
+                        DataColumn(label: Text('Телефон')),
+                        DataColumn(label: Text('Контакт')),
+                        DataColumn(label: Text('Товаров')),
+                        DataColumn(label: Text('Статус')),
+                        DataColumn(label: Text('')),
+                      ],
+                      rows: _warehouses.map((warehouse) {
+                        final itemsCount = _itemsCounts[warehouse.id] ?? 0;
+
+                        return DataRow(
+                          cells: [
+                            DataCell(Text(warehouse.name)),
+                            DataCell(Text(warehouse.address ?? '-')),
+                            DataCell(Text(warehouse.phone ?? '-')),
+                            DataCell(Text(warehouse.contactPerson ?? '-')),
+                            DataCell(Text(itemsCount.toString())),
+                            DataCell(
+                              Text(
+                                warehouse.isActive ? 'Активен' : 'Неактивен',
+                                style: TextStyle(
+                                  color: warehouse.isActive
+                                      ? AppTheme.textSecondary
+                                      : AppTheme.errorColor,
+                                ),
+                              ),
+                            ),
+                            DataCell(_warehouseMenu(warehouse)),
+                          ],
+                        );
+                      }).toList(),
+                    ),
+                  );
+                },
+              ),
       ),
     );
   }

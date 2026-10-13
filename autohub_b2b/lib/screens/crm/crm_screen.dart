@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:autohub_b2b/widgets/shell_actions.dart';
+import 'package:autohub_b2b/widgets/add_action_button.dart';
 import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/widgets/unauthorized_placeholder.dart';
 import 'package:autohub_b2b/models/customer_model.dart';
@@ -83,11 +85,13 @@ class _CrmScreenState extends State<CrmScreen> {
       } else {
         final q = query.toLowerCase().trim();
         filteredCustomers = customers.where((customer) {
-          final matchesVehicle = customer.vehicles.any((v) =>
-              v.brand.toLowerCase().contains(q) ||
-              v.model.toLowerCase().contains(q) ||
-              v.plateNumber.toLowerCase().contains(q) ||
-              (v.vin?.toLowerCase().contains(q) ?? false));
+          final matchesVehicle = customer.vehicles.any(
+            (v) =>
+                v.brand.toLowerCase().contains(q) ||
+                v.model.toLowerCase().contains(q) ||
+                v.plateNumber.toLowerCase().contains(q) ||
+                (v.vin?.toLowerCase().contains(q) ?? false),
+          );
           return customer.name.toLowerCase().contains(q) ||
               customer.phone.toLowerCase().contains(q) ||
               (customer.email?.toLowerCase().contains(q) ?? false) ||
@@ -134,138 +138,79 @@ class _CrmScreenState extends State<CrmScreen> {
     );
   }
 
+  Widget _customerMenu(BuildContext context, CustomerModel customer) {
+    return PopupMenuButton<String>(
+      tooltip: 'Действия',
+      onSelected: (value) {
+        if (value == 'edit') {
+          _showCustomerDialog(context, customer: customer);
+        }
+        if (value == 'delete') _showDeleteDialog(context, customer);
+      },
+      itemBuilder: (context) => const [
+        PopupMenuItem(value: 'edit', child: Text('Изменить')),
+        PopupMenuItem(
+          value: 'delete',
+          child: Text('Удалить', style: TextStyle(color: AppTheme.errorColor)),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final isNarrow = MediaQuery.sizeOf(context).width < 600;
+    // На телефоне заголовок раздела уже в AppBar оболочки (main.dart).
+    final isNarrow = MediaQuery.sizeOf(context).width < 768;
+
+    final search = TextField(
+      controller: _searchController,
+      decoration: const InputDecoration(
+        hintText: 'Имя, телефон или email',
+        prefixIcon: Icon(Icons.search),
+        isDense: true,
+      ),
+      onChanged: _filterCustomers,
+    );
 
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
       body: Column(
         children: [
-          // Заголовок и поиск
-          Container(
-            padding: EdgeInsets.fromLTRB(
-              isNarrow ? 16 : 24,
-              isNarrow ? 16 : 24,
-              isNarrow ? 16 : 24,
-              isNarrow ? 12 : 24,
-            ),
-            decoration: const BoxDecoration(
-              color: AppTheme.surfaceColor,
-              border: Border(bottom: BorderSide(color: AppTheme.borderColor)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (isNarrow) ...[
-                  Text(
-                    'CRM',
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Управление клиентами',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppTheme.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.icon(
-                      onPressed: () => _showCustomerDialog(context),
-                      icon: const Icon(Icons.person_add),
-                      label: const Text('Добавить клиента'),
-                    ),
-                  ),
-                ] else ...[
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'CRM',
-                              style: Theme.of(context).textTheme.displayMedium,
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Управление клиентами',
-                              style: Theme.of(context).textTheme.bodyMedium
-                                  ?.copyWith(color: AppTheme.textSecondary),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      FilledButton.icon(
+          Padding(
+            padding: EdgeInsets.fromLTRB(16, isNarrow ? 12 : 24, 16, 8),
+            child: isNarrow
+                // «+» — в AppBar оболочки, поиск на всю ширину.
+                ? ShellActions(
+                    actions: [
+                      AddActionButton(
+                        tooltip: 'Добавить клиента',
                         onPressed: () => _showCustomerDialog(context),
-                        icon: const Icon(Icons.person_add),
-                        label: const Text('Добавить клиента'),
                       ),
                     ],
-                  ),
-                ],
-                SizedBox(height: isNarrow ? 16 : 24),
-                if (isNarrow) ...[
-                  TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      hintText: 'Поиск: имя, телефон, email…',
-                      prefixIcon: const Icon(Icons.search),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      filled: true,
-                      fillColor: AppTheme.backgroundColor,
-                    ),
-                    onChanged: _filterCustomers,
-                  ),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton.icon(
-                      onPressed: () {
-                        // Фильтры будут реализованы позже
-                      },
-                      icon: const Icon(Icons.filter_list, size: 20),
-                      label: const Text('Фильтры'),
-                    ),
-                  ),
-                ] else ...[
-                  Row(
+                    child: search,
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _searchController,
-                          decoration: InputDecoration(
-                            hintText: 'Поиск по имени, телефону, email...',
-                            prefixIcon: const Icon(Icons.search),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'CRM',
+                              style: Theme.of(
+                                context,
+                              ).textTheme.headlineSmall?.copyWith(fontSize: 22),
                             ),
-                            filled: true,
-                            fillColor: AppTheme.backgroundColor,
                           ),
-                          onChanged: _filterCustomers,
-                        ),
+                          AddActionButton(
+                            onPressed: () => _showCustomerDialog(context),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 16),
-                      OutlinedButton.icon(
-                        onPressed: () {
-                          // Фильтры будут реализованы позже
-                        },
-                        icon: const Icon(Icons.filter_list),
-                        label: const Text('Фильтры'),
-                      ),
+                      const SizedBox(height: 16),
+                      search,
                     ],
                   ),
-                ],
-              ],
-            ),
           ),
 
           // Список клиентов
@@ -292,7 +237,11 @@ class _CrmScreenState extends State<CrmScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.error_outline, size: 64, color: Colors.red),
+            const Icon(
+              Icons.error_outline,
+              size: 64,
+              color: AppTheme.errorColor,
+            ),
             const SizedBox(height: 16),
             Text(error!, textAlign: TextAlign.center),
             const SizedBox(height: 16),
@@ -460,24 +409,7 @@ class _CrmScreenState extends State<CrmScreen> {
                               tooltip: 'WhatsApp',
                             ),
                           ],
-                          IconButton(
-                            icon: const Icon(Icons.edit_outlined, size: 20),
-                            onPressed: () => _showCustomerDialog(
-                              context,
-                              customer: customer,
-                            ),
-                            tooltip: 'Редактировать',
-                          ),
-                          IconButton(
-                            icon: const Icon(
-                              Icons.delete_outline,
-                              size: 20,
-                              color: Colors.red,
-                            ),
-                            onPressed: () =>
-                                _showDeleteDialog(context, customer),
-                            tooltip: 'Удалить',
-                          ),
+                          _customerMenu(context, customer),
                         ],
                       ),
                     ],
@@ -569,14 +501,14 @@ class _CrmScreenState extends State<CrmScreen> {
                                     ),
                                     decoration: BoxDecoration(
                                       color: v.needsService
-                                          ? Colors.orange.withValues(
+                                          ? AppTheme.warningColor.withValues(
                                               alpha: 0.12,
                                             )
                                           : AppTheme.surfaceColor,
                                       borderRadius: BorderRadius.circular(6),
                                       border: Border.all(
                                         color: v.needsService
-                                            ? Colors.orange
+                                            ? AppTheme.warningColor
                                             : AppTheme.borderColor,
                                       ),
                                     ),
@@ -587,7 +519,7 @@ class _CrmScreenState extends State<CrmScreen> {
                                           Icons.directions_car,
                                           size: 14,
                                           color: v.needsService
-                                              ? Colors.orange
+                                              ? AppTheme.warningColor
                                               : AppTheme.primaryColor,
                                         ),
                                         const SizedBox(width: 4),
@@ -597,7 +529,7 @@ class _CrmScreenState extends State<CrmScreen> {
                                             fontSize: 12,
                                             fontWeight: FontWeight.w500,
                                             color: v.needsService
-                                                ? Colors.orange.shade900
+                                                ? AppTheme.warningColor
                                                 : AppTheme.textPrimary,
                                           ),
                                         ),
@@ -607,7 +539,7 @@ class _CrmScreenState extends State<CrmScreen> {
                                             'ТО',
                                             style: TextStyle(
                                               fontSize: 10,
-                                              color: Colors.orange,
+                                              color: AppTheme.warningColor,
                                               fontWeight: FontWeight.bold,
                                             ),
                                           ),
@@ -637,7 +569,7 @@ class _CrmScreenState extends State<CrmScreen> {
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
                     child: Text(
-                      'С ${dateFormat.format(customer.createdAt)}',
+                      'Клиент с ${dateFormat.format(customer.createdAt)}',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: AppTheme.textSecondary,
                       ),
@@ -785,63 +717,64 @@ class _CrmScreenState extends State<CrmScreen> {
                                 runSpacing: 4,
                                 crossAxisAlignment: WrapCrossAlignment.center,
                                 children: [
-                                  ...customer.vehicles.map((v) => InkWell(
-                                        onTap: () {
-                                          Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (_) =>
-                                                  VehicleDetailScreen(
-                                                    vehicleId: v.id,
-                                                  ),
+                                  ...customer.vehicles.map(
+                                    (v) => InkWell(
+                                      onTap: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => VehicleDetailScreen(
+                                              vehicleId: v.id,
                                             ),
-                                          ).then((_) => _loadCustomers());
-                                        },
-                                        borderRadius: BorderRadius.circular(4),
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 6,
-                                            vertical: 3,
                                           ),
-                                          decoration: BoxDecoration(
+                                        ).then((_) => _loadCustomers());
+                                      },
+                                      borderRadius: BorderRadius.circular(4),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                          vertical: 3,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: v.needsService
+                                              ? AppTheme.warningColor
+                                                    .withValues(alpha: 0.12)
+                                              : AppTheme.backgroundColor,
+                                          borderRadius: BorderRadius.circular(
+                                            4,
+                                          ),
+                                          border: Border.all(
                                             color: v.needsService
-                                                ? Colors.orange.withValues(
-                                                    alpha: 0.12,
-                                                  )
-                                                : AppTheme.backgroundColor,
-                                            borderRadius:
-                                                BorderRadius.circular(4),
-                                            border: Border.all(
-                                              color: v.needsService
-                                                  ? Colors.orange
-                                                  : AppTheme.borderColor,
-                                            ),
-                                          ),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Icon(
-                                                Icons.directions_car,
-                                                size: 13,
-                                                color: v.needsService
-                                                    ? Colors.orange
-                                                    : AppTheme.primaryColor,
-                                              ),
-                                              const SizedBox(width: 4),
-                                              Text(
-                                                '${v.brand} ${v.model}${v.plateNumber.isNotEmpty ? ' (${v.plateNumber})' : ''}',
-                                                style: TextStyle(
-                                                  fontSize: 11,
-                                                  fontWeight: FontWeight.w500,
-                                                  color: v.needsService
-                                                      ? Colors.orange.shade900
-                                                      : AppTheme.textPrimary,
-                                                ),
-                                              ),
-                                            ],
+                                                ? AppTheme.warningColor
+                                                : AppTheme.borderColor,
                                           ),
                                         ),
-                                      )),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              Icons.directions_car,
+                                              size: 13,
+                                              color: v.needsService
+                                                  ? AppTheme.warningColor
+                                                  : AppTheme.primaryColor,
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              '${v.brand} ${v.model}${v.plateNumber.isNotEmpty ? ' (${v.plateNumber})' : ''}',
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w500,
+                                                color: v.needsService
+                                                    ? AppTheme.warningColor
+                                                    : AppTheme.textPrimary,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
                                   IconButton(
                                     icon: const Icon(
                                       Icons.add_circle_outline,
@@ -865,7 +798,8 @@ class _CrmScreenState extends State<CrmScreen> {
                                           ? customer.carModel!
                                           : '—',
                                       style: TextStyle(
-                                        color: (customer.carModel != null &&
+                                        color:
+                                            (customer.carModel != null &&
                                                 customer.carModel!.isNotEmpty)
                                             ? AppTheme.textPrimary
                                             : AppTheme.textSecondary,
@@ -899,9 +833,11 @@ class _CrmScreenState extends State<CrmScreen> {
                           children: [
                             if (customer.phone.trim().isNotEmpty) ...[
                               IconButton(
-                                icon: const Icon(Icons.phone_outlined, size: 18),
-                                onPressed: () =>
-                                    _makePhoneCall(customer.phone),
+                                icon: const Icon(
+                                  Icons.phone_outlined,
+                                  size: 18,
+                                ),
+                                onPressed: () => _makePhoneCall(customer.phone),
                                 tooltip: 'Позвонить',
                                 visualDensity: VisualDensity.compact,
                               ),
@@ -910,32 +846,12 @@ class _CrmScreenState extends State<CrmScreen> {
                                   Icons.chat_bubble_outline,
                                   size: 18,
                                 ),
-                                onPressed: () =>
-                                    _openWhatsApp(customer.phone),
+                                onPressed: () => _openWhatsApp(customer.phone),
                                 tooltip: 'WhatsApp',
                                 visualDensity: VisualDensity.compact,
                               ),
                             ],
-                            IconButton(
-                              icon: const Icon(Icons.edit_outlined, size: 18),
-                              onPressed: () => _showCustomerDialog(
-                                context,
-                                customer: customer,
-                              ),
-                              tooltip: 'Редактировать',
-                              visualDensity: VisualDensity.compact,
-                            ),
-                            IconButton(
-                              icon: const Icon(
-                                Icons.delete_outline,
-                                size: 18,
-                                color: Colors.red,
-                              ),
-                              onPressed: () =>
-                                  _showDeleteDialog(context, customer),
-                              tooltip: 'Удалить',
-                              visualDensity: VisualDensity.compact,
-                            ),
+                            _customerMenu(context, customer),
                           ],
                         ),
                       ),
@@ -1011,7 +927,9 @@ Future<void> showCustomerDialog(
     },
   );
   if (isMobile) {
-    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => formWidget));
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => formWidget));
   } else {
     await showDialog(context: context, builder: (_) => formWidget);
   }
@@ -1065,7 +983,9 @@ class _CustomerFormDialogState extends State<CustomerFormDialog> {
     try {
       final res = await widget.dio.get('/api/customers/$customerId');
       if (mounted && res.data != null) {
-        final updated = CustomerModel.fromJson(res.data as Map<String, dynamic>);
+        final updated = CustomerModel.fromJson(
+          res.data as Map<String, dynamic>,
+        );
         setState(() {
           _vehicles = updated.vehicles;
           _isLoadingVehicles = false;
@@ -1162,9 +1082,9 @@ class _CustomerFormDialogState extends State<CustomerFormDialog> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка'))));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка'))),
+        );
       }
     }
   }
@@ -1317,7 +1237,7 @@ class _CustomerFormDialogState extends State<CustomerFormDialog> {
                     borderRadius: BorderRadius.circular(10),
                     side: BorderSide(
                       color: v.needsService
-                          ? Colors.orange
+                          ? AppTheme.warningColor
                           : AppTheme.borderColor,
                     ),
                   ),
@@ -1326,7 +1246,7 @@ class _CustomerFormDialogState extends State<CustomerFormDialog> {
                     leading: Icon(
                       Icons.directions_car,
                       color: v.needsService
-                          ? Colors.orange
+                          ? AppTheme.warningColor
                           : AppTheme.primaryColor,
                     ),
                     title: Row(
@@ -1334,9 +1254,7 @@ class _CustomerFormDialogState extends State<CustomerFormDialog> {
                         Expanded(
                           child: Text(
                             v.displayName,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w600,
-                            ),
+                            style: const TextStyle(fontWeight: FontWeight.w600),
                           ),
                         ),
                         if (v.needsService)
@@ -1346,14 +1264,16 @@ class _CustomerFormDialogState extends State<CustomerFormDialog> {
                               vertical: 2,
                             ),
                             decoration: BoxDecoration(
-                              color: Colors.orange.withValues(alpha: 0.15),
+                              color: AppTheme.warningColor.withValues(
+                                alpha: 0.15,
+                              ),
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: const Text(
                               'Требуется ТО',
                               style: TextStyle(
                                 fontSize: 10,
-                                color: Colors.orange,
+                                color: AppTheme.warningColor,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
@@ -1372,8 +1292,7 @@ class _CustomerFormDialogState extends State<CustomerFormDialog> {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) =>
-                              VehicleDetailScreen(vehicleId: v.id),
+                          builder: (_) => VehicleDetailScreen(vehicleId: v.id),
                         ),
                       ).then((_) {
                         if (widget.customer?.id != null) {

@@ -1,5 +1,8 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:autohub_b2b/core/theme.dart';
+import 'package:autohub_b2b/widgets/add_action_button.dart';
+import 'package:autohub_b2b/widgets/shell_actions.dart';
 import '../../models/warehouse_model.dart';
 import '../../models/item_model.dart';
 import '../../widgets/unauthorized_placeholder.dart';
@@ -149,128 +152,140 @@ class _WarehouseTransfersScreenState extends State<WarehouseTransfersScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Перемещения товаров'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadTransfers,
-          ),
-        ],
+    final wide = AddActionButton.isWide(context);
+    final actions = <Widget>[
+      IconButton(
+        icon: const Icon(Icons.refresh),
+        tooltip: 'Обновить',
+        onPressed: _loadTransfers,
       ),
-      body: _isForbidden
-          ? UnauthorizedPlaceholder(
-              message: _forbiddenMessage,
-              isForbidden: false,
-            )
-          : _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _isOffline
-          ? OfflinePlaceholder(onRetry: _loadTransfers)
-          : _transfers.isEmpty
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.swap_horiz, size: 64, color: Colors.grey[400]),
-                  const SizedBox(height: 16),
-                  const Text('Нет перемещений'),
-                ],
-              ),
-            )
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: _transfers.length,
-              itemBuilder: (context, index) {
-                final transfer = _transfers[index];
-
-                return Card(
-                  child: ExpansionTile(
-                    leading: Icon(
-                      _getStatusIcon(transfer.status),
-                      color: _getStatusColor(transfer.status),
-                    ),
-                    title: Text(
-                      '${transfer.fromWarehouse?.name ?? "?"} → ${transfer.toWarehouse?.name ?? "?"}',
-                    ),
-                    subtitle: Text(
-                      'Товар: ${transfer.item?['name'] ?? "ID: ${transfer.itemId}"}\nКол-во: ${transfer.quantity}',
-                    ),
-                    trailing: Chip(
-                      label: Text(transfer.status.getDisplayName()),
-                      backgroundColor: _getStatusColor(
-                        transfer.status,
-                      ).withOpacity(0.2),
-                    ),
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (transfer.notes != null) ...[
-                              const Text(
-                                'Примечание:',
-                                style: TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                              Text(transfer.notes!),
-                              const SizedBox(height: 8),
-                            ],
-                            Text('Создано: ${_formatDate(transfer.createdAt)}'),
-                            if (transfer.completedAt != null)
-                              Text(
-                                'Завершено: ${_formatDate(transfer.completedAt!)}',
-                              ),
-                            const SizedBox(height: 16),
-                            if (transfer.status == TransferStatus.draft)
-                              Wrap(
-                                spacing: 8,
-                                children: [
-                                  ElevatedButton.icon(
-                                    onPressed: () => _updateStatus(
-                                      transfer,
-                                      TransferStatus.inTransit,
-                                    ),
-                                    icon: const Icon(Icons.local_shipping),
-                                    label: const Text('В путь'),
-                                  ),
-                                  ElevatedButton.icon(
-                                    onPressed: () => _updateStatus(
-                                      transfer,
-                                      TransferStatus.completed,
-                                    ),
-                                    icon: const Icon(Icons.check),
-                                    label: const Text('Завершить'),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.green,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            if (transfer.status == TransferStatus.inTransit)
-                              ElevatedButton.icon(
-                                onPressed: () => _updateStatus(
-                                  transfer,
-                                  TransferStatus.completed,
-                                ),
-                                icon: const Icon(Icons.check),
-                                label: const Text('Завершить'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.green,
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-      floatingActionButton: FloatingActionButton(
+      AddActionButton(
         onPressed: _showCreateTransferDialog,
-        child: const Icon(Icons.add),
+        tooltip: 'Добавить',
+      ),
+    ];
+
+    return ShellActions(
+      actions: wide ? const [] : actions,
+      child: Scaffold(
+        // На телефоне шапка одна — оболочки; кнопки уходят в неё через ShellActions.
+        appBar: wide
+            ? AppBar(
+                title: const Text('Перемещения товаров'),
+                actions: [...actions, const SizedBox(width: 8)],
+              )
+            : null,
+        body: _isForbidden
+            ? UnauthorizedPlaceholder(
+                message: _forbiddenMessage,
+                isForbidden: false,
+              )
+            : _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : _isOffline
+            ? OfflinePlaceholder(onRetry: _loadTransfers)
+            : _transfers.isEmpty
+            ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.swap_horiz, size: 64, color: Colors.grey[400]),
+                    const SizedBox(height: 16),
+                    const Text('Нет перемещений'),
+                  ],
+                ),
+              )
+            : ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: _transfers.length,
+                itemBuilder: (context, index) {
+                  final transfer = _transfers[index];
+
+                  return Card(
+                    child: ExpansionTile(
+                      leading: Icon(
+                        _getStatusIcon(transfer.status),
+                        color: _getStatusColor(transfer.status),
+                      ),
+                      title: Text(
+                        '${transfer.fromWarehouse?.name ?? "?"} → ${transfer.toWarehouse?.name ?? "?"}',
+                      ),
+                      subtitle: Text(
+                        'Товар: ${transfer.item?['name'] ?? "ID: ${transfer.itemId}"}\nКол-во: ${transfer.quantity}',
+                      ),
+                      trailing: Chip(
+                        label: Text(transfer.status.getDisplayName()),
+                        backgroundColor: _getStatusColor(
+                          transfer.status,
+                        ).withValues(alpha: 0.2),
+                      ),
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (transfer.notes != null) ...[
+                                const Text(
+                                  'Примечание:',
+                                  style: TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                                Text(transfer.notes!),
+                                const SizedBox(height: 8),
+                              ],
+                              Text(
+                                'Создано: ${_formatDate(transfer.createdAt)}',
+                              ),
+                              if (transfer.completedAt != null)
+                                Text(
+                                  'Завершено: ${_formatDate(transfer.completedAt!)}',
+                                ),
+                              const SizedBox(height: 16),
+                              if (transfer.status == TransferStatus.draft)
+                                Wrap(
+                                  spacing: 8,
+                                  children: [
+                                    ElevatedButton.icon(
+                                      onPressed: () => _updateStatus(
+                                        transfer,
+                                        TransferStatus.inTransit,
+                                      ),
+                                      icon: const Icon(Icons.local_shipping),
+                                      label: const Text('В путь'),
+                                    ),
+                                    ElevatedButton.icon(
+                                      onPressed: () => _updateStatus(
+                                        transfer,
+                                        TransferStatus.completed,
+                                      ),
+                                      icon: const Icon(Icons.check),
+                                      label: const Text('Завершить'),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: AppTheme.successColor,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              if (transfer.status == TransferStatus.inTransit)
+                                ElevatedButton.icon(
+                                  onPressed: () => _updateStatus(
+                                    transfer,
+                                    TransferStatus.completed,
+                                  ),
+                                  icon: const Icon(Icons.check),
+                                  label: const Text('Завершить'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppTheme.successColor,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
       ),
     );
   }
@@ -293,11 +308,11 @@ class _WarehouseTransfersScreenState extends State<WarehouseTransfersScreen> {
       case TransferStatus.draft:
         return Colors.grey;
       case TransferStatus.inTransit:
-        return Colors.orange;
+        return AppTheme.warningColor;
       case TransferStatus.completed:
-        return Colors.green;
+        return AppTheme.successColor;
       case TransferStatus.cancelled:
-        return Colors.red;
+        return AppTheme.errorColor;
     }
   }
 
@@ -415,10 +430,8 @@ class _TransferFormDialogState extends State<_TransferFormDialog> {
           ),
           items: widget.items
               .map(
-                (item) => DropdownMenuItem(
-                  value: item.id,
-                  child: Text(item.name ?? 'Без названия'),
-                ),
+                (item) =>
+                    DropdownMenuItem(value: item.id, child: Text(item.name)),
               )
               .toList(),
           onChanged: (v) => setState(() => _itemId = v),

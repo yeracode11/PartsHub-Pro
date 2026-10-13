@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:autohub_b2b/core/theme.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:image_picker/image_picker.dart';
 import '../models/item_model.dart';
 import '../services/api/api_user_message.dart';
 import '../services/image_upload_service.dart';
@@ -89,7 +89,7 @@ class _ImageUploadWidgetState extends State<ImageUploadWidget> {
                 ),
               ),
               if (widget.item.id != null)
-                ElevatedButton.icon(
+                OutlinedButton.icon(
                   onPressed: _isUploading ? null : _pickAndUploadImages,
                   icon: _isUploading
                       ? const SizedBox(
@@ -99,10 +99,6 @@ class _ImageUploadWidgetState extends State<ImageUploadWidget> {
                         )
                       : const Icon(Icons.add_photo_alternate),
                   label: Text(_isUploading ? 'Загрузка...' : 'Добавить фото'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Theme.of(context).primaryColor,
-                    foregroundColor: Colors.white,
-                  ),
                 ),
             ],
           ),
@@ -169,7 +165,7 @@ class _ImageUploadWidgetState extends State<ImageUploadWidget> {
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
-                              color: Colors.green,
+                              color: AppTheme.successColor,
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: const Text(
@@ -193,7 +189,7 @@ class _ImageUploadWidgetState extends State<ImageUploadWidget> {
                             child: Container(
                               padding: const EdgeInsets.all(4),
                               decoration: const BoxDecoration(
-                                color: Colors.red,
+                                color: AppTheme.errorColor,
                                 shape: BoxShape.circle,
                               ),
                               child: const Icon(
@@ -215,7 +211,7 @@ class _ImageUploadWidgetState extends State<ImageUploadWidget> {
                             child: Container(
                               padding: const EdgeInsets.all(4),
                               decoration: const BoxDecoration(
-                                color: Colors.blue,
+                                color: AppTheme.primaryColor,
                                 shape: BoxShape.circle,
                               ),
                               child: const Icon(
@@ -351,7 +347,7 @@ class _ImageUploadWidgetState extends State<ImageUploadWidget> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: Colors.green,
+        backgroundColor: AppTheme.successColor,
       ),
     );
   }
@@ -360,7 +356,7 @@ class _ImageUploadWidgetState extends State<ImageUploadWidget> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: Colors.red,
+        backgroundColor: AppTheme.errorColor,
       ),
     );
   }

@@ -37,7 +37,7 @@ class UnauthorizedPlaceholder extends StatelessWidget {
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: AppTheme.primaryColor.withOpacity(0.3),
+                    color: AppTheme.primaryColor.withValues(alpha: 0.3),
                     blurRadius: 24,
                     spreadRadius: 4,
                   ),

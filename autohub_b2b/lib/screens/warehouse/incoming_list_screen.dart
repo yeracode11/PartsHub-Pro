@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:autohub_b2b/widgets/add_action_button.dart';
+import 'package:autohub_b2b/widgets/shell_actions.dart';
 import 'package:intl/intl.dart';
 import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/models/incoming_doc_model.dart';
@@ -120,89 +122,97 @@ class _IncomingListScreenState extends State<IncomingListScreen> {
       );
     }
 
-    return Scaffold(
-      backgroundColor: AppTheme.backgroundColor,
-      appBar: AppBar(
-        title: const Text('Приходные накладные'),
-        elevation: 0,
-        actions: [
-          // Фильтр по статусу
-          PopupMenuButton<IncomingDocStatus?>(
-            icon: const Icon(Icons.filter_list),
-            onSelected: (status) {
-              setState(() {
-                _filterStatus = status;
-              });
-              _loadDocuments();
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(value: null, child: Text('Все')),
-              const PopupMenuItem(
-                value: IncomingDocStatus.draft,
-                child: Text('Черновики'),
-              ),
-              const PopupMenuItem(
-                value: IncomingDocStatus.done,
-                child: Text('Проведенные'),
-              ),
-            ],
+    final wide = AddActionButton.isWide(context);
+    final actions = <Widget>[
+      // Фильтр по статусу
+      PopupMenuButton<IncomingDocStatus?>(
+        icon: const Icon(Icons.filter_list),
+        tooltip: 'Фильтр',
+        onSelected: (status) {
+          setState(() {
+            _filterStatus = status;
+          });
+          _loadDocuments();
+        },
+        itemBuilder: (context) => [
+          const PopupMenuItem(value: null, child: Text('Все')),
+          const PopupMenuItem(
+            value: IncomingDocStatus.draft,
+            child: Text('Черновики'),
           ),
-          IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: _openNewIncomingDocument,
-            tooltip: 'Создать накладную',
+          const PopupMenuItem(
+            value: IncomingDocStatus.done,
+            child: Text('Проведенные'),
           ),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _isOffline
-          ? OfflinePlaceholder(onRetry: _loadDocuments)
-          : _error != null
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(_error!, textAlign: TextAlign.center),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: _loadDocuments,
-                    child: const Text('Повторить'),
-                  ),
-                ],
+      AddActionButton(
+        onPressed: _openNewIncomingDocument,
+        tooltip: 'Создать накладную',
+      ),
+    ];
+
+    return ShellActions(
+      actions: wide ? const [] : actions,
+      child: Scaffold(
+        backgroundColor: AppTheme.backgroundColor,
+        // На телефоне шапка одна — оболочки; кнопки уходят в неё через ShellActions.
+        appBar: wide
+            ? AppBar(
+                title: const Text('Приходные накладные'),
+                actions: [...actions, const SizedBox(width: 8)],
+              )
+            : null,
+        body: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : _isOffline
+            ? OfflinePlaceholder(onRetry: _loadDocuments)
+            : _error != null
+            ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(_error!, textAlign: TextAlign.center),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: _loadDocuments,
+                      child: const Text('Повторить'),
+                    ),
+                  ],
+                ),
+              )
+            : _documents.isEmpty
+            ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.receipt_long, size: 64, color: Colors.grey[400]),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Нет приходных накладных',
+                      style: TextStyle(fontSize: 18, color: Colors.grey[600]),
+                    ),
+                    const SizedBox(height: 24),
+                    ElevatedButton.icon(
+                      onPressed: _openNewIncomingDocument,
+                      icon: const Icon(Icons.add),
+                      label: const Text('Создать накладную'),
+                    ),
+                  ],
+                ),
+              )
+            : RefreshIndicator(
+                onRefresh: _loadDocuments,
+                child: ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: _documents.length,
+                  itemBuilder: (context, index) {
+                    final doc = _documents[index];
+                    return _buildDocumentCard(doc);
+                  },
+                ),
               ),
-            )
-          : _documents.isEmpty
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.receipt_long, size: 64, color: Colors.grey[400]),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Нет приходных накладных',
-                    style: TextStyle(fontSize: 18, color: Colors.grey[600]),
-                  ),
-                  const SizedBox(height: 24),
-                  ElevatedButton.icon(
-                    onPressed: _openNewIncomingDocument,
-                    icon: const Icon(Icons.add),
-                    label: const Text('Создать накладную'),
-                  ),
-                ],
-              ),
-            )
-          : RefreshIndicator(
-              onRefresh: _loadDocuments,
-              child: ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: _documents.length,
-                itemBuilder: (context, index) {
-                  final doc = _documents[index];
-                  return _buildDocumentCard(doc);
-                },
-              ),
-            ),
+      ),
     );
   }
 
@@ -284,7 +294,7 @@ class _IncomingListScreenState extends State<IncomingListScreen> {
                   ),
                   if (doc.items != null && doc.items!.isNotEmpty)
                     Text(
-                      '${doc.items!.length} позиций',
+                      _positionsLabel(doc.items!.length),
                       style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                     ),
                 ],
@@ -300,20 +310,20 @@ class _IncomingListScreenState extends State<IncomingListScreen> {
     Color color;
     switch (status) {
       case IncomingDocStatus.draft:
-        color = Colors.orange;
+        color = AppTheme.warningColor;
         break;
       case IncomingDocStatus.done:
-        color = Colors.green;
+        color = AppTheme.successColor;
         break;
       case IncomingDocStatus.cancelled:
-        color = Colors.red;
+        color = AppTheme.errorColor;
         break;
     }
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: color),
       ),
@@ -327,4 +337,15 @@ class _IncomingListScreenState extends State<IncomingListScreen> {
       ),
     );
   }
+}
+
+String _positionsLabel(int count) {
+  final mod10 = count % 10;
+  final mod100 = count % 100;
+  final word = mod10 == 1 && mod100 != 11
+      ? 'позиция'
+      : mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)
+      ? 'позиции'
+      : 'позиций';
+  return '$count $word';
 }

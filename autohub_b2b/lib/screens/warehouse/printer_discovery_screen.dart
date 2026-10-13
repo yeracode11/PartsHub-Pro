@@ -91,7 +91,7 @@ class _PrinterDiscoveryScreenState extends State<PrinterDiscoveryScreen> {
                 ? 'Подключено: ${host.ip}:${host.port}'
                 : 'Не удалось подключиться: ${host.ip}',
           ),
-          backgroundColor: ok ? Colors.green : Colors.red,
+          backgroundColor: ok ? AppTheme.successColor : AppTheme.errorColor,
         ),
       );
     } finally {
@@ -111,7 +111,7 @@ class _PrinterDiscoveryScreenState extends State<PrinterDiscoveryScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(ok ? 'Тест ESC/POS отправлен' : res.msg),
-          backgroundColor: ok ? Colors.green : Colors.red,
+          backgroundColor: ok ? AppTheme.successColor : AppTheme.errorColor,
         ),
       );
     } finally {
@@ -180,7 +180,10 @@ class _PrinterDiscoveryScreenState extends State<PrinterDiscoveryScreen> {
                   const SizedBox(height: 8),
                   Text(
                     _warning!,
-                    style: const TextStyle(fontSize: 13, color: Colors.orange),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: AppTheme.warningColor,
+                    ),
                   ),
                 ],
               ],

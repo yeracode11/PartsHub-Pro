@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/models/item_model.dart';
-import 'package:autohub_b2b/services/items_service.dart';
 import 'package:autohub_b2b/repositories/items_repository.dart';
 import 'package:autohub_b2b/services/service_locator.dart';
 import 'package:autohub_b2b/screens/warehouse/item_detail_screen.dart';
@@ -21,7 +20,6 @@ class FindPartScreen extends StatefulWidget {
 
 class _FindPartScreenState extends State<FindPartScreen>
     with WidgetsBindingObserver {
-  final ItemsService _itemsService = ItemsService();
   final ItemsRepository _itemsRepo = ServiceLocator().itemsRepository;
   final MobileScannerController _scannerController = MobileScannerController();
 
@@ -30,16 +28,12 @@ class _FindPartScreenState extends State<FindPartScreen>
   bool _isLoading = false;
   bool _isRequestingPermission = false;
   String? _errorMessage;
-  ItemModel? _foundItem;
   bool _isAuthRequired = false;
   bool _authChecked = false;
 
   // Защита от повторных сканирований
   String? _lastScannedCode;
   DateTime? _lastScanTime;
-  static const Duration _scanCooldown = Duration(
-    seconds: 3,
-  ); // Минимальная задержка между сканированиями
 
   // Защита от повторных проверок доступа к камере
   bool _isCheckingCameraAccess = false;
@@ -409,7 +403,6 @@ class _FindPartScreenState extends State<FindPartScreen>
     setState(() {
       _isLoading = true;
       _errorMessage = null;
-      _foundItem = null;
     });
 
     // Ищем товар по коду
@@ -428,7 +421,6 @@ class _FindPartScreenState extends State<FindPartScreen>
           'FindPartScreen: Found item - ID: ${item.id}, Name: ${item.name}, SKU: ${item.sku}',
         );
         setState(() {
-          _foundItem = item;
           _isLoading = false;
         });
 
@@ -445,7 +437,7 @@ class _FindPartScreenState extends State<FindPartScreen>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Запчасть с кодом "$code" не найдена'),
-            backgroundColor: Colors.orange,
+            backgroundColor: AppTheme.warningColor,
             duration: const Duration(seconds: 3),
           ),
         );
@@ -474,7 +466,7 @@ class _FindPartScreenState extends State<FindPartScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(userFacingApiMessage(e, prefix: 'Ошибка поиска')),
-          backgroundColor: Colors.red,
+          backgroundColor: AppTheme.errorColor,
           duration: const Duration(seconds: 3),
         ),
       );
@@ -507,7 +499,6 @@ class _FindPartScreenState extends State<FindPartScreen>
           if (mounted) {
             setState(() {
               _isScanning = true;
-              _foundItem = null;
               _isLoading = false;
             });
             _scannerController.start();
@@ -561,7 +552,6 @@ class _FindPartScreenState extends State<FindPartScreen>
     setState(() {
       _isScanning = true;
       _errorMessage = null;
-      _foundItem = null;
       _isLoading = false;
     });
 
@@ -628,7 +618,9 @@ class _FindPartScreenState extends State<FindPartScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _isAuthRequired ? AppTheme.backgroundColor : Colors.blue,
+      backgroundColor: _isAuthRequired
+          ? AppTheme.backgroundColor
+          : AppTheme.primaryColor,
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.close),
@@ -867,14 +859,11 @@ class _FindPartScreenState extends State<FindPartScreen>
                     const Icon(
                       Icons.error_outline,
                       size: 64,
-                      color: Colors.red,
+                      color: AppTheme.errorColor,
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      userFacingApiMessage(
-                        error ?? 'Не удалось запустить камеру',
-                        prefix: 'Ошибка камеры',
-                      ),
+                      userFacingApiMessage(error, prefix: 'Ошибка камеры'),
                       style: const TextStyle(color: Colors.white, fontSize: 16),
                       textAlign: TextAlign.center,
                     ),
@@ -901,7 +890,10 @@ class _FindPartScreenState extends State<FindPartScreen>
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [Colors.transparent, Colors.black.withOpacity(0.8)],
+                colors: [
+                  Colors.transparent,
+                  Colors.black.withValues(alpha: 0.8),
+                ],
               ),
             ),
             child: Column(
@@ -911,7 +903,7 @@ class _FindPartScreenState extends State<FindPartScreen>
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: AppTheme.primaryColor.withOpacity(0.9),
+                      color: AppTheme.primaryColor.withValues(alpha: 0.9),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Row(
@@ -940,7 +932,7 @@ class _FindPartScreenState extends State<FindPartScreen>
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.7),
+                      color: Colors.black.withValues(alpha: 0.7),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Column(
@@ -975,7 +967,7 @@ class _FindPartScreenState extends State<FindPartScreen>
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.orange.withOpacity(0.9),
+                      color: AppTheme.warningColor.withValues(alpha: 0.9),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(

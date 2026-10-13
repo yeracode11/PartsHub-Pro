@@ -96,7 +96,7 @@ class _WhatsAppScreenState extends State<WhatsAppScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('WhatsApp подключен'),
-            backgroundColor: Colors.green,
+            backgroundColor: AppTheme.successColor,
           ),
         );
       }

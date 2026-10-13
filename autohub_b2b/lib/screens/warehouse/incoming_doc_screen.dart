@@ -161,7 +161,7 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Накладная обновлена'),
-              backgroundColor: Colors.green,
+              backgroundColor: AppTheme.successColor,
             ),
           );
         }
@@ -172,7 +172,7 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(userFacingApiMessage(e, prefix: 'Ошибка сохранения')),
-            backgroundColor: Colors.red,
+            backgroundColor: AppTheme.errorColor,
           ),
         );
       }
@@ -221,7 +221,7 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Накладная проведена'),
-            backgroundColor: Colors.green,
+            backgroundColor: AppTheme.successColor,
           ),
         );
       }
@@ -231,7 +231,7 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(userFacingApiMessage(e, prefix: 'Ошибка проведения')),
-            backgroundColor: Colors.red,
+            backgroundColor: AppTheme.errorColor,
           ),
         );
       }
@@ -283,30 +283,36 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
       appBar: AppBar(
-        title: Text(
-          _document == null
-              ? 'Новая накладная'
-              : 'Накладная ${_document!.docNumber}',
-        ),
+        // Номер накладной важнее слова «Накладная» — иначе он обрезается.
+        title: _document == null
+            ? const Text('Новая накладная')
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(_document!.docNumber),
+                  Text(
+                    _document!.status == IncomingDocStatus.done
+                        ? 'Проведена'
+                        : 'Черновик',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w400,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
         actions: [
-          if (_document != null && _document!.status == IncomingDocStatus.done)
-            IconButton(
-              icon: const Icon(Icons.check_circle),
-              color: Colors.green,
-              onPressed: null,
-              tooltip: 'Проведена',
-            ),
           if (_document != null && _document!.status == IncomingDocStatus.draft)
-            IconButton(
-              icon: const Icon(Icons.check),
+            TextButton(
               onPressed: _isLoading ? null : _processDocument,
-              tooltip: 'Провести',
+              child: const Text('Провести'),
             ),
-          IconButton(
-            icon: const Icon(Icons.save),
+          FilledButton(
             onPressed: _isLoading ? null : _saveDocument,
-            tooltip: 'Сохранить',
+            child: const Text('Сохранить'),
           ),
+          const SizedBox(width: 12),
         ],
       ),
       body: _isLoading
@@ -648,7 +654,9 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
             if (item.category != null) Text('Категория: ${item.category}'),
             if (item.carBrand != null)
               Text('Авто: ${item.carBrand} ${item.carModel ?? ''}'),
-            Text('Кол-во: ${item.quantity} × ${item.purchasePrice} ₸'),
+            Text(
+              'Кол-во: ${item.quantity} × ${NumberFormat('#,##0.##', 'ru_RU').format(item.purchasePrice)} ₸',
+            ),
             if (item.warehouseCell != null)
               Text('Ячейка: ${item.warehouseCell}'),
           ],
@@ -665,7 +673,7 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
             // Кнопка удаления (только для черновиков)
             if (_document?.status == IncomingDocStatus.draft)
               IconButton(
-                icon: const Icon(Icons.delete, color: Colors.red),
+                icon: const Icon(Icons.delete, color: AppTheme.errorColor),
                 onPressed: () async {
                   final confirmed = await showDialog<bool>(
                     context: context,
@@ -679,7 +687,7 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
                         ElevatedButton(
                           onPressed: () => Navigator.of(context).pop(true),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.red,
+                            backgroundColor: AppTheme.errorColor,
                           ),
                           child: const Text('Удалить'),
                         ),
@@ -759,7 +767,7 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
                 content: Text(
                   'Не удалось подключиться к принтеру. Проверьте подключение.',
                 ),
-                backgroundColor: Colors.red,
+                backgroundColor: AppTheme.errorColor,
               ),
             );
           }
@@ -802,7 +810,7 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Напечатано наклеек: ${item.quantity}'),
-              backgroundColor: Colors.green,
+              backgroundColor: AppTheme.successColor,
             ),
           );
         }
@@ -811,7 +819,7 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Ошибка печати. Проверьте подключение принтера.'),
-              backgroundColor: Colors.red,
+              backgroundColor: AppTheme.errorColor,
             ),
           );
         }
@@ -822,7 +830,7 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(userFacingApiMessage(e, prefix: 'Ошибка печати')),
-            backgroundColor: Colors.red,
+            backgroundColor: AppTheme.errorColor,
           ),
         );
       }
@@ -899,7 +907,7 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
                 content: Text(
                   'Не удалось подключиться к принтеру. Проверьте подключение.',
                 ),
-                backgroundColor: Colors.red,
+                backgroundColor: AppTheme.errorColor,
               ),
             );
           }
@@ -950,7 +958,7 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Напечатано наклеек: $totalPrinted'),
-            backgroundColor: Colors.green,
+            backgroundColor: AppTheme.successColor,
           ),
         );
       }
@@ -960,7 +968,7 @@ class _IncomingDocScreenState extends State<IncomingDocScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(userFacingApiMessage(e, prefix: 'Ошибка печати')),
-            backgroundColor: Colors.red,
+            backgroundColor: AppTheme.errorColor,
           ),
         );
       }

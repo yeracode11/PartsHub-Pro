@@ -37,6 +37,7 @@ import 'package:autohub_b2b/screens/onboarding/onboarding_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:autohub_b2b/services/service_locator.dart';
 import 'package:autohub_b2b/widgets/offline_banner.dart';
+import 'package:autohub_b2b/widgets/shell_actions.dart';
 import 'package:autohub_b2b/widgets/unauthorized_placeholder.dart';
 
 void main() async {
@@ -161,6 +162,8 @@ class _MainScreenState extends State<MainScreen> {
   int?
   _warehouseSubMenuIndex; // null = закрыто, 0 = Товары, 1 = Оприходование, 2 = Расположение, 3 = Склады, 4 = Перемещения, 5 = Доноры (авторазбор)
   String? _userRole; // Роль текущего пользователя
+  // Кнопки текущего раздела для AppBar оболочки на телефоне (см. ShellActions).
+  final _shellActions = ValueNotifier<List<Widget>>(const []);
 
   final List<Widget> _screens = [
     const DashboardScreen(),
@@ -174,6 +177,12 @@ class _MainScreenState extends State<MainScreen> {
     const ScheduleScreen(),
     const PayrollScreen(),
   ];
+
+  @override
+  void dispose() {
+    _shellActions.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -341,7 +350,9 @@ class _MainScreenState extends State<MainScreen> {
     return Column(
       children: [
         const OfflineBanner(),
-        Expanded(child: mainContent),
+        Expanded(
+          child: ShellActionsScope(actions: _shellActions, child: mainContent),
+        ),
       ],
     );
   }
@@ -371,17 +382,21 @@ class _MainScreenState extends State<MainScreen> {
                 foregroundColor: AppTheme.textPrimary,
                 elevation: 0,
                 actions: [
+                  ValueListenableBuilder<List<Widget>>(
+                    valueListenable: _shellActions,
+                    builder: (context, actions, _) => Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: actions,
+                    ),
+                  ),
                   if (_isGuest(authState))
                     IconButton(
                       icon: const Icon(Icons.login),
                       tooltip: 'Войти',
                       onPressed: () => _openLogin(context),
                     ),
+                  const SizedBox(width: 4),
                 ],
-                bottom: PreferredSize(
-                  preferredSize: const Size.fromHeight(1),
-                  child: Container(height: 1, color: AppTheme.borderColor),
-                ),
               ),
               body: _buildShellBody(authState),
               bottomNavigationBar: _buildBottomNavigationBar(authState),
@@ -562,11 +577,11 @@ class _MainScreenState extends State<MainScreen> {
                                       padding: const EdgeInsets.all(12),
                                       decoration: BoxDecoration(
                                         color: AppTheme.primaryColor
-                                            .withOpacity(0.1),
+                                            .withValues(alpha: 0.1),
                                         borderRadius: BorderRadius.circular(12),
                                         border: Border.all(
                                           color: AppTheme.primaryColor
-                                              .withOpacity(0.2),
+                                              .withValues(alpha: 0.2),
                                         ),
                                       ),
                                       child: Row(
@@ -661,49 +676,6 @@ class _MainScreenState extends State<MainScreen> {
         },
       ),
     );
-  }
-
-  String _getApprarTitle() {
-    if (_selectedIndex == 1) {
-      switch (_warehouseSubMenuIndex) {
-        case 0:
-          return 'Товары';
-        case 1:
-          return 'Оприходование';
-        case 2:
-          return 'Расположение';
-        case 3:
-          return 'Склады';
-        case 4:
-          return 'Перемещения';
-        case 5:
-          return 'Доноры';
-        default:
-          return 'Склад';
-      }
-    }
-    switch (_selectedIndex) {
-      case 0:
-        return 'Дашборд';
-      case 2:
-        return 'Продажи';
-      case 3:
-        return 'CRM';
-      case 4:
-        return 'Автомобили';
-      case 5:
-        return 'Аналитика';
-      case 6:
-        return 'WhatsApp';
-      case 7:
-        return 'Настройки';
-      case 8:
-        return 'Запись';
-      case 9:
-        return 'Зарплата';
-      default:
-        return 'Auto+ Pro';
-    }
   }
 
   Widget _buildDrawer(BuildContext context, AuthState authState) {
@@ -902,10 +874,10 @@ class _MainScreenState extends State<MainScreen> {
                       child: Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: AppTheme.primaryColor.withOpacity(0.1),
+                          color: AppTheme.primaryColor.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: AppTheme.primaryColor.withOpacity(0.2),
+                            color: AppTheme.primaryColor.withValues(alpha: 0.2),
                           ),
                         ),
                         child: Row(
@@ -1075,7 +1047,7 @@ class _MainScreenState extends State<MainScreen> {
         ),
       ),
       selected: isSelected,
-      selectedTileColor: AppTheme.primaryColor.withOpacity(0.1),
+      selectedTileColor: AppTheme.primaryColor.withValues(alpha: 0.1),
       onTap: () {
         Navigator.of(context).pop();
         setState(() {
@@ -1182,7 +1154,7 @@ class _MainScreenState extends State<MainScreen> {
         ),
       ),
       selected: isSelected,
-      selectedTileColor: AppTheme.primaryColor.withOpacity(0.1),
+      selectedTileColor: AppTheme.primaryColor.withValues(alpha: 0.1),
       onTap: () {
         Navigator.of(context).pop();
         setState(() {
@@ -1229,7 +1201,7 @@ class _MainScreenState extends State<MainScreen> {
                 ),
                 decoration: BoxDecoration(
                   color: isSelected
-                      ? AppTheme.primaryColor.withOpacity(0.1)
+                      ? AppTheme.primaryColor.withValues(alpha: 0.1)
                       : Colors.transparent,
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -1342,12 +1314,12 @@ class _MainScreenState extends State<MainScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
               color: isSelected
-                  ? AppTheme.primaryColor.withOpacity(0.15)
+                  ? AppTheme.primaryColor.withValues(alpha: 0.15)
                   : Colors.transparent,
               borderRadius: BorderRadius.circular(8),
               border: isSelected
                   ? Border.all(
-                      color: AppTheme.primaryColor.withOpacity(0.3),
+                      color: AppTheme.primaryColor.withValues(alpha: 0.3),
                       width: 1,
                     )
                   : null,
@@ -1410,7 +1382,7 @@ class _MainScreenState extends State<MainScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
               color: isSelected
-                  ? AppTheme.primaryColor.withOpacity(0.1)
+                  ? AppTheme.primaryColor.withValues(alpha: 0.1)
                   : Colors.transparent,
               borderRadius: BorderRadius.circular(12),
             ),

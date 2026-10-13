@@ -229,7 +229,9 @@ class _BlePrinterScanScreenState extends State<BlePrinterScanScreen> {
               style: TextStyle(
                 fontSize: 13,
                 height: 1.35,
-                color: _error != null ? Colors.red : AppTheme.textSecondary,
+                color: _error != null
+                    ? AppTheme.errorColor
+                    : AppTheme.textSecondary,
               ),
             ),
           ),
@@ -316,7 +318,11 @@ class _BlePrinterScanScreenState extends State<BlePrinterScanScreen> {
                             padding: EdgeInsets.fromLTRB(16, 20, 16, 4),
                             child: Row(
                               children: [
-                                Icon(Icons.link, color: Colors.green, size: 22),
+                                Icon(
+                                  Icons.link,
+                                  color: AppTheme.successColor,
+                                  size: 22,
+                                ),
                                 SizedBox(width: 8),
                                 Text(
                                   'Подключены к приложению',
@@ -339,7 +345,7 @@ class _BlePrinterScanScreenState extends State<BlePrinterScanScreen> {
                                 ListTile(
                                   leading: const Icon(
                                     Icons.bluetooth_connected,
-                                    color: Colors.green,
+                                    color: AppTheme.successColor,
                                   ),
                                   title: Text(_connectedTileTitle(d)),
                                   subtitle: Text(
@@ -348,7 +354,7 @@ class _BlePrinterScanScreenState extends State<BlePrinterScanScreen> {
                                   ),
                                   trailing: const Icon(
                                     Icons.check_circle,
-                                    color: Colors.green,
+                                    color: AppTheme.successColor,
                                     size: 22,
                                   ),
                                   onTap: () => _openPrinter(d),

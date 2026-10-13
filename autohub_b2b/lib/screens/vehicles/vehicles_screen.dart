@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:autohub_b2b/widgets/shell_actions.dart';
 import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/utils/dialog_helper.dart';
 import 'package:autohub_b2b/utils/auth_guard.dart';
@@ -7,9 +8,13 @@ import 'package:autohub_b2b/widgets/offline_placeholder.dart';
 import 'package:autohub_b2b/services/api/api_client.dart';
 import 'package:autohub_b2b/models/vehicle_model.dart';
 import 'package:dio/dio.dart';
+import 'package:intl/intl.dart';
 import 'package:autohub_b2b/screens/vehicles/vehicle_detail_screen.dart';
 import 'package:autohub_b2b/services/api/api_user_message.dart';
 import 'package:autohub_b2b/widgets/vehicle_reference_fields.dart';
+import 'package:autohub_b2b/widgets/add_action_button.dart';
+
+final _mileageFormat = NumberFormat('#,###', 'ru_RU');
 
 class VehiclesScreen extends StatefulWidget {
   const VehiclesScreen({super.key});
@@ -73,7 +78,7 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(userFacingApiMessage(e, prefix: 'Ошибка загрузки')),
-              backgroundColor: Colors.red,
+              backgroundColor: AppTheme.errorColor,
             ),
           );
         }
@@ -130,7 +135,7 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Автомобиль удален'),
-              backgroundColor: Colors.green,
+              backgroundColor: AppTheme.successColor,
             ),
           );
         }
@@ -139,7 +144,7 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(userFacingApiMessage(e, prefix: 'Ошибка удаления')),
-              backgroundColor: Colors.red,
+              backgroundColor: AppTheme.errorColor,
             ),
           );
         }
@@ -166,53 +171,47 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Автомобили',
-                          style: Theme.of(context).textTheme.headlineSmall
-                              ?.copyWith(fontWeight: FontWeight.w600),
+            // На телефоне заголовок уже в AppBar оболочки: оставляем поиск и «+».
+            if (wide)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text.rich(
+                        TextSpan(
+                          text: 'Автомобили',
+                          children: [
+                            if (!isLoading && !isForbidden && !isOffline)
+                              TextSpan(
+                                text: searchQuery.isEmpty
+                                    ? '  ${vehicles.length}'
+                                    : '  ${filteredVehicles.length} из ${vehicles.length}',
+                                style: const TextStyle(
+                                  color: AppTheme.textSecondary,
+                                  fontWeight: FontWeight.w400,
+                                ),
+                              ),
+                          ],
                         ),
-                        if (!isLoading && !isForbidden && !isOffline)
-                          Text(
-                            searchQuery.isEmpty
-                                ? '${vehicles.length}'
-                                : '${filteredVehicles.length} из ${vehicles.length}',
-                            style: const TextStyle(
-                              color: AppTheme.textSecondary,
-                              fontSize: 14,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                  if (wide)
-                    FilledButton.icon(
-                      onPressed: _showAddVehicleDialog,
-                      icon: const Icon(Icons.add),
-                      label: const Text('Добавить'),
-                    )
-                  else
-                    IconButton(
-                      icon: const Icon(Icons.add),
-                      onPressed: _showAddVehicleDialog,
-                      tooltip: 'Добавить',
-                      style: IconButton.styleFrom(
-                        minimumSize: const Size(44, 44),
+                        style: Theme.of(
+                          context,
+                        ).textTheme.headlineSmall?.copyWith(fontSize: 22),
                       ),
                     ),
-                ],
+                    AddActionButton(onPressed: _showAddVehicleDialog),
+                  ],
+                ),
               ),
-            ),
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: _VehicleSearch(),
+            Padding(
+              padding: EdgeInsets.fromLTRB(16, wide ? 0 : 12, 16, 8),
+              // На телефоне «+» — в AppBar оболочки, поиск на всю ширину.
+              child: ShellActions(
+                actions: wide
+                    ? const []
+                    : [AddActionButton(onPressed: _showAddVehicleDialog)],
+                child: const _VehicleSearch(),
+              ),
             ),
             Expanded(child: _listBody()),
           ],
@@ -257,7 +256,8 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(8, 0, 8, 24),
       itemCount: filteredVehicles.length,
-      separatorBuilder: (_, _) => const Divider(height: 1, indent: 16, endIndent: 16),
+      separatorBuilder: (_, _) =>
+          const Divider(height: 1, indent: 16, endIndent: 16),
       itemBuilder: (context, index) => _VehicleRow(
         vehicle: filteredVehicles[index],
         onOpen: () => _openVehicleDetail(filteredVehicles[index]),
@@ -325,7 +325,7 @@ class _VehicleRow extends StatelessWidget {
         [
           vehicle.plateNumber,
           vehicle.customerName,
-          '${vehicle.currentMileage} км',
+          '${_mileageFormat.format(vehicle.currentMileage)} км',
           if (service != null) service,
         ].join(' · '),
         maxLines: 2,
@@ -480,7 +480,7 @@ class _VehicleDialogState extends State<VehicleDialog> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Пожалуйста, заполните все обязательные поля'),
-          backgroundColor: Colors.red,
+          backgroundColor: AppTheme.errorColor,
         ),
       );
       return;
@@ -544,7 +544,7 @@ class _VehicleDialogState extends State<VehicleDialog> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(userFacingApiMessage(e, prefix: 'Ошибка сохранения')),
-            backgroundColor: Colors.red,
+            backgroundColor: AppTheme.errorColor,
           ),
         );
       }
@@ -705,7 +705,9 @@ class _VehicleDialogState extends State<VehicleDialog> {
                 decoration: const InputDecoration(labelText: 'Год *'),
                 keyboardType: TextInputType.number,
                 validator: (value) {
-                  if (value == null || value.trim().isEmpty) return 'Обязательно';
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Обязательно';
+                  }
                   final parsed = int.tryParse(value.trim());
                   if (parsed == null ||
                       parsed < 1900 ||
@@ -732,7 +734,9 @@ class _VehicleDialogState extends State<VehicleDialog> {
                 decoration: const InputDecoration(labelText: 'Год *'),
                 keyboardType: TextInputType.number,
                 validator: (value) {
-                  if (value == null || value.trim().isEmpty) return 'Обязательно';
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Обязательно';
+                  }
                   final parsed = int.tryParse(value.trim());
                   if (parsed == null ||
                       parsed < 1900 ||

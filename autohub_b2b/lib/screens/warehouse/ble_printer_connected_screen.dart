@@ -113,7 +113,7 @@ class _BlePrinterConnectedScreenState extends State<BlePrinterConnectedScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Тест отправлен'),
-          backgroundColor: Colors.green,
+          backgroundColor: AppTheme.successColor,
         ),
       );
       setState(() {
@@ -123,7 +123,10 @@ class _BlePrinterConnectedScreenState extends State<BlePrinterConnectedScreen> {
     } on BleEscPosException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text(e.message),
+          backgroundColor: AppTheme.errorColor,
+        ),
       );
       setState(() {
         _phase = _Phase.ready;
@@ -134,7 +137,7 @@ class _BlePrinterConnectedScreenState extends State<BlePrinterConnectedScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(userFacingApiMessage(e)),
-          backgroundColor: Colors.red,
+          backgroundColor: AppTheme.errorColor,
         ),
       );
       setState(() => _phase = _Phase.ready);
@@ -156,7 +159,7 @@ class _BlePrinterConnectedScreenState extends State<BlePrinterConnectedScreen> {
           content: Text(
             'TSPL отправлен! Если лента напечатала «TSPL TEST» — всё работает.',
           ),
-          backgroundColor: Colors.green,
+          backgroundColor: AppTheme.successColor,
           duration: Duration(seconds: 5),
         ),
       );
@@ -167,7 +170,10 @@ class _BlePrinterConnectedScreenState extends State<BlePrinterConnectedScreen> {
     } on BleEscPosException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text(e.message),
+          backgroundColor: AppTheme.errorColor,
+        ),
       );
       setState(() {
         _phase = _Phase.ready;
@@ -178,7 +184,7 @@ class _BlePrinterConnectedScreenState extends State<BlePrinterConnectedScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(userFacingApiMessage(e, prefix: 'Ошибка')),
-          backgroundColor: Colors.red,
+          backgroundColor: AppTheme.errorColor,
         ),
       );
       setState(() => _phase = _Phase.ready);
@@ -201,7 +207,7 @@ class _BlePrinterConnectedScreenState extends State<BlePrinterConnectedScreen> {
             'Отправлено 6 байт (ESC@+LF). Если лента двинулась — ESC/POS работает. Если нет — этот UUID не тот канал.',
           ),
           duration: Duration(seconds: 5),
-          backgroundColor: Colors.indigo,
+          backgroundColor: AppTheme.violetColor,
         ),
       );
       setState(() {
@@ -211,7 +217,10 @@ class _BlePrinterConnectedScreenState extends State<BlePrinterConnectedScreen> {
     } on BleEscPosException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text(e.message),
+          backgroundColor: AppTheme.errorColor,
+        ),
       );
       setState(() => _phase = _Phase.ready);
     } catch (e) {
@@ -219,7 +228,7 @@ class _BlePrinterConnectedScreenState extends State<BlePrinterConnectedScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(userFacingApiMessage(e)),
-          backgroundColor: Colors.red,
+          backgroundColor: AppTheme.errorColor,
         ),
       );
       setState(() => _phase = _Phase.ready);
@@ -242,7 +251,7 @@ class _BlePrinterConnectedScreenState extends State<BlePrinterConnectedScreen> {
             'Команды протяга отправлены. Если был только короткий щёлчок — попробуйте другой профиль BLE: канал может принимать байты без разбора ESC/POS.',
           ),
           duration: const Duration(seconds: 5),
-          backgroundColor: Colors.green.shade700,
+          backgroundColor: AppTheme.successColor,
         ),
       );
       setState(() {
@@ -252,7 +261,10 @@ class _BlePrinterConnectedScreenState extends State<BlePrinterConnectedScreen> {
     } on BleEscPosException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text(e.message),
+          backgroundColor: AppTheme.errorColor,
+        ),
       );
       setState(() => _phase = _Phase.ready);
     } catch (e) {
@@ -260,7 +272,7 @@ class _BlePrinterConnectedScreenState extends State<BlePrinterConnectedScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(userFacingApiMessage(e)),
-          backgroundColor: Colors.red,
+          backgroundColor: AppTheme.errorColor,
         ),
       );
       setState(() => _phase = _Phase.ready);
@@ -280,7 +292,7 @@ class _BlePrinterConnectedScreenState extends State<BlePrinterConnectedScreen> {
           content: Text(
             'Другой UUID/сервис записи (см. профиль над кнопками). Запустите протяг или тест.',
           ),
-          backgroundColor: Colors.teal,
+          backgroundColor: AppTheme.successColor,
         ),
       );
       setState(() {
@@ -290,7 +302,10 @@ class _BlePrinterConnectedScreenState extends State<BlePrinterConnectedScreen> {
     } on BleEscPosException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text(e.message),
+          backgroundColor: AppTheme.errorColor,
+        ),
       );
       setState(() {
         _phase = _Phase.ready;
@@ -301,7 +316,7 @@ class _BlePrinterConnectedScreenState extends State<BlePrinterConnectedScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(userFacingApiMessage(e)),
-          backgroundColor: Colors.red,
+          backgroundColor: AppTheme.errorColor,
         ),
       );
       setState(() {
@@ -403,7 +418,7 @@ class _BlePrinterConnectedScreenState extends State<BlePrinterConnectedScreen> {
           if (_phase == _Phase.error) ...[
             Text(
               _lastError ?? 'Ошибка',
-              style: const TextStyle(color: Colors.red),
+              style: const TextStyle(color: AppTheme.errorColor),
             ),
             const SizedBox(height: 12),
             FilledButton(onPressed: _link, child: const Text('Повторить')),
@@ -436,7 +451,7 @@ class _BlePrinterConnectedScreenState extends State<BlePrinterConnectedScreen> {
             // ── TSPL (правильный протокол для AiYin IP-802BT) ──
             FilledButton.icon(
               style: FilledButton.styleFrom(
-                backgroundColor: Colors.green.shade700,
+                backgroundColor: AppTheme.successColor,
               ),
               onPressed: (_phase == _Phase.ready) ? _printTsplTest : null,
               icon: const Icon(Icons.print_outlined),
@@ -450,7 +465,7 @@ class _BlePrinterConnectedScreenState extends State<BlePrinterConnectedScreen> {
                 'Если эта кнопка печатает — всё работает.',
                 style: TextStyle(
                   fontSize: 11,
-                  color: Colors.green.shade800,
+                  color: AppTheme.successColor,
                   height: 1.4,
                 ),
               ),
@@ -489,7 +504,7 @@ class _BlePrinterConnectedScreenState extends State<BlePrinterConnectedScreen> {
             const SizedBox(height: 8),
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.deepPurple,
+                backgroundColor: AppTheme.violetColor,
                 foregroundColor: Colors.white,
               ),
               onPressed: (_phase == _Phase.ready) ? _autoTestAllProfiles : null,
@@ -525,8 +540,8 @@ class _BlePrinterConnectedScreenState extends State<BlePrinterConnectedScreen> {
                           style: TextStyle(
                             fontSize: 12,
                             color: r.status.startsWith('✅')
-                                ? Colors.green
-                                : Colors.red,
+                                ? AppTheme.successColor
+                                : AppTheme.errorColor,
                           ),
                         ),
                       ),
@@ -567,9 +582,9 @@ class _BlePrinterConnectedScreenState extends State<BlePrinterConnectedScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.orange.shade50,
+                color: AppTheme.warningSoft,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.orange.shade200),
+                border: Border.all(color: AppTheme.warningBorder),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

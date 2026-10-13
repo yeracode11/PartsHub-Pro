@@ -346,7 +346,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       _buildBadge(
                         icon: Icons.business,
                         label: user.businessType.displayName,
-                        color: Colors.blue,
+                        color: AppTheme.primaryColor,
                       ),
                     ],
                   ),
@@ -511,7 +511,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             icon: const Icon(Icons.logout),
             label: const Text('Выйти из аккаунта'),
             style: FilledButton.styleFrom(
-              backgroundColor: Colors.red,
+              backgroundColor: AppTheme.errorColor,
               padding: const EdgeInsets.symmetric(vertical: 16),
             ),
           ),
@@ -523,7 +523,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: TextButton(
               onPressed: () => _showDeleteAccountDialog(context),
               style: TextButton.styleFrom(
-                foregroundColor: Colors.red.shade300,
+                foregroundColor: AppTheme.errorBorder,
               ),
               child: const Text('Удалить аккаунт'),
             ),

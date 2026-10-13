@@ -156,7 +156,7 @@ class _LabelPrintScreenState extends State<LabelPrintScreen> {
             content: Text(
               'Подключите термопринтер по BLE: Настройки принтера → Bluetooth LE.',
             ),
-            backgroundColor: Colors.orange,
+            backgroundColor: AppTheme.warningColor,
           ),
         );
         return;
@@ -176,13 +176,16 @@ class _LabelPrintScreenState extends State<LabelPrintScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Этикетка отправлена на BLE‑принтер'),
-          backgroundColor: Colors.green,
+          backgroundColor: AppTheme.successColor,
         ),
       );
     } on BleEscPosException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text(e.message),
+          backgroundColor: AppTheme.errorColor,
+        ),
       );
     } on UnsupportedError catch (e) {
       if (!mounted) return;
@@ -194,7 +197,7 @@ class _LabelPrintScreenState extends State<LabelPrintScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(userFacingApiMessage(e, prefix: 'Ошибка BLE')),
-          backgroundColor: Colors.red,
+          backgroundColor: AppTheme.errorColor,
         ),
       );
     } finally {
@@ -218,7 +221,7 @@ class _LabelPrintScreenState extends State<LabelPrintScreen> {
             content: Text(
               'Подключите принтер: Настройки принтера → Bluetooth LE.',
             ),
-            backgroundColor: Colors.orange,
+            backgroundColor: AppTheme.warningColor,
           ),
         );
         return;
@@ -234,20 +237,23 @@ class _LabelPrintScreenState extends State<LabelPrintScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('TSPL-этикетка отправлена на принтер'),
-          backgroundColor: Colors.green,
+          backgroundColor: AppTheme.successColor,
         ),
       );
     } on BleEscPosException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text(e.message),
+          backgroundColor: AppTheme.errorColor,
+        ),
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(userFacingApiMessage(e, prefix: 'Ошибка TSPL')),
-          backgroundColor: Colors.red,
+          backgroundColor: AppTheme.errorColor,
         ),
       );
     } finally {
@@ -268,7 +274,7 @@ class _LabelPrintScreenState extends State<LabelPrintScreen> {
             content: Text(
               'Укажите IP принтера в «Настройки принтера» → раздел Wi‑Fi и нажмите «Подключить».',
             ),
-            backgroundColor: Colors.orange,
+            backgroundColor: AppTheme.warningColor,
           ),
         );
         return;
@@ -292,7 +298,7 @@ class _LabelPrintScreenState extends State<LabelPrintScreen> {
                 ? 'Этикетка отправлена на ${_thermalWifi.wifiIp}:${_thermalWifi.wifiPort}'
                 : 'Не удалось отправить данные по сети. Проверьте IP и порт 9100.',
           ),
-          backgroundColor: ok ? Colors.green : Colors.red,
+          backgroundColor: ok ? AppTheme.successColor : AppTheme.errorColor,
         ),
       );
     } on UnsupportedError catch (e) {
@@ -305,7 +311,7 @@ class _LabelPrintScreenState extends State<LabelPrintScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(userFacingApiMessage(e, prefix: 'Ошибка сети')),
-          backgroundColor: Colors.red,
+          backgroundColor: AppTheme.errorColor,
         ),
       );
     } finally {
@@ -518,7 +524,7 @@ class _LabelPrintScreenState extends State<LabelPrintScreen> {
                   if (_mobileBle) ...[
                     FilledButton.icon(
                       style: FilledButton.styleFrom(
-                        backgroundColor: Colors.green.shade700,
+                        backgroundColor: AppTheme.successColor,
                       ),
                       onPressed: _anyEscPosSending ? null : _printTsplBle,
                       icon: _tsplSending

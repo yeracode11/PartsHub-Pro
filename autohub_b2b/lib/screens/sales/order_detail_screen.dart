@@ -84,7 +84,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Заказ обновлен'),
-            backgroundColor: Colors.green,
+            backgroundColor: AppTheme.successColor,
           ),
         );
         Navigator.pop(context, true); // Возвращаем true для обновления списка
@@ -96,7 +96,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             content: Text(
               userFacingApiMessage(e, prefix: 'Ошибка обновления заказа'),
             ),
-            backgroundColor: Colors.red,
+            backgroundColor: AppTheme.errorColor,
           ),
         );
       }
@@ -107,80 +107,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         });
       }
     }
-  }
-
-  Widget _buildStatusBadge(String status) {
-    Color color;
-    String label;
-
-    switch (status) {
-      case 'completed':
-        color = AppTheme.successGradient.colors[0];
-        label = 'Завершен';
-        break;
-      case 'processing':
-        color = Colors.blue.shade400;
-        label = 'В работе';
-        break;
-      case 'cancelled':
-        color = Colors.red;
-        label = 'Отменен';
-        break;
-      default:
-        color = AppTheme.warningGradient.colors[0];
-        label = 'Ожидание';
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: color,
-          fontWeight: FontWeight.w600,
-          fontSize: 13,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPaymentBadge(String status) {
-    Color color;
-    String label;
-
-    switch (status) {
-      case 'paid':
-        color = AppTheme.successGradient.colors[0];
-        label = 'Оплачен';
-        break;
-      case 'partially_paid':
-        color = AppTheme.warningGradient.colors[0];
-        label = 'Частично';
-        break;
-      default:
-        color = Colors.grey;
-        label = 'Не оплачен';
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: color,
-          fontWeight: FontWeight.w600,
-          fontSize: 13,
-        ),
-      ),
-    );
   }
 
   List<WorkStageModel> _getDefaultWorkStages() {
@@ -393,11 +319,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               ),
             )
           else
-            IconButton(
-              icon: const Icon(Icons.save),
-              onPressed: _saveOrder,
-              tooltip: 'Сохранить изменения',
-            ),
+            FilledButton(onPressed: _saveOrder, child: const Text('Сохранить')),
+          const SizedBox(width: 12),
         ],
       ),
       body: SingleChildScrollView(
@@ -440,7 +363,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                               vertical: 6,
                             ),
                             decoration: BoxDecoration(
-                              color: AppTheme.primaryColor.withOpacity(0.1),
+                              color: AppTheme.primaryColor.withValues(
+                                alpha: 0.1,
+                              ),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
@@ -622,7 +547,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                   ? Icons.check_circle
                                   : Icons.radio_button_unchecked,
                               color: isComplete
-                                  ? AppTheme.successGradient.colors[0]
+                                  ? AppTheme.successColor
                                   : AppTheme.textSecondary,
                             ),
                             title: Row(

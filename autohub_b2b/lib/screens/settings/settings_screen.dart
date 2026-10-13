@@ -205,14 +205,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: OutlinedButton.icon(
                     onPressed: () => _confirmLogout(context),
-                    icon: const Icon(Icons.logout, color: Colors.red),
+                    icon: const Icon(Icons.logout, color: AppTheme.errorColor),
                     label: const Text(
                       'Выйти из аккаунта',
-                      style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600),
+                      style: TextStyle(color: AppTheme.errorColor, fontWeight: FontWeight.w600),
                     ),
                     style: OutlinedButton.styleFrom(
                       minimumSize: const Size.fromHeight(52),
-                      side: const BorderSide(color: Colors.red),
+                      side: const BorderSide(color: AppTheme.errorColor),
                     ),
                   ),
                 ),

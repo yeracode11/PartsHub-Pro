@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:autohub_b2b/widgets/shell_actions.dart';
 import 'package:flutter/services.dart';
 import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/models/item_model.dart';
@@ -316,7 +317,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
             content: Text(
               'Импортировано товаров: ${importResult.successCount}',
             ),
-            backgroundColor: Colors.green,
+            backgroundColor: AppTheme.successColor,
           ),
         );
       }
@@ -637,7 +638,11 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.error_outline, size: 64, color: Colors.red),
+            const Icon(
+              Icons.error_outline,
+              size: 64,
+              color: AppTheme.errorColor,
+            ),
             const SizedBox(height: 16),
             Text(error!, textAlign: TextAlign.center),
             const SizedBox(height: 16),
@@ -987,7 +992,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                           'Товары',
                           style: Theme.of(
                             context,
-                          ).textTheme.displayMedium?.copyWith(fontSize: 28),
+                          ).textTheme.headlineSmall?.copyWith(fontSize: 22),
                         ),
                       ),
                     if (!isMobile)
@@ -1055,47 +1060,53 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                           ),
                         ],
                       )
-                    else ...[
-                      Expanded(child: _searchField(compact: true)),
-                      _filterButton(),
-                      PopupMenuButton<String>(
-                        tooltip: 'Ещё',
-                        icon: const Icon(Icons.more_horiz),
-                        itemBuilder: (context) => const [
-                          PopupMenuItem(
-                            value: 'import',
-                            child: Text('Импорт Excel'),
-                          ),
-                          PopupMenuItem(
-                            value: 'printer',
-                            child: Text('Принтер'),
-                          ),
-                          PopupMenuItem(
-                            value: 'select',
-                            child: Text('Выбрать для печати'),
-                          ),
-                        ],
-                        onSelected: (value) {
-                          if (value == 'import') {
-                            _importFromExcel();
-                          } else if (value == 'printer') {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (context) =>
-                                    const PrinterSettingsScreen(),
-                              ),
-                            );
-                          } else if (value == 'select') {
-                            setState(() => _selecting = true);
-                          }
-                        },
+                    else
+                      // На телефоне кнопки раздела — в AppBar оболочки, поиск на всю ширину.
+                      Expanded(
+                        child: ShellActions(
+                          actions: [
+                            _filterButton(),
+                            PopupMenuButton<String>(
+                              tooltip: 'Ещё',
+                              icon: const Icon(Icons.more_horiz),
+                              itemBuilder: (context) => const [
+                                PopupMenuItem(
+                                  value: 'import',
+                                  child: Text('Импорт Excel'),
+                                ),
+                                PopupMenuItem(
+                                  value: 'printer',
+                                  child: Text('Принтер'),
+                                ),
+                                PopupMenuItem(
+                                  value: 'select',
+                                  child: Text('Выбрать для печати'),
+                                ),
+                              ],
+                              onSelected: (value) {
+                                if (value == 'import') {
+                                  _importFromExcel();
+                                } else if (value == 'printer') {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          const PrinterSettingsScreen(),
+                                    ),
+                                  );
+                                } else if (value == 'select') {
+                                  setState(() => _selecting = true);
+                                }
+                              },
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.add),
+                              onPressed: () => _showItemDialog(context),
+                              tooltip: 'Добавить товар',
+                            ),
+                          ],
+                          child: _searchField(compact: true),
+                        ),
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.add),
-                        onPressed: () => _showItemDialog(context),
-                        tooltip: 'Добавить товар',
-                      ),
-                    ],
                   ],
                 ),
                 if (!isMobile) ...[
@@ -1316,7 +1327,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                       Expanded(
                         flex: 3,
                         child: Text(
-                          item.name ?? 'Без названия',
+                          item.name,
                           style: const TextStyle(fontWeight: FontWeight.w500),
                         ),
                       ),
@@ -1330,22 +1341,20 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                           ),
                           decoration: BoxDecoration(
                             color: item.quantity > 10
-                                ? AppTheme.successGradient.colors[0]
-                                      .withOpacity(0.1)
+                                ? AppTheme.successColor.withValues(alpha: 0.1)
                                 : item.quantity > 0
-                                ? AppTheme.warningGradient.colors[0]
-                                      .withOpacity(0.1)
-                                : Colors.red.withOpacity(0.1),
+                                ? AppTheme.warningColor.withValues(alpha: 0.1)
+                                : AppTheme.errorColor.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
                             '${item.quantity}',
                             style: TextStyle(
                               color: item.quantity > 10
-                                  ? AppTheme.successGradient.colors[0]
+                                  ? AppTheme.successColor
                                   : item.quantity > 0
-                                  ? AppTheme.warningGradient.colors[0]
-                                  : Colors.red,
+                                  ? AppTheme.warningColor
+                                  : AppTheme.errorColor,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -1371,7 +1380,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                             IconButton(
                               icon: const Icon(
                                 Icons.delete_outline,
-                                color: Colors.red,
+                                color: AppTheme.errorColor,
                               ),
                               onPressed: () => _showDeleteDialog(context, item),
                               tooltip: 'Удалить',
@@ -1415,8 +1424,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
     DialogHelper.showConfirm(
       context: context,
       title: 'Удалить товар?',
-      message:
-          'Вы уверены что хотите удалить "${item.name ?? 'Без названия'}"?',
+      message: 'Вы уверены что хотите удалить "${item.name}"?',
       confirmText: 'Удалить',
       isDestructive: true,
       onConfirm: (ctx) async {
@@ -1486,12 +1494,12 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                           const Icon(
                             Icons.check_circle,
                             size: 16,
-                            color: Colors.green,
+                            color: AppTheme.successColor,
                           ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              item.name ?? 'Без названия',
+                              item.name,
                               style: const TextStyle(fontSize: 13),
                             ),
                           ),
@@ -1573,7 +1581,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(userFacingApiMessage(e, prefix: 'Ошибка')),
-            backgroundColor: Colors.red,
+            backgroundColor: AppTheme.errorColor,
           ),
         );
       }

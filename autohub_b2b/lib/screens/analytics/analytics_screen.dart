@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:autohub_b2b/widgets/shell_actions.dart';
 import 'package:autohub_b2b/core/theme.dart';
 import 'package:dio/dio.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -143,13 +144,24 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     final isMobile = MediaQuery.of(context).size.width < 768;
     final padding = isMobile ? 16.0 : 24.0;
 
+    final refresh = IconButton(
+      icon: const Icon(Icons.refresh),
+      onPressed: _loadAnalytics,
+      tooltip: 'Обновить',
+    );
+
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
       body: Column(
         children: [
-          // Заголовок
+          // На телефоне заголовок раздела уже в AppBar оболочки.
           Container(
-            padding: EdgeInsets.all(padding),
+            padding: EdgeInsets.fromLTRB(
+              padding,
+              isMobile ? 12 : padding,
+              isMobile ? 8 : padding,
+              12,
+            ),
             decoration: const BoxDecoration(
               color: AppTheme.surfaceColor,
               border: Border(bottom: BorderSide(color: AppTheme.borderColor)),
@@ -157,73 +169,53 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (!isMobile) ...[
+                  Text(
+                    'Аналитика',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.headlineSmall?.copyWith(fontSize: 22),
+                  ),
+                  const SizedBox(height: 16),
+                ],
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Аналитика',
-                            style: Theme.of(context).textTheme.displayMedium
-                                ?.copyWith(fontSize: isMobile ? 24 : 28),
-                          ),
-                          if (!isMobile) ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              'Детальная аналитика продаж и товаров',
-                              style: Theme.of(context).textTheme.bodyMedium
-                                  ?.copyWith(color: AppTheme.textSecondary),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: SegmentedButton<String>(
+                          showSelectedIcon: false,
+                          segments: [
+                            ButtonSegment(
+                              value: '7d',
+                              label: Text(isMobile ? '7д' : '7 дней'),
+                            ),
+                            ButtonSegment(
+                              value: '30d',
+                              label: Text(isMobile ? '30д' : '30 дней'),
+                            ),
+                            ButtonSegment(
+                              value: '90d',
+                              label: Text(isMobile ? '90д' : '90 дней'),
                             ),
                           ],
-                        ],
+                          selected: {selectedPeriod},
+                          onSelectionChanged: (Set<String> newSelection) {
+                            setState(() {
+                              selectedPeriod = newSelection.first;
+                            });
+                            _loadAnalytics();
+                          },
+                        ),
                       ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.refresh),
-                      onPressed: _loadAnalytics,
-                      tooltip: 'Обновить',
+                    // На телефоне «Обновить» — в AppBar оболочки.
+                    ShellActions(
+                      actions: isMobile ? [refresh] : const [],
+                      child: isMobile ? const SizedBox.shrink() : refresh,
                     ),
                   ],
                 ),
-                if (isMobile) ...[
-                  const SizedBox(height: 12),
-                  SegmentedButton<String>(
-                    segments: const [
-                      ButtonSegment(value: '7d', label: Text('7д')),
-                      ButtonSegment(value: '30d', label: Text('30д')),
-                      ButtonSegment(value: '90d', label: Text('90д')),
-                    ],
-                    selected: {selectedPeriod},
-                    onSelectionChanged: (Set<String> newSelection) {
-                      setState(() {
-                        selectedPeriod = newSelection.first;
-                      });
-                      _loadAnalytics();
-                    },
-                  ),
-                ] else ...[
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      SegmentedButton<String>(
-                        segments: const [
-                          ButtonSegment(value: '7d', label: Text('7 дней')),
-                          ButtonSegment(value: '30d', label: Text('30 дней')),
-                          ButtonSegment(value: '90d', label: Text('90 дней')),
-                        ],
-                        selected: {selectedPeriod},
-                        onSelectionChanged: (Set<String> newSelection) {
-                          setState(() {
-                            selectedPeriod = newSelection.first;
-                          });
-                          _loadAnalytics();
-                        },
-                      ),
-                    ],
-                  ),
-                ],
               ],
             ),
           ),
@@ -258,7 +250,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.error_outline, size: 64, color: Colors.red),
+            const Icon(
+              Icons.error_outline,
+              size: 64,
+              color: AppTheme.errorColor,
+            ),
             const SizedBox(height: 16),
             Text(error!, textAlign: TextAlign.center),
             const SizedBox(height: 16),
@@ -326,7 +322,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     final orders = advancedAnalytics!['orders'];
     final avgOrder = advancedAnalytics!['avgOrderValue'];
     final profit = advancedAnalytics!['profit'];
-    final payments = advancedAnalytics!['payments'];
 
     final currencyFormatter = NumberFormat.currency(
       locale: 'ru_RU',
@@ -346,8 +341,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   'Выручка',
                   currencyFormatter.format(revenue['current']),
                   revenue['change']?.toDouble() ?? 0.0,
-                  Icons.attach_money,
-                  AppTheme.primaryColor,
                   isMobile: true,
                 ),
               ),
@@ -357,8 +350,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   'Заказы',
                   '${orders['current']}',
                   orders['change']?.toDouble() ?? 0.0,
-                  Icons.shopping_bag,
-                  Colors.orange,
                   isMobile: true,
                 ),
               ),
@@ -372,8 +363,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   'Средний чек',
                   currencyFormatter.format(avgOrder['current']),
                   avgOrder['change']?.toDouble() ?? 0.0,
-                  Icons.receipt,
-                  Colors.green,
                   isMobile: true,
                 ),
               ),
@@ -383,8 +372,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   'Прибыль',
                   currencyFormatter.format(profit['amount']),
                   profit['margin']?.toDouble() ?? 0.0,
-                  Icons.trending_up,
-                  Colors.purple,
                   isPercent: true,
                   isMobile: true,
                 ),
@@ -402,8 +389,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             'Выручка',
             currencyFormatter.format(revenue['current']),
             revenue['change']?.toDouble() ?? 0.0,
-            Icons.attach_money,
-            AppTheme.primaryColor,
           ),
         ),
         SizedBox(width: spacing),
@@ -412,8 +397,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             'Заказы',
             '${orders['current']}',
             orders['change']?.toDouble() ?? 0.0,
-            Icons.shopping_bag,
-            Colors.orange,
           ),
         ),
         SizedBox(width: spacing),
@@ -422,8 +405,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             'Средний чек',
             currencyFormatter.format(avgOrder['current']),
             avgOrder['change']?.toDouble() ?? 0.0,
-            Icons.receipt,
-            Colors.green,
           ),
         ),
         SizedBox(width: spacing),
@@ -432,8 +413,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             'Прибыль',
             currencyFormatter.format(profit['amount']),
             profit['margin']?.toDouble() ?? 0.0,
-            Icons.trending_up,
-            Colors.purple,
             isPercent: true,
           ),
         ),
@@ -444,85 +423,58 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   Widget _buildMetricCard(
     String title,
     String value,
-    double change,
-    IconData icon,
-    Color color, {
+    double change, {
     bool isPercent = false,
     bool isMobile = false,
   }) {
-    final isPositive = change >= 0;
-    final changeText = isPercent
-        ? '${change.toStringAsFixed(1)}%'
-        : '${isPositive ? '+' : ''}${change.toStringAsFixed(1)}%';
+    // Для прибыли в change приходит маржа, а не динамика — показываем её как есть.
+    final String note;
+    final Color noteColor;
+    if (isPercent) {
+      note = 'маржа ${change.toStringAsFixed(1)}%';
+      noteColor = AppTheme.textSecondary;
+    } else if (change.abs() < 0.05) {
+      note = 'без изменений';
+      noteColor = AppTheme.textSecondary;
+    } else {
+      note =
+          '${change > 0 ? '+' : '−'}${change.abs().toStringAsFixed(1)}% к прошлому периоду';
+      noteColor = change > 0 ? AppTheme.secondaryColor : AppTheme.errorColor;
+    }
 
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: EdgeInsets.all(isMobile ? 16 : 20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: color.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(icon, color: color, size: 24),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: (isPositive ? Colors.green : Colors.red).withOpacity(
-                      0.1,
-                    ),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        isPositive ? Icons.arrow_upward : Icons.arrow_downward,
-                        size: 14,
-                        color: isPositive ? Colors.green : Colors.red,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        changeText,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: isPositive ? Colors.green : Colors.red,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+    return Container(
+      padding: EdgeInsets.all(isMobile ? 14 : 20),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.borderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: isMobile ? 20 : 24,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.textPrimary,
             ),
-            const SizedBox(height: 16),
-            Text(
-              title,
-              style: TextStyle(fontSize: 14, color: AppTheme.textSecondary),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.textPrimary,
-              ),
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            note,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 12, color: noteColor),
+          ),
+        ],
       ),
     );
   }
@@ -531,7 +483,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     final data = salesChart!['data'] as List<dynamic>;
     if (data.isEmpty) {
       return Card(
-        elevation: 4,
+        elevation: 0,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -577,7 +529,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     final interval = getInterval();
 
     return Card(
-      elevation: 4,
+      elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: EdgeInsets.all(isMobile ? 12 : 24),
@@ -603,7 +555,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: AppTheme.primaryColor.withOpacity(0.1),
+                        color: AppTheme.primaryColor.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Row(
@@ -633,56 +585,15 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               ],
             ),
             SizedBox(height: isMobile ? 8 : 8),
-            if (isMobile)
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: [
-                  _buildStatItem(
-                    'Среднее',
-                    currencyFormatter.format(avgAmount),
-                    Colors.blue,
-                    isMobile: true,
-                    inWrap: true,
-                  ),
-                  _buildStatItem(
-                    'Макс',
-                    currencyFormatter.format(maxAmount),
-                    Colors.green,
-                    isMobile: true,
-                    inWrap: true,
-                  ),
-                  _buildStatItem(
-                    'Мин',
-                    currencyFormatter.format(minAmount),
-                    Colors.orange,
-                    isMobile: true,
-                    inWrap: true,
-                  ),
-                ],
-              )
-            else
-              Row(
-                children: [
-                  _buildStatItem(
-                    'Среднее',
-                    currencyFormatter.format(avgAmount),
-                    Colors.blue,
-                  ),
-                  const SizedBox(width: 16),
-                  _buildStatItem(
-                    'Макс',
-                    currencyFormatter.format(maxAmount),
-                    Colors.green,
-                  ),
-                  const SizedBox(width: 16),
-                  _buildStatItem(
-                    'Мин',
-                    currencyFormatter.format(minAmount),
-                    Colors.orange,
-                  ),
-                ],
+            Text(
+              'Среднее ${currencyFormatter.format(avgAmount)}  ·  '
+              'Макс ${currencyFormatter.format(maxAmount)}  ·  '
+              'Мин ${currencyFormatter.format(minAmount)}',
+              style: const TextStyle(
+                fontSize: 13,
+                color: AppTheme.textSecondary,
               ),
+            ),
             SizedBox(height: isMobile ? 16 : 24),
             SizedBox(
               height: isMobile ? 320 : 350,
@@ -701,7 +612,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     },
                     getDrawingVerticalLine: (value) {
                       return FlLine(
-                        color: AppTheme.borderColor.withOpacity(0.3),
+                        color: AppTheme.borderColor.withValues(alpha: 0.3),
                         strokeWidth: 1,
                       );
                     },
@@ -814,27 +725,19 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                       }).toList(),
                       isCurved: true,
                       curveSmoothness: 0.35,
+                      // Без этого сглаживание уводит линию ниже нуля.
+                      preventCurveOverShooting: true,
                       color: AppTheme.primaryColor,
-                      barWidth: 4,
-                      dotData: FlDotData(
-                        show: true,
-                        getDotPainter: (spot, percent, barData, index) {
-                          return FlDotCirclePainter(
-                            radius: 5,
-                            color: AppTheme.primaryColor,
-                            strokeWidth: 2,
-                            strokeColor: Colors.white,
-                          );
-                        },
-                      ),
+                      barWidth: 2.5,
+                      dotData: const FlDotData(show: false),
                       belowBarData: BarAreaData(
                         show: true,
                         gradient: LinearGradient(
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
                           colors: [
-                            AppTheme.primaryColor.withOpacity(0.3),
-                            AppTheme.primaryColor.withOpacity(0.05),
+                            AppTheme.primaryColor.withValues(alpha: 0.3),
+                            AppTheme.primaryColor.withValues(alpha: 0.05),
                           ],
                         ),
                       ),
@@ -849,62 +752,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     );
   }
 
-  Widget _buildStatItem(
-    String label,
-    String value,
-    Color color, {
-    bool isMobile = false,
-    bool inWrap = false,
-  }) {
-    final container = Container(
-      padding: EdgeInsets.all(isMobile ? 8 : 12),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: isMobile ? 9 : 11,
-              color: AppTheme.textSecondary,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          SizedBox(height: isMobile ? 2 : 4),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: isMobile ? 11 : 14,
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
-      ),
-    );
-
-    // Если используется в Wrap, не оборачиваем в Flexible/Expanded
-    if (inWrap) {
-      return container;
-    }
-
-    if (isMobile) {
-      return Flexible(child: container);
-    }
-    return Expanded(child: container);
-  }
-
   Widget _buildTopSellingItems({bool isMobile = false}) {
     if (topSellingItems.isEmpty) {
       return Card(
-        elevation: 4,
+        elevation: 0,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -925,7 +776,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     );
 
     return Card(
-      elevation: 4,
+      elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: EdgeInsets.all(isMobile ? 16 : 24),
@@ -960,7 +811,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 final item = topSellingItems[index];
                 return ListTile(
                   leading: CircleAvatar(
-                    backgroundColor: AppTheme.primaryColor.withOpacity(0.1),
+                    backgroundColor: AppTheme.primaryColor.withValues(
+                      alpha: 0.1,
+                    ),
                     child: Text(
                       '${index + 1}',
                       style: const TextStyle(
@@ -1014,9 +867,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
+          color: color.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withOpacity(0.3)),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
         ),
         child: Text(
           '$label: $value',
@@ -1036,7 +889,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     );
 
     return Card(
-      elevation: 4,
+      elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: EdgeInsets.all(isMobile ? 16 : 24),
@@ -1047,7 +900,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               children: [
                 Icon(
                   Icons.insights,
-                  color: Colors.teal,
+                  color: AppTheme.successColor,
                   size: isMobile ? 20 : 24,
                 ),
                 SizedBox(width: isMobile ? 6 : 8),
@@ -1069,27 +922,27 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 buildTag(
                   'A',
                   ((summary['A'] ?? 0) as num).toInt(),
-                  Colors.green,
+                  AppTheme.successColor,
                 ),
                 buildTag(
                   'B',
                   ((summary['B'] ?? 0) as num).toInt(),
-                  Colors.orange,
+                  AppTheme.warningColor,
                 ),
                 buildTag(
                   'C',
                   ((summary['C'] ?? 0) as num).toInt(),
-                  Colors.redAccent,
+                  AppTheme.errorColor,
                 ),
                 buildTag(
                   'X',
                   ((summary['X'] ?? 0) as num).toInt(),
-                  Colors.blue,
+                  AppTheme.primaryColor,
                 ),
                 buildTag(
                   'Y',
                   ((summary['Y'] ?? 0) as num).toInt(),
-                  Colors.deepPurple,
+                  AppTheme.violetColor,
                 ),
                 buildTag(
                   'Z',
@@ -1117,11 +970,13 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   final revenue = item['revenue'] ?? 0;
                   return ListTile(
                     leading: CircleAvatar(
-                      backgroundColor: Colors.teal.withOpacity(0.1),
+                      backgroundColor: AppTheme.successColor.withValues(
+                        alpha: 0.1,
+                      ),
                       child: Text(
                         '$abc/$xyz',
                         style: const TextStyle(
-                          color: Colors.teal,
+                          color: AppTheme.successColor,
                           fontWeight: FontWeight.bold,
                           fontSize: 12,
                         ),
@@ -1171,7 +1026,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     }
 
     return Card(
-      elevation: 4,
+      elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: EdgeInsets.all(isMobile ? 16 : 24),
@@ -1182,7 +1037,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               children: [
                 Icon(
                   Icons.people,
-                  color: Colors.indigo,
+                  color: AppTheme.violetColor,
                   size: isMobile ? 20 : 24,
                 ),
                 SizedBox(width: isMobile ? 6 : 8),
@@ -1249,7 +1104,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   Widget _buildLowStockItems({bool isMobile = false}) {
     if (lowStockItems.isEmpty) {
       return Card(
-        elevation: 4,
+        elevation: 0,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: Padding(
           padding: EdgeInsets.all(isMobile ? 16 : 24),
@@ -1259,7 +1114,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 Icon(
                   Icons.check_circle,
                   size: isMobile ? 40 : 48,
-                  color: Colors.green,
+                  color: AppTheme.successColor,
                 ),
                 const SizedBox(height: 8),
                 Text(
@@ -1284,7 +1139,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     );
 
     return Card(
-      elevation: 4,
+      elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: EdgeInsets.all(isMobile ? 16 : 24),
@@ -1295,7 +1150,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               children: [
                 Icon(
                   Icons.warning,
-                  color: Colors.orange,
+                  color: AppTheme.warningColor,
                   size: isMobile ? 20 : 24,
                 ),
                 SizedBox(width: isMobile ? 6 : 8),
@@ -1324,13 +1179,18 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   leading: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: (isCritical ? Colors.red : Colors.orange)
-                          .withOpacity(0.1),
+                      color:
+                          (isCritical
+                                  ? AppTheme.errorColor
+                                  : AppTheme.warningColor)
+                              .withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Icon(
                       isCritical ? Icons.error : Icons.warning,
-                      color: isCritical ? Colors.red : Colors.orange,
+                      color: isCritical
+                          ? AppTheme.errorColor
+                          : AppTheme.warningColor,
                       size: 20,
                     ),
                   ),
@@ -1351,7 +1211,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 14,
-                          color: isCritical ? Colors.red : Colors.orange,
+                          color: isCritical
+                              ? AppTheme.errorColor
+                              : AppTheme.warningColor,
                         ),
                       ),
                       Text(
@@ -1386,7 +1248,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     );
 
     return Card(
-      elevation: 4,
+      elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: EdgeInsets.all(isMobile ? 16 : 24),
@@ -1411,11 +1273,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                       final category = entry.value;
                       final colors = [
                         AppTheme.primaryColor,
-                        Colors.orange.shade400,
-                        Colors.green.shade400,
-                        Colors.purple.shade400,
-                        Colors.blue.shade400,
-                        Colors.red.shade400,
+                        AppTheme.warningColor,
+                        AppTheme.successColor,
+                        AppTheme.violetColor,
+                        AppTheme.primaryColor,
+                        AppTheme.errorColor,
                       ];
 
                       final percentage = totalRevenue > 0
@@ -1448,11 +1310,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 final category = entry.value;
                 final colors = [
                   AppTheme.primaryColor,
-                  Colors.orange.shade400,
-                  Colors.green.shade400,
-                  Colors.purple.shade400,
-                  Colors.blue.shade400,
-                  Colors.red.shade400,
+                  AppTheme.warningColor,
+                  AppTheme.successColor,
+                  AppTheme.violetColor,
+                  AppTheme.primaryColor,
+                  AppTheme.errorColor,
                 ];
 
                 return Padding(
@@ -1510,11 +1372,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                             final category = entry.value;
                             final colors = [
                               AppTheme.primaryColor,
-                              Colors.orange.shade400,
-                              Colors.green.shade400,
-                              Colors.purple.shade400,
-                              Colors.blue.shade400,
-                              Colors.red.shade400,
+                              AppTheme.warningColor,
+                              AppTheme.successColor,
+                              AppTheme.violetColor,
+                              AppTheme.primaryColor,
+                              AppTheme.errorColor,
                             ];
 
                             final percentage = totalRevenue > 0
@@ -1550,11 +1412,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                         final category = entry.value;
                         final colors = [
                           AppTheme.primaryColor,
-                          Colors.orange.shade400,
-                          Colors.green.shade400,
-                          Colors.purple.shade400,
-                          Colors.blue.shade400,
-                          Colors.red.shade400,
+                          AppTheme.warningColor,
+                          AppTheme.successColor,
+                          AppTheme.violetColor,
+                          AppTheme.primaryColor,
+                          AppTheme.errorColor,
                         ];
 
                         return Padding(

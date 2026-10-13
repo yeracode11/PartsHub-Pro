@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -55,7 +57,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.error_outline, size: 64, color: Colors.red),
+                  const Icon(
+                    Icons.error_outline,
+                    size: 64,
+                    color: AppTheme.errorColor,
+                  ),
                   const SizedBox(height: 16),
                   Text(
                     'Ошибка загрузки данных',
@@ -103,73 +109,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Заголовок
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Дашборд',
-                      style: Theme.of(context).textTheme.displayMedium
-                          ?.copyWith(fontSize: isMobile ? 24 : 28),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Добро пожаловать в Auto+ Pro',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppTheme.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (!isMobile)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppTheme.successGradient.colors[0].withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: AppTheme.successGradient.colors[0].withOpacity(
-                        0.3,
-                      ),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.circle,
-                        size: 8,
-                        color: AppTheme.successGradient.colors[0],
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Онлайн',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AppTheme.successGradient.colors[0],
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-
-          SizedBox(height: isMobile ? 16 : 32),
+          // На телефоне заголовок уже в AppBar оболочки.
+          if (!isMobile) ...[
+            Text(
+              'Дашборд',
+              style: Theme.of(
+                context,
+              ).textTheme.headlineSmall?.copyWith(fontSize: 22),
+            ),
+            const SizedBox(height: 24),
+          ],
 
           // Статистические карточки
           LayoutBuilder(
             builder: (context, constraints) {
               final crossAxisCount = isMobile ? 2 : 4;
               final spacing = isMobile ? 12.0 : 24.0;
-              final aspectRatio = isMobile ? 1.3 : 1.5;
+              final aspectRatio = isMobile ? 2.0 : 2.4;
 
               return GridView.count(
                 crossAxisCount: crossAxisCount,
@@ -183,8 +139,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     context,
                     title: 'Общий доход',
                     value: '${numberFormat.format(state.stats.totalRevenue)} ₸',
-                    icon: Icons.attach_money,
-                    gradient: AppTheme.primaryGradient,
+                    hero: true,
                     isMobile: isMobile,
                   ),
                   _buildStatCard(
@@ -192,26 +147,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     title: 'Доход за месяц',
                     value:
                         '${numberFormat.format(state.stats.monthlyRevenue)} ₸',
-                    icon: Icons.trending_up,
-                    gradient: AppTheme.successGradient,
+                    accent: AppTheme.successColor,
                     isMobile: isMobile,
                   ),
                   _buildStatCard(
                     context,
                     title: 'Товаров на складе',
                     value: '${state.stats.inventoryCount}',
-                    icon: Icons.inventory_2,
-                    gradient: AppTheme.warningGradient,
+                    accent: AppTheme.warningColor,
                     isMobile: isMobile,
                   ),
                   _buildStatCard(
                     context,
                     title: 'Активные заказы',
                     value: '${state.stats.activeOrdersCount}',
-                    icon: Icons.shopping_cart,
-                    gradient: LinearGradient(
-                      colors: [Colors.blue.shade400, Colors.blue.shade600],
-                    ),
+                    accent: AppTheme.violetColor,
                     isMobile: isMobile,
                   ),
                 ],
@@ -267,72 +217,48 @@ class _DashboardScreenState extends State<DashboardScreen> {
         authState.user.businessType != BusinessType.dismantler;
   }
 
+  /// Главная метрика залита фирменным цветом, остальные — лёгкий тон своего цвета.
   Widget _buildStatCard(
     BuildContext context, {
     required String title,
     required String value,
-    required IconData icon,
-    required Gradient gradient,
+    bool hero = false,
+    Color accent = AppTheme.primaryColor,
     bool isMobile = false,
   }) {
+    final background = hero
+        ? AppTheme.primaryColor
+        : accent.withValues(alpha: 0.08);
+    final labelColor = hero
+        ? Colors.white.withValues(alpha: 0.85)
+        : AppTheme.textSecondary;
+    final valueColor = hero ? Colors.white : accent;
+
     return Container(
-      padding: EdgeInsets.all(isMobile ? 16 : 24),
+      padding: EdgeInsets.all(isMobile ? 14 : 20),
       decoration: BoxDecoration(
-        color: AppTheme.surfaceColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.borderColor),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        color: background,
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Container(
-                padding: EdgeInsets.all(isMobile ? 8 : 12),
-                decoration: BoxDecoration(
-                  gradient: gradient,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  icon,
-                  color: Colors.white,
-                  size: isMobile ? 20 : 24,
-                ),
-              ),
-            ],
+          Text(
+            title,
+            style: TextStyle(color: labelColor, fontSize: 13),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                value,
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  fontSize: isMobile ? 18 : 20,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                title,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppTheme.textSecondary,
-                  fontSize: isMobile ? 12 : 14,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: isMobile ? 20 : 24,
+              fontWeight: FontWeight.w600,
+              color: valueColor,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
@@ -349,6 +275,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         .entries
         .map((e) => FlSpot(e.key.toDouble(), e.value.amount / 1000))
         .toList();
+    final hasSales = spots.any((spot) => spot.y > 0);
 
     return Container(
       padding: EdgeInsets.all(isMobile ? 16 : 24),
@@ -361,85 +288,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Продажи',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(fontSize: isMobile ? 18 : 20),
-              ),
-              if (!isMobile)
-                Row(
-                  children: [
-                    _buildPeriodButton(
-                      context,
-                      '7д',
-                      '7d',
-                      state.currentPeriod == '7d',
-                    ),
-                    const SizedBox(width: 8),
-                    _buildPeriodButton(
-                      context,
-                      '30д',
-                      '30d',
-                      state.currentPeriod == '30d',
-                    ),
-                    const SizedBox(width: 8),
-                    _buildPeriodButton(
-                      context,
-                      '90д',
-                      '90d',
-                      state.currentPeriod == '90d',
-                    ),
-                  ],
+              Expanded(
+                child: Text(
+                  'Продажи',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontSize: isMobile ? 17 : 20,
+                  ),
                 ),
+              ),
+              _buildPeriodSelector(context, state.currentPeriod),
             ],
           ),
-          if (isMobile) ...[
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildPeriodButton(
-                    context,
-                    '7д',
-                    '7d',
-                    state.currentPeriod == '7d',
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _buildPeriodButton(
-                    context,
-                    '30д',
-                    '30d',
-                    state.currentPeriod == '30d',
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _buildPeriodButton(
-                    context,
-                    '90д',
-                    '90d',
-                    state.currentPeriod == '90d',
-                  ),
-                ),
-              ],
-            ),
-          ],
           SizedBox(height: isMobile ? 16 : 24),
           SizedBox(
-            height: isMobile ? 200 : 300,
-            child: spots.isEmpty
-                ? const Center(child: Text('Нет данных'))
+            height: hasSales ? (isMobile ? 200 : 300) : 72,
+            child: !hasSales
+                ? const Center(
+                    child: Text(
+                      'Нет продаж за выбранный период',
+                      style: TextStyle(color: AppTheme.textSecondary),
+                    ),
+                  )
                 : LineChart(
                     LineChartData(
                       gridData: FlGridData(
                         show: true,
                         drawVerticalLine: false,
-                        horizontalInterval: 50,
+                        // Значения в тысячах: ~4 линии сетки при любом масштабе.
+                        horizontalInterval: _gridInterval(spots),
                         getDrawingHorizontalLine: (value) {
                           return FlLine(
                             color: AppTheme.borderColor,
@@ -497,10 +374,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                       ),
                       borderData: FlBorderData(show: false),
+                      lineTouchData: LineTouchData(
+                        touchTooltipData: LineTouchTooltipData(
+                          getTooltipColor: (_) => AppTheme.textPrimary,
+                          getTooltipItems: (touched) => touched
+                              .map(
+                                (spot) => LineTooltipItem(
+                                  '${NumberFormat('#,###', 'ru_RU').format(spot.y * 1000)} ₸',
+                                  const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                        ),
+                      ),
                       lineBarsData: [
                         LineChartBarData(
                           spots: spots,
                           isCurved: true,
+                          preventCurveOverShooting: true,
                           gradient: AppTheme.primaryGradient,
                           barWidth: 3,
                           dotData: const FlDotData(show: false),
@@ -508,7 +403,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             show: true,
                             gradient: LinearGradient(
                               colors: AppTheme.primaryGradient.colors
-                                  .map((c) => c.withOpacity(0.1))
+                                  .map((c) => c.withValues(alpha: 0.1))
                                   .toList(),
                               begin: Alignment.topCenter,
                               end: Alignment.bottomCenter,
@@ -524,40 +419,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildPeriodButton(
-    BuildContext context,
-    String label,
-    String period,
-    bool isSelected,
-  ) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () {
-          context.read<DashboardBloc>().add(
-            DashboardChartPeriodChanged(period),
-          );
-        },
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: isSelected
-                ? AppTheme.primaryColor
-                : AppTheme.primaryColor.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              color: isSelected ? Colors.white : AppTheme.primaryColor,
-              fontWeight: FontWeight.w600,
-              fontSize: 14,
-            ),
-          ),
-        ),
-      ),
+  double _gridInterval(List<FlSpot> spots) {
+    final maxY = spots.fold<double>(
+      0,
+      (max, spot) => spot.y > max ? spot.y : max,
+    );
+    if (maxY <= 0) return 1;
+    // Округляем шаг до «круглого» числа, чтобы подписи были 200k, 400k…
+    final raw = maxY / 4;
+    final magnitude = math
+        .pow(10, (math.log(raw) / math.ln10).floor())
+        .toDouble();
+    return (raw / magnitude).ceilToDouble() * magnitude;
+  }
+
+  Widget _buildPeriodSelector(BuildContext context, String currentPeriod) {
+    return SegmentedButton<String>(
+      showSelectedIcon: false,
+      style: const ButtonStyle(visualDensity: VisualDensity.compact),
+      segments: const [
+        ButtonSegment(value: '7d', label: Text('7д')),
+        ButtonSegment(value: '30d', label: Text('30д')),
+        ButtonSegment(value: '90d', label: Text('90д')),
+      ],
+      selected: {currentPeriod},
+      onSelectionChanged: (selection) {
+        context.read<DashboardBloc>().add(
+          DashboardChartPeriodChanged(selection.first),
+        );
+      },
     );
   }
 
@@ -589,9 +479,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           if (orders.isEmpty)
             Text(
               'Заказов пока нет',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: AppTheme.textSecondary,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: AppTheme.textSecondary),
             )
           else
             ...orders.map((order) {
@@ -600,7 +490,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 if (customerName != null && customerName.isNotEmpty)
                   customerName,
                 dateFormat.format(order.createdAt),
-                _orderStatusLabel(order.status),
               ].join(' · ');
               return Padding(
                 padding: const EdgeInsets.only(top: 12),
@@ -619,8 +508,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             ),
                           ),
                           const SizedBox(height: 2),
-                          Text(
-                            subtitle,
+                          Text.rich(
+                            TextSpan(
+                              text: '$subtitle · ',
+                              children: [
+                                TextSpan(
+                                  text: _orderStatusLabel(order.status),
+                                  style: TextStyle(
+                                    color: AppTheme.orderStatusColor(
+                                      order.status,
+                                    ),
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
                             style: const TextStyle(
                               fontSize: 13,
                               color: AppTheme.textSecondary,
@@ -687,9 +589,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           if (state.popularItems.isEmpty)
             Text(
               'Продаж пока нет',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: AppTheme.textSecondary,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: AppTheme.textSecondary),
             )
           else if (isMobile)
             ...state.popularItems.map((item) {

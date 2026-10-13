@@ -91,8 +91,10 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
     _barcodeController.text = item.barcode ?? '';
     _brandController.text = item.brand ?? '';
     _internalCodeController.text = item.internalCode ?? '';
-    _priceController.text = item.price.toString();
-    _purchaseCostController.text = item.purchaseCost?.toString() ?? '';
+    _priceController.text = _plainNumber(item.price);
+    _purchaseCostController.text = item.purchaseCost == null
+        ? ''
+        : _plainNumber(item.purchaseCost!);
     _quantityController.text = item.quantity.toString();
     _descriptionController.text = item.description ?? '';
     _warehouseCellController.text = item.warehouseCell ?? '';
@@ -145,21 +147,15 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text(
-          'Редактировать товар',
-          style: TextStyle(color: Colors.white),
-        ),
-        backgroundColor: AppTheme.primaryColor,
-        foregroundColor: Colors.white,
-        elevation: 0,
+        title: const Text('Изменить товар'),
         actions: [
           if (widget.item.id != null)
-            IconButton(
-              icon: const Icon(Icons.save),
+            FilledButton(
               onPressed: _isLoading ? null : _saveItem,
+              child: const Text('Сохранить'),
             ),
+          const SizedBox(width: 12),
         ],
       ),
       body: _isLoading
@@ -538,13 +534,7 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
   }
 
   Widget _buildSectionTitle(String title) {
-    return Text(
-      title,
-      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-        fontWeight: FontWeight.bold,
-        color: AppTheme.primaryColor,
-      ),
-    );
+    return Text(title, style: AppTheme.sectionTitle);
   }
 
   Future<void> _copySkuToClipboard() async {
@@ -554,7 +544,7 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('SKU не заполнен'),
-          backgroundColor: Colors.orange,
+          backgroundColor: AppTheme.warningColor,
         ),
       );
       return;
@@ -565,7 +555,7 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('SKU скопирован'),
-        backgroundColor: Colors.green,
+        backgroundColor: AppTheme.successColor,
       ),
     );
   }
@@ -583,7 +573,7 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
               Text(
                 _nameController.text.trim().isNotEmpty
                     ? _nameController.text.trim()
-                    : (widget.item.name ?? 'Товар'),
+                    : widget.item.name,
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 12),
@@ -617,14 +607,13 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
     if (result == null) return;
 
     final price =
-        double.tryParse(_priceController.text.trim()) ??
-        (widget.item.price ?? 0);
+        double.tryParse(_priceController.text.trim()) ?? widget.item.price;
 
     final printer = ThermalPrinterService();
     final success = await printer.printLabel(
       itemName: _nameController.text.trim().isNotEmpty
           ? _nameController.text.trim()
-          : (widget.item.name ?? 'Товар'),
+          : widget.item.name,
       sku: _skuController.text.trim().isNotEmpty
           ? _skuController.text.trim()
           : widget.item.sku,
@@ -643,7 +632,7 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
               ? 'Этикетка отправлена на печать'
               : 'Не удалось напечатать этикетку',
         ),
-        backgroundColor: success ? Colors.green : Colors.red,
+        backgroundColor: success ? AppTheme.successColor : AppTheme.errorColor,
       ),
     );
   }
@@ -725,7 +714,7 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
                   ? 'Товар успешно создан'
                   : 'Товар успешно обновлен',
             ),
-            backgroundColor: Colors.green,
+            backgroundColor: AppTheme.successColor,
           ),
         );
         Navigator.of(context).pop(saved);
@@ -735,7 +724,7 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(userFacingApiMessage(e, prefix: 'Ошибка сохранения')),
-            backgroundColor: Colors.red,
+            backgroundColor: AppTheme.errorColor,
           ),
         );
       }
@@ -746,3 +735,7 @@ class _ItemEditScreenState extends State<ItemEditScreen> {
     }
   }
 }
+
+/// «400000.0» в поле ввода выглядит как ошибка; целые суммы показываем без дробной части.
+String _plainNumber(num value) =>
+    value == value.truncate() ? value.truncate().toString() : value.toString();

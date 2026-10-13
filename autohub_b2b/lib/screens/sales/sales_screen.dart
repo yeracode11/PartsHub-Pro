@@ -1,9 +1,10 @@
 import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
+import 'package:autohub_b2b/widgets/add_action_button.dart';
+import 'package:autohub_b2b/widgets/shell_actions.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/widgets/unauthorized_placeholder.dart';
-import 'package:autohub_b2b/services/database/database.dart';
 import 'package:autohub_b2b/models/order_model.dart';
 import 'package:autohub_b2b/models/customer_model.dart';
 import 'package:autohub_b2b/models/vehicle_model.dart';
@@ -131,61 +132,70 @@ class _SalesScreenState extends State<SalesScreen> {
     final isMobile = MediaQuery.of(context).size.width < 768;
     final padding = isMobile ? 16.0 : 24.0;
 
-    return Scaffold(
-      backgroundColor: AppTheme.backgroundColor,
-      body: Column(
-        children: [
-          // Заголовок
-          Container(
-            padding: EdgeInsets.all(padding),
-            decoration: const BoxDecoration(
-              color: AppTheme.surfaceColor,
-              border: Border(bottom: BorderSide(color: AppTheme.borderColor)),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (!isMobile)
-                        Text(
-                          'Продажи',
-                          style: Theme.of(
-                            context,
-                          ).textTheme.displayMedium?.copyWith(fontSize: 28),
-                        ),
-                      if (_today != null) ...[
-                        if (!isMobile) const SizedBox(height: 4),
-                        Text(
-                          _todayLine(),
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(color: AppTheme.textSecondary),
-                        ),
-                      ],
-                    ],
+    // На телефоне «+» — в AppBar оболочки, под ним только сводка за сегодня.
+    return ShellActions(
+      actions: isMobile
+          ? [
+              AddActionButton(
+                onPressed: () => _showOrderDialog(context),
+                tooltip: 'Новый заказ',
+              ),
+            ]
+          : const [],
+      child: Scaffold(
+        backgroundColor: AppTheme.backgroundColor,
+        body: Column(
+          children: [
+            if (!isMobile || _today != null)
+              Container(
+                width: double.infinity,
+                padding: isMobile
+                    ? const EdgeInsets.fromLTRB(16, 10, 16, 10)
+                    : EdgeInsets.all(padding),
+                decoration: const BoxDecoration(
+                  color: AppTheme.surfaceColor,
+                  border: Border(
+                    bottom: BorderSide(color: AppTheme.borderColor),
                   ),
                 ),
-                if (!isMobile)
-                  FilledButton.icon(
-                    onPressed: () => _showOrderDialog(context),
-                    icon: const Icon(Icons.add),
-                    label: const Text('Новый заказ'),
-                  )
-                else
-                  IconButton(
-                    icon: const Icon(Icons.add),
-                    onPressed: () => _showOrderDialog(context),
-                    tooltip: 'Новый заказ',
-                  ),
-              ],
-            ),
-          ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (!isMobile)
+                            Text(
+                              'Продажи',
+                              style: Theme.of(
+                                context,
+                              ).textTheme.headlineSmall?.copyWith(fontSize: 22),
+                            ),
+                          if (_today != null) ...[
+                            if (!isMobile) const SizedBox(height: 4),
+                            Text(
+                              _todayLine(),
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(color: AppTheme.textSecondary),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    if (!isMobile)
+                      FilledButton.icon(
+                        onPressed: () => _showOrderDialog(context),
+                        icon: const Icon(Icons.add),
+                        label: const Text('Новый заказ'),
+                      ),
+                  ],
+                ),
+              ),
 
-          // Список заказов
-          Expanded(child: _buildOrdersList(isMobile: isMobile)),
-        ],
+            // Список заказов
+            Expanded(child: _buildOrdersList(isMobile: isMobile)),
+          ],
+        ),
       ),
     );
   }
@@ -207,7 +217,11 @@ class _SalesScreenState extends State<SalesScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.error_outline, size: 64, color: Colors.red),
+            const Icon(
+              Icons.error_outline,
+              size: 64,
+              color: AppTheme.errorColor,
+            ),
             const SizedBox(height: 16),
             Text(error!, textAlign: TextAlign.center),
             const SizedBox(height: 16),
@@ -229,7 +243,7 @@ class _SalesScreenState extends State<SalesScreen> {
               padding: const EdgeInsets.all(32),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: AppTheme.primaryColor.withOpacity(0.1),
+                color: AppTheme.primaryColor.withValues(alpha: 0.1),
               ),
               child: const Icon(
                 Icons.shopping_cart_outlined,
@@ -289,28 +303,40 @@ class _SalesScreenState extends State<SalesScreen> {
       itemCount: orders.length,
       itemBuilder: (context, index) {
         final order = orders[index];
+        final subtitle = _orderSubtitle(order);
         return Card(
-          margin: const EdgeInsets.only(bottom: 12),
+          margin: const EdgeInsets.only(bottom: 8),
           child: InkWell(
             onTap: () => _showOrderDialog(context, order: order),
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Expanded(
                         child: Text(
                           order.orderNumber ?? '#${order.id}',
                           style: const TextStyle(
-                            fontSize: 16,
+                            fontSize: 15,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),
+                      Text(
+                        '${numberFormat.format(order.total)} ₸',
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                       PopupMenuButton(
+                        iconSize: 20,
+                        style: const ButtonStyle(
+                          visualDensity: VisualDensity.compact,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
                         itemBuilder: (context) => [
                           const PopupMenuItem(
                             value: 'edit',
@@ -326,11 +352,15 @@ class _SalesScreenState extends State<SalesScreen> {
                             value: 'delete',
                             child: Row(
                               children: [
-                                Icon(Icons.delete, size: 20, color: Colors.red),
+                                Icon(
+                                  Icons.delete,
+                                  size: 20,
+                                  color: AppTheme.errorColor,
+                                ),
                                 SizedBox(width: 8),
                                 Text(
                                   'Удалить',
-                                  style: TextStyle(color: Colors.red),
+                                  style: TextStyle(color: AppTheme.errorColor),
                                 ),
                               ],
                             ),
@@ -346,10 +376,13 @@ class _SalesScreenState extends State<SalesScreen> {
                       ),
                     ],
                   ),
-                  if (_orderSubtitle(order) != null) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      _orderSubtitle(order)!,
+                  Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: Text(
+                      [
+                        dateFormat.format(order.createdAt),
+                        if (subtitle != null) subtitle,
+                      ].join(' · '),
                       style: const TextStyle(
                         fontSize: 13,
                         color: AppTheme.textSecondary,
@@ -357,58 +390,14 @@ class _SalesScreenState extends State<SalesScreen> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                  ],
-                  const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Сумма',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: AppTheme.textSecondary,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '${numberFormat.format(order.total)} ₸',
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: AppTheme.primaryColor,
-                            ),
-                          ),
-                        ],
-                      ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          _buildStatusBadge(order.status),
-                          const SizedBox(height: 8),
-                          _buildPaymentBadge(order.paymentStatus),
-                        ],
-                      ),
-                    ],
                   ),
-                  const SizedBox(height: 12),
-                  Row(
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
                     children: [
-                      Icon(
-                        Icons.access_time,
-                        size: 16,
-                        color: AppTheme.textSecondary,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        dateFormat.format(order.createdAt),
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppTheme.textSecondary,
-                        ),
-                      ),
+                      _buildStatusBadge(order.status),
+                      _buildPaymentBadge(order.paymentStatus),
                     ],
                   ),
                 ],
@@ -550,7 +539,7 @@ class _SalesScreenState extends State<SalesScreen> {
                             IconButton(
                               icon: const Icon(
                                 Icons.delete_outline,
-                                color: Colors.red,
+                                color: AppTheme.errorColor,
                               ),
                               onPressed: () =>
                                   _showDeleteDialog(context, order),
@@ -576,46 +565,46 @@ class _SalesScreenState extends State<SalesScreen> {
 
     switch (status) {
       case 'completed':
-        color = AppTheme.successGradient.colors[0];
+        color = AppTheme.successColor;
         label = 'Завершен';
         break;
       case 'processing':
-        color = Colors.blue.shade400;
+        color = AppTheme.primaryColor;
         label = 'В работе';
         break;
       case 'reserved':
-        color = Colors.deepPurple;
+        color = AppTheme.violetColor;
         label = 'Забронирован';
         break;
       case 'ready':
-        color = Colors.teal;
+        color = AppTheme.successColor;
         label = 'Готов к выдаче';
         break;
       case 'picking':
-        color = Colors.indigo;
+        color = AppTheme.violetColor;
         label = 'Сборка';
         break;
       case 'delivered':
-        color = Colors.blueGrey;
+        color = AppTheme.textSecondary;
         label = 'Выдан';
         break;
       case 'returned':
-        color = Colors.brown;
+        color = AppTheme.textSecondary;
         label = 'Возврат';
         break;
       case 'cancelled':
-        color = Colors.red;
+        color = AppTheme.errorColor;
         label = 'Отменен';
         break;
       default:
-        color = AppTheme.warningGradient.colors[0];
+        color = AppTheme.warningColor;
         label = 'Ожидание';
     }
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
@@ -635,11 +624,11 @@ class _SalesScreenState extends State<SalesScreen> {
 
     switch (status) {
       case 'paid':
-        color = AppTheme.successGradient.colors[0];
+        color = AppTheme.successColor;
         label = 'Оплачен';
         break;
       case 'partially_paid':
-        color = AppTheme.warningGradient.colors[0];
+        color = AppTheme.warningColor;
         label = 'Частично';
         break;
       default:
@@ -650,7 +639,7 @@ class _SalesScreenState extends State<SalesScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
@@ -1044,7 +1033,7 @@ class _OrderDialogState extends State<_OrderDialog> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Товар с кодом "$trimmed" не найден'),
-          backgroundColor: Colors.red,
+          backgroundColor: AppTheme.errorColor,
         ),
       );
       return;
@@ -1088,7 +1077,7 @@ class _OrderDialogState extends State<_OrderDialog> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Добавлен товар: $name (x1)'),
-        backgroundColor: Colors.green,
+        backgroundColor: AppTheme.successColor,
         duration: const Duration(seconds: 1),
       ),
     );
@@ -1464,7 +1453,7 @@ class _OrderDialogState extends State<_OrderDialog> {
                       width: 56,
                       height: 56,
                       decoration: BoxDecoration(
-                        color: AppTheme.primaryColor.withOpacity(0.08),
+                        color: AppTheme.primaryColor.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Icon(
@@ -1571,7 +1560,7 @@ class _OrderDialogState extends State<_OrderDialog> {
               onTap: () => setState(() => selectedItems.removeAt(index)),
               child: const Padding(
                 padding: EdgeInsets.all(4),
-                child: Icon(Icons.close, size: 18, color: Colors.red),
+                child: Icon(Icons.close, size: 18, color: AppTheme.errorColor),
               ),
             ),
           ],
@@ -1672,7 +1661,7 @@ class _OrderDialogState extends State<_OrderDialog> {
         color: Theme.of(context).cardColor,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.06),
+            color: Colors.black.withValues(alpha: 0.06),
             blurRadius: 8,
             offset: const Offset(0, -2),
           ),
@@ -1918,7 +1907,7 @@ class _OrderDialogState extends State<_OrderDialog> {
                                         )
                                       : CircleAvatar(
                                           backgroundColor: AppTheme.primaryColor
-                                              .withOpacity(0.1),
+                                              .withValues(alpha: 0.1),
                                           child: const Icon(
                                             Icons.inventory_2,
                                             color: AppTheme.primaryColor,
@@ -2003,7 +1992,7 @@ class _OrderDialogState extends State<_OrderDialog> {
                                       IconButton(
                                         icon: const Icon(
                                           Icons.delete_outline,
-                                          color: Colors.red,
+                                          color: AppTheme.errorColor,
                                         ),
                                         onPressed: () => setState(
                                           () => selectedItems.removeAt(index),
@@ -2022,10 +2011,10 @@ class _OrderDialogState extends State<_OrderDialog> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: AppTheme.primaryColor.withOpacity(0.05),
+                  color: AppTheme.primaryColor.withValues(alpha: 0.05),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: AppTheme.primaryColor.withOpacity(0.2),
+                    color: AppTheme.primaryColor.withValues(alpha: 0.2),
                   ),
                 ),
                 child: Row(
@@ -2316,7 +2305,7 @@ class _OrderDialogState extends State<_OrderDialog> {
                   ? 'Заказ обновлен'
                   : 'Заказ создан',
             ),
-            backgroundColor: Colors.green,
+            backgroundColor: AppTheme.successColor,
           ),
         );
       }
@@ -2325,7 +2314,7 @@ class _OrderDialogState extends State<_OrderDialog> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(userFacingApiMessage(e, prefix: 'Ошибка')),
-            backgroundColor: Colors.red,
+            backgroundColor: AppTheme.errorColor,
           ),
         );
       }
@@ -2717,7 +2706,7 @@ class _BarcodeScannerPageState extends State<_BarcodeScannerPage> {
               'Наведите камеру на штрих-код или QR-код',
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: Colors.white.withOpacity(0.8),
+                color: Colors.white.withValues(alpha: 0.8),
                 fontSize: 15,
               ),
             ),

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/services/connectivity_service.dart';
 import 'package:autohub_b2b/services/sync_service.dart';
 import 'package:autohub_b2b/services/service_locator.dart';
@@ -69,11 +70,11 @@ class _OfflineBannerState extends State<OfflineBanner>
       text = 'Нет подключения — офлайн-режим';
       icon = Icons.cloud_off;
     } else if (_isSyncing) {
-      bgColor = Colors.blue.shade600;
+      bgColor = AppTheme.primaryColor;
       text = 'Синхронизация данных...';
       icon = Icons.sync;
     } else {
-      bgColor = Colors.green.shade600;
+      bgColor = AppTheme.successColor;
       text = 'Подключение восстановлено';
       icon = Icons.cloud_done;
     }

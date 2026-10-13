@@ -64,7 +64,7 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(userFacingApiMessage(e, prefix: 'Ошибка загрузки')),
-              backgroundColor: Colors.red,
+              backgroundColor: AppTheme.errorColor,
             ),
           );
         }
@@ -75,7 +75,7 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(userFacingApiMessage(e, prefix: 'Ошибка загрузки')),
-            backgroundColor: Colors.red,
+            backgroundColor: AppTheme.errorColor,
           ),
         );
       }
@@ -126,14 +126,14 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Пробег обновлен'),
-              backgroundColor: Colors.green,
+              backgroundColor: AppTheme.successColor,
             ),
           );
         }
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка')), backgroundColor: Colors.red),
+            SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка')), backgroundColor: AppTheme.errorColor),
           );
         }
       }
@@ -219,7 +219,7 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text('Укажите пробег'),
-                      backgroundColor: Colors.red,
+                      backgroundColor: AppTheme.errorColor,
                     ),
                   );
                   return;
@@ -252,14 +252,14 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('ТО записано'),
-              backgroundColor: Colors.green,
+              backgroundColor: AppTheme.successColor,
             ),
           );
         }
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка')), backgroundColor: Colors.red),
+            SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка')), backgroundColor: AppTheme.errorColor),
           );
         }
       }
@@ -347,7 +347,7 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Автомобиль удален'),
-              backgroundColor: Colors.green,
+              backgroundColor: AppTheme.successColor,
             ),
           );
           Navigator.of(context).pop(true);
@@ -357,7 +357,7 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(userFacingApiMessage(e, prefix: 'Ошибка удаления')),
-              backgroundColor: Colors.red,
+              backgroundColor: AppTheme.errorColor,
             ),
           );
         }
@@ -393,9 +393,9 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
                   value: 'delete',
                   child: Row(
                     children: [
-                      Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                      Icon(Icons.delete_outline, color: AppTheme.errorColor, size: 20),
                       SizedBox(width: 8),
-                      Text('Удалить', style: TextStyle(color: Colors.red)),
+                      Text('Удалить', style: TextStyle(color: AppTheme.errorColor)),
                     ],
                   ),
                 ),
@@ -466,7 +466,7 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
                 const SizedBox(width: 8),
                 const Text(
                   'Владелец (CRM)',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  style: AppTheme.sectionTitle,
                 ),
                 const Spacer(),
                 TextButton.icon(
@@ -655,7 +655,7 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
           children: [
             const Text(
               'Технические характеристики',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              style: AppTheme.sectionTitle,
             ),
             const SizedBox(height: 16),
             Row(
@@ -700,7 +700,7 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
             if (isMobile) ...[
               const Text(
                 'Обслуживание',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                style: AppTheme.sectionTitle,
               ),
               const SizedBox(height: 12),
               SizedBox(
@@ -725,7 +725,7 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
                 children: [
                   const Text(
                     'Обслуживание',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    style: AppTheme.sectionTitle,
                   ),
                   const Spacer(),
                   OutlinedButton.icon(
@@ -748,7 +748,7 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppTheme.primaryColor.withOpacity(0.1),
+                color: AppTheme.primaryColor.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
@@ -771,7 +771,7 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '${NumberFormat('#,###').format(vehicle!.currentMileage)} км',
+                        '${NumberFormat('#,###', 'ru_RU').format(vehicle!.currentMileage)} км',
                         style: const TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
@@ -818,7 +818,7 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
                           ),
                           if (vehicle!.lastServiceMileage != null)
                             Text(
-                              '${NumberFormat('#,###').format(vehicle!.lastServiceMileage)} км',
+                              '${NumberFormat('#,###', 'ru_RU').format(vehicle!.lastServiceMileage)} км',
                               style: TextStyle(
                                 fontSize: 12,
                                 color: AppTheme.textSecondary,
@@ -837,12 +837,12 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
                         color: vehicle!.needsService
-                            ? Colors.orange.shade50
-                            : Colors.green.shade50,
+                            ? AppTheme.warningSoft
+                            : AppTheme.successSoft,
                         border: Border.all(
                           color: vehicle!.needsService
-                              ? Colors.orange.shade300
-                              : Colors.green.shade300,
+                              ? AppTheme.warningBorder
+                              : AppTheme.successBorder,
                         ),
                         borderRadius: BorderRadius.circular(12),
                       ),
@@ -863,7 +863,7 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
                                 Icon(
                                   Icons.warning,
                                   size: 16,
-                                  color: Colors.orange.shade700,
+                                  color: AppTheme.warningColor,
                                 ),
                             ],
                           ),
@@ -876,8 +876,8 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
                               color: vehicle!.needsService
-                                  ? Colors.orange.shade700
-                                  : Colors.green.shade700,
+                                  ? AppTheme.warningColor
+                                  : AppTheme.successColor,
                             ),
                           ),
                           if (vehicle!.daysUntilService != null)
@@ -888,13 +888,13 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
                               style: TextStyle(
                                 fontSize: 12,
                                 color: vehicle!.needsService
-                                    ? Colors.orange.shade700
-                                    : Colors.green.shade700,
+                                    ? AppTheme.warningColor
+                                    : AppTheme.successColor,
                               ),
                             ),
                           if (vehicle!.nextServiceMileage != null)
                             Text(
-                              '${NumberFormat('#,###').format(vehicle!.nextServiceMileage)} км',
+                              '${NumberFormat('#,###', 'ru_RU').format(vehicle!.nextServiceMileage)} км',
                               style: TextStyle(
                                 fontSize: 12,
                                 color: AppTheme.textSecondary,
@@ -913,7 +913,7 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
+                  color: AppTheme.primarySoft,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Column(
@@ -921,14 +921,14 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
                   children: [
                     Row(
                       children: [
-                        Icon(Icons.note, size: 16, color: Colors.blue.shade700),
+                        Icon(Icons.note, size: 16, color: AppTheme.primaryColor),
                         const SizedBox(width: 8),
                         Text(
                           'Примечания',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
-                            color: Colors.blue.shade700,
+                            color: AppTheme.primaryColor,
                           ),
                         ),
                       ],
@@ -938,7 +938,7 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
                       vehicle!.notes!,
                       style: TextStyle(
                         fontSize: 14,
-                        color: Colors.blue.shade900,
+                        color: AppTheme.primaryColor,
                       ),
                     ),
                   ],
@@ -962,7 +962,7 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
           children: [
             const Text(
               'История заказов',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              style: AppTheme.sectionTitle,
             ),
             const SizedBox(height: 16),
             if (orders.isEmpty)
@@ -987,7 +987,7 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
                     leading: CircleAvatar(
                       backgroundColor: _getStatusColor(
                         order['status'],
-                      ).withOpacity(0.2),
+                      ).withValues(alpha: 0.2),
                       child: Icon(
                         Icons.receipt,
                         color: _getStatusColor(order['status']),
@@ -1021,7 +1021,7 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
                           decoration: BoxDecoration(
                             color: _getStatusColor(
                               order['status'],
-                            ).withOpacity(0.2),
+                            ).withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
@@ -1064,13 +1064,13 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
   Color _getStatusColor(String status) {
     switch (status) {
       case 'completed':
-        return Colors.green;
+        return AppTheme.successColor;
       case 'processing':
-        return Colors.blue;
+        return AppTheme.primaryColor;
       case 'cancelled':
-        return Colors.red;
+        return AppTheme.errorColor;
       default:
-        return Colors.orange;
+        return AppTheme.warningColor;
     }
   }
 

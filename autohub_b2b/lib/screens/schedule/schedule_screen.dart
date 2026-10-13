@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:autohub_b2b/widgets/shell_actions.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 
@@ -14,6 +15,7 @@ import 'package:autohub_b2b/services/api/api_client.dart';
 import 'package:autohub_b2b/services/api/api_user_message.dart';
 import 'package:autohub_b2b/services/offline_queue.dart';
 import 'package:autohub_b2b/services/service_locator.dart';
+import 'package:autohub_b2b/widgets/add_action_button.dart';
 
 class ScheduleScreen extends StatefulWidget {
   const ScheduleScreen({super.key});
@@ -75,10 +77,16 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     }
     try {
       final from = _dayStart.toUtc().toIso8601String();
-      final to = _dayStart.add(const Duration(days: 1)).toUtc().toIso8601String();
+      final to = _dayStart
+          .add(const Duration(days: 1))
+          .toUtc()
+          .toIso8601String();
       final results = await Future.wait([
         _dio.get('/api/schedule/posts'),
-        _dio.get('/api/schedule/appointments', queryParameters: {'from': from, 'to': to}),
+        _dio.get(
+          '/api/schedule/appointments',
+          queryParameters: {'from': from, 'to': to},
+        ),
       ]);
       if (!mounted) return;
       final posts = (results[0].data as List)
@@ -124,13 +132,18 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   ) async {
     final merged = List<Map<String, dynamic>>.of(appointments);
     for (final snapshot in await OfflineQueue().snapshots('appointment')) {
-      final starts = DateTime.tryParse(snapshot['startsAt']?.toString() ?? '')?.toLocal();
+      final starts = DateTime.tryParse(
+        snapshot['startsAt']?.toString() ?? '',
+      )?.toLocal();
       if (starts == null) continue;
-      final sameDay = starts.year == _dayStart.year &&
+      final sameDay =
+          starts.year == _dayStart.year &&
           starts.month == _dayStart.month &&
           starts.day == _dayStart.day;
       if (!sameDay) continue;
-      final index = merged.indexWhere((item) => item['id'].toString() == snapshot['id'].toString());
+      final index = merged.indexWhere(
+        (item) => item['id'].toString() == snapshot['id'].toString(),
+      );
       if (index >= 0) {
         merged[index] = snapshot;
       } else {
@@ -152,10 +165,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     final changed = await showModalBottomSheet<bool>(
       context: context,
       showDragHandle: true,
-      builder: (_) => _AppointmentSheet(
-        appointment: appointment,
-        canEdit: _canEdit,
-      ),
+      builder: (_) =>
+          _AppointmentSheet(appointment: appointment, canEdit: _canEdit),
     );
     if (changed == true) _load();
   }
@@ -177,11 +188,6 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     ('done', 'Готово', null),
   ];
 
-  String get _dayLabel {
-    const days = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'];
-    return '${days[_dayStart.weekday - 1]}, ${DateFormat('dd.MM').format(_dayStart)}';
-  }
-
   Future<void> _move(Map<String, dynamic> item, String status) async {
     final id = item['id'];
     setState(() => _movingId = id is int ? id : int.tryParse('$id'));
@@ -196,160 +202,382 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       );
       if (!mounted) return;
       if (result.queued) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text(offlineSavedMessage)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text(offlineSavedMessage)));
       }
       await _load(silent: true);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userFacingApiMessage(e))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(userFacingApiMessage(e))));
     } finally {
       if (mounted) setState(() => _movingId = null);
     }
   }
 
+  /// null — показываем все статусы.
+  String? _statusFilter;
+
+  static const _months = [
+    'Январь',
+    'Февраль',
+    'Март',
+    'Апрель',
+    'Май',
+    'Июнь',
+    'Июль',
+    'Август',
+    'Сентябрь',
+    'Октябрь',
+    'Ноябрь',
+    'Декабрь',
+  ];
+  static const _weekdays = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'];
+
+  DateTime get _weekStart =>
+      _dayStart.subtract(Duration(days: _dayStart.weekday - 1));
+
+  bool _isSameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
+  void _selectDay(DateTime day) {
+    setState(() {
+      _day = day;
+      _statusFilter = null;
+    });
+    _load();
+  }
+
+  Future<void> _onAdd() async {
+    if (_posts.isNotEmpty) return _add();
+    // Без постов записать некуда — объясняем и сразу открываем их настройку.
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Сначала добавьте пост — место, куда записывать'),
+      ),
+    );
+    await _managePosts();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
-          child: Row(
-            children: [
-              IconButton(
-                onPressed: () {
-                  setState(() => _day = _dayStart.subtract(const Duration(days: 1)));
-                  _load();
-                },
-                icon: const Icon(Icons.chevron_left),
-              ),
-              Expanded(
-                child: Text(
-                  _dayLabel,
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+    return Container(
+      color: AppTheme.backgroundColor,
+      child: Column(
+        children: [
+          _buildWeekHeader(),
+          Expanded(
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : _error != null
+                ? Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(_error!),
+                        const SizedBox(height: 8),
+                        OutlinedButton(
+                          onPressed: _load,
+                          child: const Text('Повторить'),
+                        ),
+                      ],
+                    ),
+                  )
+                : _buildBoard(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWeekHeader() {
+    final today = DateTime.now();
+    final weekStart = _weekStart;
+    final wide = AddActionButton.isWide(context);
+    final actions = <Widget>[
+      TextButton(onPressed: _managePosts, child: const Text('Посты')),
+      AddActionButton(
+        label: 'Записать',
+        tooltip: 'Новая запись',
+        onPressed: _onAdd,
+      ),
+    ];
+    return ShellActions(
+      actions: _canEdit && !wide ? actions : const [],
+      child: Container(
+        color: AppTheme.surfaceColor,
+        padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Text(
+                  '${_months[_dayStart.month - 1]} ${_dayStart.year}',
+                  style: const TextStyle(
+                    fontSize: 17,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-              ),
-              IconButton(
-                onPressed: () {
-                  setState(() => _day = _dayStart.add(const Duration(days: 1)));
-                  _load();
-                },
-                icon: const Icon(Icons.chevron_right),
-              ),
-              if (_canEdit)
-                TextButton(onPressed: _managePosts, child: const Text('Посты')),
-              if (_canEdit)
+                if (!_isSameDay(_dayStart, today)) ...[
+                  const SizedBox(width: 4),
+                  TextButton(
+                    onPressed: () => _selectDay(today),
+                    child: const Text('Сегодня'),
+                  ),
+                ],
+                const Spacer(),
+                // На телефоне эти кнопки — в AppBar оболочки.
+                if (_canEdit && wide) ...actions,
+              ],
+            ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
                 IconButton(
-                  tooltip: 'Новая запись',
-                  onPressed: _posts.isEmpty ? null : _add,
-                  icon: const Icon(Icons.add),
+                  tooltip: 'Предыдущая неделя',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () =>
+                      _selectDay(_dayStart.subtract(const Duration(days: 7))),
+                  icon: const Icon(Icons.chevron_left),
                 ),
-            ],
-          ),
+                for (var i = 0; i < 7; i++)
+                  Expanded(
+                    child: _buildDayCell(
+                      weekStart.add(Duration(days: i)),
+                      today: today,
+                    ),
+                  ),
+                IconButton(
+                  tooltip: 'Следующая неделя',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () =>
+                      _selectDay(_dayStart.add(const Duration(days: 7))),
+                  icon: const Icon(Icons.chevron_right),
+                ),
+              ],
+            ),
+          ],
         ),
-        Expanded(
-          child: _loading
-              ? const Center(child: CircularProgressIndicator())
-              : _error != null
-                  ? Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(_error!),
-                          const SizedBox(height: 8),
-                          OutlinedButton(onPressed: _load, child: const Text('Повторить')),
-                        ],
-                      ),
-                    )
-                  : _buildBoard(),
+      ),
+    );
+  }
+
+  Widget _buildDayCell(DateTime day, {required DateTime today}) {
+    final selected = _isSameDay(day, _dayStart);
+    final isToday = _isSameDay(day, today);
+    final weekend = day.weekday >= 6;
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () => _selectDay(day),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              _weekdays[day.weekday - 1],
+              style: TextStyle(
+                fontSize: 12,
+                color: weekend ? AppTheme.errorColor : AppTheme.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Container(
+              width: 36,
+              height: 36,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: selected ? AppTheme.primaryColor : Colors.transparent,
+                shape: BoxShape.circle,
+                border: isToday && !selected
+                    ? Border.all(color: AppTheme.primaryColor, width: 1.5)
+                    : null,
+              ),
+              child: Text(
+                '${day.day}',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: selected || isToday
+                      ? FontWeight.w600
+                      : FontWeight.w400,
+                  color: selected
+                      ? Colors.white
+                      : isToday
+                      ? AppTheme.primaryColor
+                      : AppTheme.textPrimary,
+                ),
+              ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 
   Color _stageColor(String status) {
     switch (status) {
       case 'arrived':
-        return AppTheme.accentColor;
+        return AppTheme.warningColor;
       case 'in_progress':
-        return AppTheme.textPrimary;
+        return AppTheme.violetColor;
       case 'done':
-        return AppTheme.secondaryColor;
+        return AppTheme.successColor;
       default:
         return AppTheme.primaryColor;
     }
   }
 
-  Widget _buildBoard() {
-    final wide = MediaQuery.sizeOf(context).width >= 960;
-    if (wide) {
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            for (var i = 0; i < _columns.length; i++) ...[
-              if (i > 0) const SizedBox(width: 12),
-              Expanded(child: _buildColumn(_columns[i], fill: true)),
-            ],
-          ],
-        ),
-      );
-    }
+  String _stageTitle(String status) => _columns
+      .firstWhere((column) => column.$1 == status, orElse: () => _columns.first)
+      .$2;
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-      children: [
-        for (var i = 0; i < _columns.length; i++) ...[
-          if (i > 0) const SizedBox(height: 16),
-          _buildColumn(_columns[i], fill: false),
-        ],
-      ],
+  (String?, String?) _nextStep(String status) {
+    final column = _columns.firstWhere(
+      (column) => column.$1 == status,
+      orElse: () => _columns.first,
     );
-  }
-
-  Widget _buildColumn((String, String, String?) column, {required bool fill}) {
-    final status = column.$1;
-    final title = column.$2;
-    final nextLabel = column.$3;
-    final color = _stageColor(status);
     final nextStatus = switch (status) {
       'scheduled' => 'arrived',
       'arrived' => 'in_progress',
       'in_progress' => 'done',
       _ => null,
     };
-    final items = _appointments
-        .where((item) => (item['status']?.toString() ?? 'scheduled') == status)
-        .toList();
-    final cards = items.isEmpty
-        ? const Padding(
-            padding: EdgeInsets.only(top: 4, bottom: 4),
-            child: Text(
-              'Нет записей',
-              style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
-            ),
-          )
-        : Column(
-            children: [
-              for (var i = 0; i < items.length; i++) ...[
-                if (i > 0) const SizedBox(height: 8),
-                _buildCard(
-                  items[i],
-                  color: color,
-                  nextStatus: nextStatus,
-                  nextLabel: nextLabel,
-                ),
-              ],
-            ],
-          );
+    return (nextStatus, column.$3);
+  }
 
+  String _status(Map<String, dynamic> item) =>
+      item['status']?.toString() ?? 'scheduled';
+
+  Widget _buildBoard() {
+    final wide = MediaQuery.sizeOf(context).width >= 960;
+    if (wide) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (var i = 0; i < _columns.length; i++) ...[
+              if (i > 0) const SizedBox(width: 12),
+              Expanded(child: _buildColumn(_columns[i])),
+            ],
+          ],
+        ),
+      );
+    }
+    return _buildDayList();
+  }
+
+  /// Телефон: один список дня по времени и фильтр по статусу вместо четырёх пустых секций.
+  Widget _buildDayList() {
+    final visible =
+        _appointments.where((item) => _status(item) != 'cancelled').toList()
+          ..sort(
+            (a, b) => (a['startsAt']?.toString() ?? '').compareTo(
+              b['startsAt']?.toString() ?? '',
+            ),
+          );
+    final filtered = _statusFilter == null
+        ? visible
+        : visible.where((item) => _status(item) == _statusFilter).toList();
+
+    return Column(
+      children: [
+        SizedBox(
+          height: 52,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+            children: [
+              _buildFilterChip(null, 'Все', visible.length),
+              for (final column in _columns)
+                _buildFilterChip(
+                  column.$1,
+                  column.$2,
+                  visible.where((item) => _status(item) == column.$1).length,
+                ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: filtered.isEmpty
+              ? _buildEmptyDay(hasAny: visible.isNotEmpty)
+              : RefreshIndicator(
+                  onRefresh: () => _load(silent: true),
+                  child: ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                    itemCount: filtered.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 8),
+                    itemBuilder: (_, index) => _buildCard(filtered[index]),
+                  ),
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFilterChip(String? status, String label, int count) {
+    final selected = _statusFilter == status;
+    final color = status == null ? AppTheme.textPrimary : _stageColor(status);
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: ChoiceChip(
+        selected: selected,
+        showCheckmark: false,
+        onSelected: (_) => setState(() => _statusFilter = status),
+        backgroundColor: AppTheme.surfaceColor,
+        selectedColor: color.withValues(alpha: 0.12),
+        side: BorderSide(
+          color: selected ? color.withValues(alpha: 0.4) : AppTheme.borderColor,
+        ),
+        label: Text(
+          count > 0 ? '$label  $count' : label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+            color: selected ? color : AppTheme.textPrimary,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyDay({required bool hasAny}) {
+    final today = _isSameDay(_dayStart, DateTime.now());
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              hasAny
+                  ? 'Нет записей с этим статусом'
+                  : today
+                  ? 'На сегодня записей нет'
+                  : 'На этот день записей нет',
+              style: const TextStyle(color: AppTheme.textSecondary),
+            ),
+            if (!hasAny && _canEdit) ...[
+              const SizedBox(height: 12),
+              FilledButton(
+                onPressed: _onAdd,
+                child: const Text('Записать клиента'),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildColumn((String, String, String?) column) {
+    final status = column.$1;
+    final color = _stageColor(status);
+    final items = _appointments
+        .where((item) => _status(item) == status)
+        .toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -364,116 +592,151 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
               ),
               const SizedBox(width: 8),
               Text(
-                title,
+                column.$2,
                 style: const TextStyle(
                   fontWeight: FontWeight.w600,
                   fontSize: 15,
-                  color: AppTheme.textPrimary,
                 ),
               ),
               const SizedBox(width: 8),
               Text(
                 '${items.length}',
-                style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: AppTheme.textSecondary,
+                ),
               ),
             ],
           ),
         ),
-        if (fill) Expanded(child: SingleChildScrollView(child: cards)) else cards,
+        Expanded(
+          child: items.isEmpty
+              ? const Text(
+                  'Нет записей',
+                  style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+                )
+              : ListView.separated(
+                  itemCount: items.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 8),
+                  itemBuilder: (_, index) =>
+                      _buildCard(items[index], showStatus: false),
+                ),
+        ),
       ],
     );
   }
 
-  Widget _buildCard(
-    Map<String, dynamic> item, {
-    required Color color,
-    required String? nextStatus,
-    required String? nextLabel,
-  }) {
+  Widget _buildCard(Map<String, dynamic> item, {bool showStatus = true}) {
+    final status = _status(item);
+    final color = _stageColor(status);
+    final (nextStatus, nextLabel) = _nextStep(status);
     final id = item['id'];
     final itemId = id is int ? id : int.tryParse('$id');
     final moving = _movingId != null && _movingId == itemId;
-    final nextColor = nextStatus == null ? color : _stageColor(nextStatus);
-    final time = _time(item);
+    final start = DateTime.tryParse(
+      item['startsAt']?.toString() ?? '',
+    )?.toLocal();
+    final end = DateTime.tryParse(item['endsAt']?.toString() ?? '')?.toLocal();
+    final timeFormat = DateFormat('HH:mm');
+    final subtitle = _subtitle(item);
+
     return Material(
       color: AppTheme.surfaceColor,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: const BorderSide(color: AppTheme.borderColor),
       ),
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
         onTap: () => _open(item),
         child: IntrinsicHeight(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Container(
-                width: 3,
-                decoration: BoxDecoration(
-                  color: color,
-                  borderRadius: const BorderRadius.horizontal(left: Radius.circular(12)),
+              Container(width: 4, color: color),
+              // Время — главная ось дня, поэтому вынесено в отдельную колонку.
+              SizedBox(
+                width: 64,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 14),
+                  child: Column(
+                    children: [
+                      Text(
+                        start == null ? '—' : timeFormat.format(start),
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (end != null)
+                        Text(
+                          timeFormat.format(end),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppTheme.textSecondary,
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ),
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+                  padding: const EdgeInsets.fromLTRB(0, 12, 12, 10),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (time.isNotEmpty)
-                        Text(
-                          time,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: AppTheme.textPrimary,
-                          ),
-                        ),
                       Text(
                         _title(item),
                         style: const TextStyle(
                           fontWeight: FontWeight.w600,
-                          fontSize: 16,
-                          height: 1.3,
+                          fontSize: 15,
                         ),
                       ),
-                      if (_subtitle(item).isNotEmpty) ...[
+                      if (subtitle.isNotEmpty) ...[
                         const SizedBox(height: 2),
                         Text(
-                          _subtitle(item),
+                          subtitle,
                           style: const TextStyle(
                             fontSize: 13,
                             color: AppTheme.textSecondary,
                           ),
                         ),
                       ],
-                      if (_canEdit && nextStatus != null && nextLabel != null)
-                        TextButton(
-                          style: TextButton.styleFrom(
-                            foregroundColor: AppTheme.textPrimary,
-                            minimumSize: const Size(44, 44),
-                            padding: EdgeInsets.zero,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            alignment: Alignment.centerLeft,
-                          ),
-                          onPressed: moving ? null : () => _move(item, nextStatus),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                width: 8,
-                                height: 8,
-                                decoration: BoxDecoration(
-                                  color: nextColor,
-                                  shape: BoxShape.circle,
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          if (showStatus)
+                            Text(
+                              _stageTitle(status),
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: color,
+                              ),
+                            ),
+                          const Spacer(),
+                          if (_canEdit &&
+                              nextStatus != null &&
+                              nextLabel != null)
+                            FilledButton.tonal(
+                              style: FilledButton.styleFrom(
+                                backgroundColor: _stageColor(
+                                  nextStatus,
+                                ).withValues(alpha: 0.12),
+                                foregroundColor: _stageColor(nextStatus),
+                                visualDensity: VisualDensity.compact,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
                                 ),
                               ),
-                              const SizedBox(width: 8),
-                              Text(moving ? 'Сохранение' : nextLabel),
-                            ],
-                          ),
-                        ),
+                              onPressed: moving
+                                  ? null
+                                  : () => _move(item, nextStatus),
+                              child: Text(moving ? 'Сохранение' : nextLabel),
+                            ),
+                        ],
+                      ),
                     ],
                   ),
                 ),
@@ -496,21 +759,12 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     final car = vehicle == null
         ? null
         : '${vehicle['brand'] ?? ''} ${vehicle['model'] ?? ''} ${vehicle['plateNumber'] ?? ''}'
-            .trim();
+              .trim();
     return [
       if (car != null && car.isNotEmpty) car,
       if (post?['name'] != null) post!['name'].toString(),
     ].where((part) => part.isNotEmpty).join(' · ');
   }
-
-  String _time(Map<String, dynamic> item) {
-    final start = DateTime.tryParse(item['startsAt']?.toString() ?? '')?.toLocal();
-    final end = DateTime.tryParse(item['endsAt']?.toString() ?? '')?.toLocal();
-    if (start == null || end == null) return '';
-    final format = DateFormat('HH:mm');
-    return '${format.format(start)}–${format.format(end)}';
-  }
-
 }
 
 class _AppointmentDialog extends StatefulWidget {
@@ -576,7 +830,9 @@ class _AppointmentDialogState extends State<_AppointmentDialog> {
       }
       if (customers.isEmpty && ServiceLocator().isInitialized) {
         try {
-          customers.addAll(await ServiceLocator().customersRepository.getCustomers());
+          customers.addAll(
+            await ServiceLocator().customersRepository.getCustomers(),
+          );
         } catch (_) {}
       }
       setState(() {
@@ -643,8 +899,12 @@ class _AppointmentDialogState extends State<_AppointmentDialog> {
           'startsAt': starts.toIso8601String(),
           'endsAt': ends.toIso8601String(),
           'notes': notes,
-          'post': post == null ? null : {'id': post['id'], 'name': post['name']},
-          'customer': customer == null ? null : {'id': customer.id, 'name': customer.name},
+          'post': post == null
+              ? null
+              : {'id': post['id'], 'name': post['name']},
+          'customer': customer == null
+              ? null
+              : {'id': customer.id, 'name': customer.name},
           'vehicle': vehicle == null
               ? null
               : {
@@ -656,9 +916,9 @@ class _AppointmentDialogState extends State<_AppointmentDialog> {
       );
       if (!mounted) return;
       if (result.queued) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text(offlineSavedMessage)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text(offlineSavedMessage)));
       }
       Navigator.pop(context, true);
     } catch (e) {
@@ -728,7 +988,8 @@ class _AppointmentDialogState extends State<_AppointmentDialog> {
                             ),
                           )
                           .toList(),
-                      onChanged: (value) => setState(() => _duration = value ?? 60),
+                      onChanged: (value) =>
+                          setState(() => _duration = value ?? 60),
                     ),
                   ),
                 ],
@@ -742,11 +1003,19 @@ class _AppointmentDialogState extends State<_AppointmentDialog> {
                   border: OutlineInputBorder(),
                 ),
                 items: [
-                  const DropdownMenuItem(value: null, child: Text('Без клиента')),
-                  ..._customers.where((customer) => customer.id != null).map(
+                  const DropdownMenuItem(
+                    value: null,
+                    child: Text('Без клиента'),
+                  ),
+                  ..._customers
+                      .where((customer) => customer.id != null)
+                      .map(
                         (customer) => DropdownMenuItem(
                           value: customer.id,
-                          child: Text(customer.name, overflow: TextOverflow.ellipsis),
+                          child: Text(
+                            customer.name,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                       ),
                 ],
@@ -765,7 +1034,10 @@ class _AppointmentDialogState extends State<_AppointmentDialog> {
                     border: OutlineInputBorder(),
                   ),
                   items: [
-                    const DropdownMenuItem(value: null, child: Text('Без авто')),
+                    const DropdownMenuItem(
+                      value: null,
+                      child: Text('Без авто'),
+                    ),
                     ...vehicles.map(
                       (vehicle) => DropdownMenuItem(
                         value: vehicle.id,
@@ -789,7 +1061,10 @@ class _AppointmentDialogState extends State<_AppointmentDialog> {
                     border: OutlineInputBorder(),
                   ),
                   items: [
-                    const DropdownMenuItem(value: null, child: Text('Не назначен')),
+                    const DropdownMenuItem(
+                      value: null,
+                      child: Text('Не назначен'),
+                    ),
                     ..._masters.map(
                       (master) => DropdownMenuItem(
                         value: master['id']?.toString(),
@@ -861,17 +1136,17 @@ class _AppointmentSheetState extends State<_AppointmentSheet> {
       );
       if (!mounted) return;
       if (result.queued) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text(offlineSavedMessage)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text(offlineSavedMessage)));
       }
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userFacingApiMessage(e))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(userFacingApiMessage(e))));
     }
   }
 
@@ -887,9 +1162,9 @@ class _AppointmentSheetState extends State<_AppointmentSheet> {
       );
       if (!mounted) return;
       if (result.queued) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text(offlineSavedMessage)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text(offlineSavedMessage)));
       }
       Navigator.pop(context, true);
     } catch (e) {
@@ -987,7 +1262,9 @@ class _PostsDialogState extends State<_PostsDialog> {
   }
 
   Future<void> _rename(Map<String, dynamic> post) async {
-    final controller = TextEditingController(text: post['name']?.toString() ?? '');
+    final controller = TextEditingController(
+      text: post['name']?.toString() ?? '',
+    );
     final name = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -1008,7 +1285,8 @@ class _PostsDialogState extends State<_PostsDialog> {
             child: const Text('Отмена'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, controller.text.trim()),
+            onPressed: () =>
+                Navigator.pop(dialogContext, controller.text.trim()),
             child: const Text('Сохранить'),
           ),
         ],
@@ -1030,9 +1308,9 @@ class _PostsDialogState extends State<_PostsDialog> {
       });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userFacingApiMessage(e))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(userFacingApiMessage(e))));
     }
   }
 
@@ -1040,16 +1318,19 @@ class _PostsDialogState extends State<_PostsDialog> {
     final name = _name.text.trim();
     if (name.isEmpty) return;
     try {
-      final response = await _dio.post('/api/schedule/posts', data: {'name': name});
+      final response = await _dio.post(
+        '/api/schedule/posts',
+        data: {'name': name},
+      );
       setState(() {
         _posts.add(response.data as Map<String, dynamic>);
         _name.clear();
       });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userFacingApiMessage(e))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(userFacingApiMessage(e))));
     }
   }
 
