@@ -113,7 +113,7 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
 
   Future<void> _deleteVehicle(VehicleModel vehicle) async {
     if (!await ensureAuthenticated(context)) return;
-    if (!context.mounted) return;
+    if (!mounted) return;
     final confirm = await DialogHelper.showConfirmSimple(
       context: context,
       title: 'Удалить автомобиль?',
@@ -407,6 +407,7 @@ class _VehicleDialogState extends State<VehicleDialog> {
   late TextEditingController _notesController;
 
   int? _selectedCustomerId;
+  bool _isSaving = false;
   String _selectedFuelType = 'petrol';
   String _selectedTransmission = 'manual';
   List<Map<String, dynamic>> customers = [];
@@ -437,8 +438,15 @@ class _VehicleDialogState extends State<VehicleDialog> {
     _notesController = TextEditingController(text: v?.notes ?? '');
 
     _selectedCustomerId = v?.customerId ?? widget.preselectedCustomerId;
-    _selectedFuelType = v?.fuelType ?? 'petrol';
-    _selectedTransmission = v?.transmission ?? 'manual';
+
+    const validFuelTypes = ['petrol', 'diesel', 'electric', 'hybrid', 'gas'];
+    const validTransmissions = ['manual', 'automatic', 'robot', 'cvt'];
+    _selectedFuelType = validFuelTypes.contains(v?.fuelType)
+        ? v!.fuelType
+        : 'petrol';
+    _selectedTransmission = validTransmissions.contains(v?.transmission)
+        ? v!.transmission
+        : 'manual';
 
     // Если редактируем существующий автомобиль, пытаемся найти марку/модель в списках
     if (v != null && v.brand.isNotEmpty && v.model.isNotEmpty) {
@@ -452,16 +460,19 @@ class _VehicleDialogState extends State<VehicleDialog> {
   Future<void> _loadCustomers() async {
     try {
       final response = await dio.get('/api/customers');
+      if (!mounted) return;
       setState(() {
         customers = List<Map<String, dynamic>>.from(response.data);
         isLoadingCustomers = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => isLoadingCustomers = false);
     }
   }
 
   Future<void> _save() async {
+    if (_isSaving) return;
     if (!_formKey.currentState!.validate() ||
         _selectedCustomerId == null ||
         (selectedBrandName == null || selectedBrandName!.isEmpty) ||
@@ -475,33 +486,49 @@ class _VehicleDialogState extends State<VehicleDialog> {
       return;
     }
 
-    // Определяем год из поколения или из поля
+    setState(() => _isSaving = true);
+
+    // Определяем год из введенного значения или поколения
+    final parsedYear = int.tryParse(_yearController.text.trim());
     int year;
-    if (selectedGeneration != null &&
+    if (parsedYear != null &&
+        parsedYear > 1900 &&
+        parsedYear <= DateTime.now().year + 1) {
+      year = parsedYear;
+    } else if (selectedGeneration != null &&
         selectedGeneration!['year_from'] != null) {
       year = selectedGeneration!['year_from'] as int;
     } else {
-      year = int.parse(_yearController.text);
+      year = parsedYear ?? DateTime.now().year;
     }
+
+    final mileage = int.tryParse(_mileageController.text.trim()) ?? 0;
+    final enginePower = _enginePowerController.text.trim().isEmpty
+        ? null
+        : int.tryParse(_enginePowerController.text.trim());
 
     final data = {
       'customerId': _selectedCustomerId,
       'brand': selectedBrandName!.trim(),
       'model': selectedModelName!.trim(),
       'year': year,
-      'color': _colorController.text.isEmpty ? null : _colorController.text,
-      'plateNumber': _plateNumberController.text,
-      'vin': _vinController.text.isEmpty ? null : _vinController.text,
+      'color': _colorController.text.trim().isEmpty
+          ? null
+          : _colorController.text.trim(),
+      'plateNumber': _plateNumberController.text.trim(),
+      'vin': _vinController.text.trim().isEmpty
+          ? null
+          : _vinController.text.trim().toUpperCase(),
       'fuelType': _selectedFuelType,
       'transmission': _selectedTransmission,
-      'engineVolume': _engineVolumeController.text.isEmpty
+      'engineVolume': _engineVolumeController.text.trim().isEmpty
           ? null
-          : _engineVolumeController.text,
-      'enginePower': _enginePowerController.text.isEmpty
+          : _engineVolumeController.text.trim(),
+      'enginePower': enginePower,
+      'currentMileage': mileage,
+      'notes': _notesController.text.trim().isEmpty
           ? null
-          : int.parse(_enginePowerController.text),
-      'currentMileage': int.parse(_mileageController.text),
-      'notes': _notesController.text.isEmpty ? null : _notesController.text,
+          : _notesController.text.trim(),
     };
 
     try {
@@ -513,6 +540,7 @@ class _VehicleDialogState extends State<VehicleDialog> {
       widget.onSave();
     } catch (e) {
       if (mounted) {
+        setState(() => _isSaving = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(userFacingApiMessage(e, prefix: 'Ошибка сохранения')),
@@ -541,10 +569,25 @@ class _VehicleDialogState extends State<VehicleDialog> {
         ),
         leading: IconButton(
           icon: const Icon(Icons.close),
-          onPressed: () => Navigator.pop(context),
+          onPressed: _isSaving ? null : () => Navigator.pop(context),
         ),
         actions: [
-          FilledButton(onPressed: _save, child: const Text('Сохранить')),
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: FilledButton(
+              onPressed: _isSaving ? null : _save,
+              child: _isSaving
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('Сохранить'),
+            ),
+          ),
         ],
       ),
       body: Form(
@@ -581,10 +624,19 @@ class _VehicleDialogState extends State<VehicleDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: _isSaving ? null : () => Navigator.pop(context),
           child: const Text('Отмена'),
         ),
-        ElevatedButton(onPressed: _save, child: const Text('Сохранить')),
+        ElevatedButton(
+          onPressed: _isSaving ? null : _save,
+          child: _isSaving
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Сохранить'),
+        ),
       ],
     );
   }
@@ -652,8 +704,16 @@ class _VehicleDialogState extends State<VehicleDialog> {
                 controller: _yearController,
                 decoration: const InputDecoration(labelText: 'Год *'),
                 keyboardType: TextInputType.number,
-                validator: (value) =>
-                    value?.isEmpty ?? true ? 'Обязательно' : null,
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) return 'Обязательно';
+                  final parsed = int.tryParse(value.trim());
+                  if (parsed == null ||
+                      parsed < 1900 ||
+                      parsed > DateTime.now().year + 1) {
+                    return 'Укажите корректный год';
+                  }
+                  return null;
+                },
               ),
               const SizedBox(height: 16),
               TextFormField(
@@ -671,8 +731,16 @@ class _VehicleDialogState extends State<VehicleDialog> {
                 controller: _yearController,
                 decoration: const InputDecoration(labelText: 'Год *'),
                 keyboardType: TextInputType.number,
-                validator: (value) =>
-                    value?.isEmpty ?? true ? 'Обязательно' : null,
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) return 'Обязательно';
+                  final parsed = int.tryParse(value.trim());
+                  if (parsed == null ||
+                      parsed < 1900 ||
+                      parsed > DateTime.now().year + 1) {
+                    return 'Укажите корректный год';
+                  }
+                  return null;
+                },
               ),
             ),
             const SizedBox(width: 16),
@@ -692,7 +760,8 @@ class _VehicleDialogState extends State<VehicleDialog> {
     TextFormField(
       controller: _plateNumberController,
       decoration: const InputDecoration(labelText: 'Госномер *'),
-      validator: (value) => value?.isEmpty ?? true ? 'Обязательно' : null,
+      validator: (value) =>
+          value == null || value.trim().isEmpty ? 'Обязательно' : null,
     ),
     const SizedBox(height: 16),
 
@@ -700,6 +769,13 @@ class _VehicleDialogState extends State<VehicleDialog> {
     TextFormField(
       controller: _vinController,
       decoration: const InputDecoration(labelText: 'VIN'),
+      validator: (value) {
+        final text = value?.trim() ?? '';
+        if (text.isNotEmpty && text.length != 17) {
+          return 'VIN должен содержать 17 символов';
+        }
+        return null;
+      },
     ),
     const SizedBox(height: 16),
 
@@ -832,7 +908,12 @@ class _VehicleDialogState extends State<VehicleDialog> {
       controller: _mileageController,
       decoration: const InputDecoration(labelText: 'Текущий пробег (км) *'),
       keyboardType: TextInputType.number,
-      validator: (value) => value?.isEmpty ?? true ? 'Обязательно' : null,
+      validator: (value) {
+        if (value == null || value.trim().isEmpty) return 'Обязательно';
+        final parsed = int.tryParse(value.trim());
+        if (parsed == null || parsed < 0) return 'Укажите корректный пробег';
+        return null;
+      },
     ),
     const SizedBox(height: 16),
 

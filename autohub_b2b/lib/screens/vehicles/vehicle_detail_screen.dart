@@ -9,6 +9,9 @@ import 'package:dio/dio.dart';
 import 'package:intl/intl.dart';
 import 'package:autohub_b2b/services/api/api_user_message.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:autohub_b2b/utils/dialog_helper.dart';
+import 'package:autohub_b2b/utils/auth_guard.dart';
+import 'package:autohub_b2b/screens/vehicles/vehicles_screen.dart';
 
 class VehicleDetailScreen extends StatefulWidget {
   final int vehicleId;
@@ -315,6 +318,53 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
     }
   }
 
+  Future<void> _editVehicle() async {
+    if (vehicle == null) return;
+    await showVehicleDialog(
+      context,
+      vehicle: vehicle,
+      onSave: _loadVehicleDetails,
+    );
+  }
+
+  Future<void> _deleteVehicle() async {
+    if (vehicle == null) return;
+    if (!await ensureAuthenticated(context)) return;
+    if (!mounted) return;
+
+    final confirm = await DialogHelper.showConfirmSimple(
+      context: context,
+      title: 'Удалить автомобиль?',
+      message: 'Вы уверены, что хотите удалить ${vehicle!.displayName}?',
+      confirmText: 'Удалить',
+      isDestructive: true,
+    );
+
+    if (confirm == true) {
+      try {
+        await dio.delete('/api/vehicles/${widget.vehicleId}');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Автомобиль удален'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          Navigator.of(context).pop(true);
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(userFacingApiMessage(e, prefix: 'Ошибка удаления')),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -327,6 +377,31 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
             onPressed: _loadVehicleDetails,
             tooltip: 'Обновить',
           ),
+          if (vehicle != null) ...[
+            IconButton(
+              icon: const Icon(Icons.edit_outlined),
+              onPressed: _editVehicle,
+              tooltip: 'Изменить',
+            ),
+            PopupMenuButton<String>(
+              tooltip: 'Действия',
+              onSelected: (value) {
+                if (value == 'delete') _deleteVehicle();
+              },
+              itemBuilder: (context) => const [
+                PopupMenuItem(
+                  value: 'delete',
+                  child: Row(
+                    children: [
+                      Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                      SizedBox(width: 8),
+                      Text('Удалить', style: TextStyle(color: Colors.red)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
       body: isForbidden
