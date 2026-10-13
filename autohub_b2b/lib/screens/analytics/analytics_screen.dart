@@ -34,6 +34,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   List<Map<String, dynamic>> abcXyzItems = [];
   List<Map<String, dynamic>> staffReportItems = [];
 
+  /// Стоимость склада и мёртвый остаток. null — нет доступа или старый бэкенд.
+  Map<String, dynamic>? inventoryValue;
+
   String selectedPeriod = '30d';
 
   @override
@@ -108,6 +111,18 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         );
       } catch (_) {
         staffReportItems = [];
+      }
+
+      // Стоимость склада и мёртвый остаток (только владелец и менеджер)
+      try {
+        final inventoryResponse = await dio.get(
+          '/api/dashboard/inventory-value',
+        );
+        inventoryValue = inventoryResponse.data is Map
+            ? Map<String, dynamic>.from(inventoryResponse.data as Map)
+            : null;
+      } catch (_) {
+        inventoryValue = null;
       }
 
       setState(() {
@@ -301,6 +316,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           ],
           SizedBox(height: spacing),
 
+          if (inventoryValue != null) ...[
+            _buildInventoryValueCard(),
+            SizedBox(height: spacing),
+          ],
+
           if (abcXyzSummary != null || abcXyzItems.isNotEmpty)
             _buildAbcXyzCard(isMobile: isMobile),
           if (abcXyzSummary != null || abcXyzItems.isNotEmpty)
@@ -369,10 +389,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               SizedBox(width: spacing),
               Expanded(
                 child: _buildMetricCard(
-                  'Прибыль',
+                  'Валовая прибыль',
                   currencyFormatter.format(profit['amount']),
                   profit['margin']?.toDouble() ?? 0.0,
                   isPercent: true,
+                  withoutCost: (profit['itemsWithoutCost'] as num?)?.toInt() ?? 0,
                   isMobile: true,
                 ),
               ),
@@ -410,10 +431,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         SizedBox(width: spacing),
         Expanded(
           child: _buildMetricCard(
-            'Прибыль',
+            'Валовая прибыль',
             currencyFormatter.format(profit['amount']),
             profit['margin']?.toDouble() ?? 0.0,
             isPercent: true,
+            withoutCost: (profit['itemsWithoutCost'] as num?)?.toInt() ?? 0,
           ),
         ),
       ],
@@ -425,13 +447,17 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     String value,
     double change, {
     bool isPercent = false,
+    // Проданные позиции без закупочной цены: прибыль по ним не посчитана.
+    int withoutCost = 0,
     bool isMobile = false,
   }) {
     // Для прибыли в change приходит маржа, а не динамика — показываем её как есть.
     final String note;
     final Color noteColor;
     if (isPercent) {
-      note = 'маржа ${change.toStringAsFixed(1)}%';
+      note = withoutCost > 0
+          ? 'маржа ${change.toStringAsFixed(1)}% · без закупа: $withoutCost'
+          : 'маржа ${change.toStringAsFixed(1)}%';
       noteColor = AppTheme.textSecondary;
     } else if (change.abs() < 0.05) {
       note = 'без изменений';
@@ -749,6 +775,163 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildInventoryValueCard() {
+    final money = NumberFormat.currency(
+      locale: 'ru_RU',
+      symbol: '₸',
+      decimalDigits: 0,
+    );
+    final totals = Map<String, dynamic>.from(inventoryValue!['totals'] as Map);
+    final aging = (inventoryValue!['aging'] as List)
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+    final dead = Map<String, dynamic>.from(inventoryValue!['deadStock'] as Map);
+    final top = (dead['top'] as List)
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+    final deadDays = inventoryValue!['deadDays'] ?? 90;
+    final totalPrice = (totals['priceValue'] as num?)?.toDouble() ?? 0;
+    final withoutCost = (totals['withoutCost'] as num?)?.toInt() ?? 0;
+
+    const labels = {
+      '0-30': 'до 30 дней',
+      '31-90': '31–90 дней',
+      '91-180': '91–180 дней',
+      '181-365': '181–365 дней',
+      '365+': 'больше года',
+    };
+    Color bucketColor(String bucket) => switch (bucket) {
+      '0-30' => AppTheme.successColor,
+      '31-90' => AppTheme.primaryColor,
+      '91-180' => AppTheme.warningColor,
+      _ => AppTheme.errorColor,
+    };
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Склад: деньги в остатке', style: AppTheme.sectionTitle),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 24,
+              runSpacing: 8,
+              children: [
+                _inventoryFigure('По цене продажи', money.format(totalPrice)),
+                _inventoryFigure(
+                  'По закупке',
+                  money.format(totals['costValue'] ?? 0),
+                ),
+                _inventoryFigure('Позиций', '${totals['items'] ?? 0}'),
+              ],
+            ),
+            if (withoutCost > 0) ...[
+              const SizedBox(height: 6),
+              Text(
+                'У $withoutCost поз. нет закупочной цены — стоимость по закупке занижена',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+            ],
+            const SizedBox(height: 16),
+            const Text(
+              'Сколько лежит без движения',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            for (final bucket in aging) ...[
+              Row(
+                children: [
+                  SizedBox(
+                    width: 110,
+                    child: Text(
+                      labels[bucket['bucket']] ?? '${bucket['bucket']}',
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                  ),
+                  Expanded(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: totalPrice > 0
+                            ? ((bucket['priceValue'] as num).toDouble() /
+                                  totalPrice)
+                            : 0,
+                        minHeight: 8,
+                        backgroundColor: AppTheme.borderColor,
+                        color: bucketColor(bucket['bucket'] as String),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  SizedBox(
+                    width: 110,
+                    child: Text(
+                      money.format(bucket['priceValue'] ?? 0),
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+            ],
+            const SizedBox(height: 12),
+            Text(
+              'Мёртвый остаток (без движения $deadDays+ дней): '
+              '${dead['items']} поз. на ${money.format(dead['priceValue'] ?? 0)}',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            if (top.isEmpty)
+              const Padding(
+                padding: EdgeInsets.only(top: 6),
+                child: Text(
+                  'Залежавшихся деталей нет',
+                  style: TextStyle(color: AppTheme.textSecondary),
+                ),
+              )
+            else
+              for (final item in top.take(10))
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: Text(
+                    '${item['name']}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  subtitle: Text(
+                    '${item['idleDays']} дн. без движения · ${item['quantity']} шт',
+                  ),
+                  trailing: Text(money.format(item['priceValue'] ?? 0)),
+                ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _inventoryFigure(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+        ),
+      ],
     );
   }
 

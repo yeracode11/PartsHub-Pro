@@ -27,6 +27,7 @@ import 'package:autohub_b2b/screens/crm/crm_screen.dart';
 import 'package:autohub_b2b/screens/analytics/analytics_screen.dart';
 import 'package:autohub_b2b/screens/whatsapp/whatsapp_screen.dart';
 import 'package:autohub_b2b/screens/vehicles/vehicles_screen.dart';
+import 'package:autohub_b2b/screens/settings/work_catalog_screen.dart';
 import 'package:autohub_b2b/screens/profile/profile_screen.dart';
 import 'package:autohub_b2b/screens/settings/settings_screen.dart';
 import 'package:autohub_b2b/screens/schedule/schedule_screen.dart';
@@ -176,6 +177,7 @@ class _MainScreenState extends State<MainScreen> {
     const SettingsScreen(),
     const ScheduleScreen(),
     const PayrollScreen(),
+    const WorkCatalogScreen(embedded: true), // 10 — Услуги
   ];
 
   @override
@@ -229,6 +231,11 @@ class _MainScreenState extends State<MainScreen> {
         authState.user.businessType == BusinessType.dismantler) {
       return false;
     }
+    // Услуги (работы) — у автосервиса и мойки; авторазбор продаёт только запчасти.
+    if (section == 'services' &&
+        authState.user.businessType == BusinessType.dismantler) {
+      return false;
+    }
 
     if (_userRole == null) return true;
 
@@ -241,7 +248,7 @@ class _MainScreenState extends State<MainScreen> {
     }
 
     if (_userRole == 'UserRole.sto') {
-      return section == 'schedule';
+      return section == 'schedule' || section == 'services';
     }
 
     return true;
@@ -324,6 +331,8 @@ class _MainScreenState extends State<MainScreen> {
         return 'Запись';
       case 9:
         return 'Зарплата';
+      case 10:
+        return 'Услуги';
       default:
         return 'AutoHub B2B';
     }
@@ -499,6 +508,13 @@ class _MainScreenState extends State<MainScreen> {
                                   selectedIcon: Icons.directions_car,
                                   label: 'Автомобили',
                                   index: 4,
+                                ),
+                              if (_canAccessSection('services', authState))
+                                _buildNavItem(
+                                  icon: Icons.handyman_outlined,
+                                  selectedIcon: Icons.handyman,
+                                  label: 'Услуги',
+                                  index: 10,
                                 ),
                               if (_canAccessSection('analytics', authState))
                                 _buildNavItem(
@@ -798,6 +814,14 @@ class _MainScreenState extends State<MainScreen> {
                     index: 4,
                     context: context,
                   ),
+                if (_canAccessSection('services', authState))
+                  _buildDrawerNavItem(
+                    icon: Icons.handyman_outlined,
+                    selectedIcon: Icons.handyman,
+                    label: 'Услуги',
+                    index: 10,
+                    context: context,
+                  ),
                 if (_canAccessSection('analytics', authState))
                   _buildDrawerNavItem(
                     icon: Icons.analytics_outlined,
@@ -989,8 +1013,9 @@ class _MainScreenState extends State<MainScreen> {
         )
         .toList();
 
-    // Если нет доступных разделов, возвращаем пустой виджет
-    if (mainSections.isEmpty) {
+    // BottomNavigationBar требует минимум два пункта. У ролей с одним разделом
+    // (СТО — только «Запись», мастер — только «Зарплата») панели нет, меню — через ☰.
+    if (mainSections.length < 2) {
       return const SizedBox.shrink();
     }
 

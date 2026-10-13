@@ -14,7 +14,8 @@ import 'package:autohub_b2b/screens/legal/privacy_policy_screen.dart';
 import 'package:autohub_b2b/screens/legal/terms_of_use_screen.dart';
 import 'package:autohub_b2b/screens/onboarding/onboarding_screen.dart';
 import 'package:autohub_b2b/screens/profile/profile_screen.dart';
-import 'package:autohub_b2b/screens/settings/work_catalog_screen.dart';
+import 'package:autohub_b2b/screens/settings/service_reminders_screen.dart';
+import 'package:autohub_b2b/models/user_model.dart';
 import 'package:autohub_b2b/screens/warehouse/printer_settings_screen.dart';
 import 'package:autohub_b2b/utils/dialog_helper.dart';
 
@@ -108,20 +109,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
               _sectionHeader('Рабочее место'),
               _card(context, [
-                ListTile(
-                  leading: const Icon(Icons.handyman_outlined),
-                  title: const Text('Справочник работ'),
-                  subtitle: const Text('Нормо-часы и ставки для заказ-нарядов'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () {
-                    Navigator.of(context).push<void>(
-                      MaterialPageRoute<void>(
-                        builder: (context) => const WorkCatalogScreen(),
-                      ),
-                    );
-                  },
-                ),
-                const Divider(height: 1),
+                if (authState is AuthAuthenticated &&
+                    authState.user.businessType != BusinessType.dismantler) ...[
+                  ListTile(
+                    leading: const Icon(Icons.notifications_active_outlined),
+                    title: const Text('Напоминания о ТО'),
+                    subtitle: const Text('WhatsApp клиентам перед датой ТО'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () {
+                      Navigator.of(context).push<void>(
+                        MaterialPageRoute<void>(
+                          builder: (context) => ServiceRemindersScreen(
+                            canEdit: authState.user.role == UserRole.owner,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                  const Divider(height: 1),
+                ],
                 ListTile(
                   leading: const Icon(Icons.print_outlined),
                   title: const Text('Принтер этикеток'),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/services/api/api_client.dart';
 import 'package:autohub_b2b/models/vehicle_model.dart';
@@ -189,9 +190,12 @@ class _ServiceRemindersWidgetState extends State<ServiceRemindersWidget> {
             children: [
               if (vehicle.daysUntilService != null)
                 Text(
-                  vehicle.needsService
-                      ? 'Просрочено!'
-                      : 'Через ${vehicle.daysUntilService} дней',
+                  // «Нужно ТО» может быть по пробегу при будущей дате — смотрим именно на дни.
+                  vehicle.daysUntilService! < 0
+                      ? 'Просрочено на ${-vehicle.daysUntilService!} дн.'
+                      : vehicle.daysUntilService == 0
+                      ? 'Сегодня'
+                      : 'Через ${vehicle.daysUntilService} дн.',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
@@ -202,7 +206,9 @@ class _ServiceRemindersWidgetState extends State<ServiceRemindersWidget> {
                 ),
               if (vehicle.kmUntilService != null)
                 Text(
-                  '${vehicle.kmUntilService} км до ТО',
+                  vehicle.kmUntilService! <= 0
+                      ? 'Пробег превышен'
+                      : '${NumberFormat('#,###', 'ru_RU').format(vehicle.kmUntilService)} км до ТО',
                   style: TextStyle(
                     fontSize: 12,
                     color: AppTheme.textSecondary,

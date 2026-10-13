@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:autohub_b2b/utils/business_features.dart';
 import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/models/order_model.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -33,6 +34,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   List<WorkStageModel> workStages = [];
   bool _canSeeWorkOrder = false;
 
+  /// Название организации для документов клиенту (смета, акт, чек).
+  String? _companyName;
+  late EstimateApprovalModel? _approval = widget.order.estimateApproval;
+  bool _approvalSaving = false;
+
   @override
   void initState() {
     super.initState();
@@ -49,6 +55,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
   Future<void> _loadBusinessType() async {
     final userData = await SecureStorageService().getUserData();
+    final organization = userData?['organization'];
+    _companyName = organization is Map ? organization['name']?.toString() : null;
     final rawType = userData?['businessType']?.toString();
     final normalized = _normalizeBusinessType(rawType);
     final canSee = normalized == 'service';
@@ -213,25 +221,162 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   List<Widget> _documentActions() {
-    return [
-      if (_canSeeWorkOrder && (widget.order.works?.isNotEmpty ?? false))
+    final hasWorks =
+        _canSeeWorkOrder && (widget.order.works?.isNotEmpty ?? false);
+    void open(ReceiptDocumentData document) =>
+        ReceiptPreviewScreen.open(context, document);
+
+    if (!hasWorks) {
+      return [
         IconButton(
-          icon: const Icon(Icons.description_outlined),
-          tooltip: 'Заказ-наряд',
-          onPressed: () => ReceiptPreviewScreen.open(
-            context,
-            ReceiptDocumentData.workOrder(widget.order),
+          icon: const Icon(Icons.picture_as_pdf_outlined),
+          tooltip: 'Скачать / печать чек',
+          onPressed: () => open(
+            ReceiptDocumentData.fromOrder(
+              widget.order,
+              companyName: _companyName,
+            ),
           ),
         ),
-      IconButton(
-        icon: const Icon(Icons.picture_as_pdf_outlined),
-        tooltip: 'Скачать / печать чек',
-        onPressed: () => ReceiptPreviewScreen.open(
-          context,
-          ReceiptDocumentData.fromOrder(widget.order),
-        ),
+      ];
+    }
+    return [
+      PopupMenuButton<String>(
+        tooltip: 'Документы',
+        icon: const Icon(Icons.description_outlined),
+        onSelected: (value) {
+          final order = widget.order;
+          final name = _companyName;
+          switch (value) {
+            case 'estimate':
+              open(ReceiptDocumentData.estimate(order, companyName: name));
+            case 'workOrder':
+              open(ReceiptDocumentData.workOrder(order, companyName: name));
+            case 'act':
+              open(ReceiptDocumentData.act(order, companyName: name));
+            case 'receipt':
+              open(ReceiptDocumentData.fromOrder(order, companyName: name));
+          }
+        },
+        itemBuilder: (context) => const [
+          PopupMenuItem(value: 'estimate', child: Text('Смета')),
+          PopupMenuItem(value: 'workOrder', child: Text('Заказ-наряд')),
+          PopupMenuItem(value: 'act', child: Text('Акт выполненных работ')),
+          PopupMenuItem(value: 'receipt', child: Text('Чек')),
+        ],
       ),
     ];
+  }
+
+  Future<void> _approveEstimate() async {
+    final result = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (context) => const _EstimateApprovalDialog(),
+    );
+    if (result == null || widget.order.id == null) return;
+    setState(() => _approvalSaving = true);
+    try {
+      final response = await widget.dio.post(
+        '/api/orders/${widget.order.id}/estimate-approval',
+        data: result,
+      );
+      if (!mounted) return;
+      setState(() {
+        _approval = EstimateApprovalModel.fromOrderJson(
+          Map<String, dynamic>.from(response.data as Map),
+        );
+      });
+      widget.onPaymentsChanged?.call();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(userFacingApiMessage(e, prefix: 'Не сохранено')),
+          backgroundColor: AppTheme.errorColor,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _approvalSaving = false);
+    }
+  }
+
+  Future<void> _revokeEstimateApproval() async {
+    if (widget.order.id == null) return;
+    setState(() => _approvalSaving = true);
+    try {
+      await widget.dio.delete('/api/orders/${widget.order.id}/estimate-approval');
+      if (!mounted) return;
+      setState(() => _approval = null);
+      widget.onPaymentsChanged?.call();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(userFacingApiMessage(e, prefix: 'Не сохранено')),
+          backgroundColor: AppTheme.errorColor,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _approvalSaving = false);
+    }
+  }
+
+  /// Согласование сметы: до начала работ клиент подтверждает сумму.
+  Widget _buildApprovalCard(NumberFormat numberFormat) {
+    final approval = _approval;
+    final changed =
+        approval != null && (approval.approvedTotal - widget.order.total).abs() >= 0.01;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Согласование сметы', style: AppTheme.sectionTitle),
+            const SizedBox(height: 8),
+            if (approval == null) ...[
+              const Text(
+                'Отправьте клиенту смету (Документы → Смета → поделиться) '
+                'и отметьте, когда он согласует сумму.',
+                style: TextStyle(color: AppTheme.textSecondary),
+              ),
+              const SizedBox(height: 12),
+              FilledButton(
+                onPressed: _approvalSaving ? null : _approveEstimate,
+                child: const Text('Клиент согласовал'),
+              ),
+            ] else ...[
+              Text(
+                'Согласовано ${DateFormat('dd.MM.yyyy HH:mm').format(approval.approvedAt)} '
+                '${approval.methodLabel} · ${numberFormat.format(approval.approvedTotal)} ₸',
+                style: const TextStyle(
+                  color: AppTheme.successColor,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              if (approval.note != null && approval.note!.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(approval.note!),
+              ],
+              if (changed) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Сумма изменилась после согласования: было '
+                  '${numberFormat.format(approval.approvedTotal)} ₸, сейчас '
+                  '${numberFormat.format(widget.order.total)} ₸. Согласуйте заново.',
+                  style: const TextStyle(color: AppTheme.warningColor),
+                ),
+              ],
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: _approvalSaving ? null : _revokeEstimateApproval,
+                child: const Text('Снять отметку'),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildWorksCard(NumberFormat numberFormat) {
@@ -657,7 +802,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                               ?.copyWith(color: AppTheme.textSecondary),
                         ),
                       ],
-                      if (widget.order.vehicle != null) ...[
+                      if (widget.order.vehicle != null &&
+                          usesClientVehicles(context)) ...[
                         const SizedBox(height: 12),
                         InkWell(
                           onTap: () => Navigator.push(
@@ -728,6 +874,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 widget.order.works!.isNotEmpty) ...[
               const SizedBox(height: 24),
               _buildWorksCard(numberFormat),
+              if (_canSeeWorkOrder && widget.order.status != 'cancelled') ...[
+                const SizedBox(height: 24),
+                _buildApprovalCard(numberFormat),
+              ],
             ],
 
             const SizedBox(height: 24),
@@ -931,6 +1081,73 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _EstimateApprovalDialog extends StatefulWidget {
+  const _EstimateApprovalDialog();
+
+  @override
+  State<_EstimateApprovalDialog> createState() => _EstimateApprovalDialogState();
+}
+
+class _EstimateApprovalDialogState extends State<_EstimateApprovalDialog> {
+  String _method = 'phone';
+  final _note = TextEditingController();
+
+  @override
+  void dispose() {
+    _note.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Клиент согласовал смету'),
+      content: SizedBox(
+        width: 400,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SegmentedButton<String>(
+              showSelectedIcon: false,
+              segments: const [
+                ButtonSegment(value: 'phone', label: Text('По телефону')),
+                ButtonSegment(value: 'whatsapp', label: Text('WhatsApp')),
+                ButtonSegment(value: 'in_person', label: Text('Лично')),
+              ],
+              selected: {_method},
+              onSelectionChanged: (value) =>
+                  setState(() => _method = value.first),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _note,
+              maxLines: 2,
+              decoration: const InputDecoration(
+                labelText: 'Комментарий',
+                hintText: 'Например: согласовал по телефону, просил позвонить',
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Отмена'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, {
+            'method': _method,
+            'note': _note.text.trim(),
+          }),
+          child: const Text('Сохранить'),
+        ),
+      ],
     );
   }
 }

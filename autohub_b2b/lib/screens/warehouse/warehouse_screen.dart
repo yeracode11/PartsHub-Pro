@@ -70,8 +70,21 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
     'sku': 'sku',
     'артикул': 'sku',
     'код': 'sku',
-    'штрихкод': 'sku',
-    'barcode': 'sku',
+    'штрихкод': 'barcode',
+    'barcode': 'barcode',
+    'ean': 'barcode',
+    'oem': 'oem',
+    'оем': 'oem',
+    'номероем': 'oem',
+    'оригинальныйномер': 'oem',
+    'brand': 'brand',
+    'бренд': 'brand',
+    'производитель': 'brand',
+    'purchasecost': 'purchaseCost',
+    'закупочнаяцена': 'purchaseCost',
+    'закупка': 'purchaseCost',
+    'себестоимость': 'purchaseCost',
+    'внутреннийкод': 'internalCode',
     'category': 'category',
     'категория': 'category',
     'price': 'price',
@@ -296,6 +309,30 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
         return;
       }
 
+      // Новый путь: проверка и запись на сервере одним пакетом, без дублей.
+      final preview = await _serverImport(parseResult.items, dryRun: true);
+      if (!mounted) return;
+      if (preview != null) {
+        final confirmed = await _confirmServerImport(
+          fileName: file.name,
+          preview: preview,
+          localWarnings: parseResult.warnings,
+        );
+        if (confirmed != true || !mounted) return;
+        final result = await _serverImport(parseResult.items, dryRun: false);
+        if (!mounted || result == null) return;
+        await _loadItems();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Импортировано товаров: ${result['created']}'),
+            backgroundColor: AppTheme.successColor,
+          ),
+        );
+        return;
+      }
+
+      // Старый сервер без /api/items/import — поштучная загрузка как раньше.
       final confirmed = await _confirmExcelImport(
         fileName: file.name,
         parseResult: parseResult,
@@ -330,6 +367,106 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
         );
       }
     }
+  }
+
+  /// POST /api/items/import. null — сервер без этого адреса (старая версия).
+  Future<Map<String, dynamic>?> _serverImport(
+    List<Map<String, dynamic>> rows, {
+    required bool dryRun,
+  }) async {
+    try {
+      final response = await dio.post(
+        '/api/items/import',
+        data: {'rows': rows, 'dryRun': dryRun},
+      );
+      return Map<String, dynamic>.from(response.data as Map);
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) return null;
+      rethrow;
+    }
+  }
+
+  Future<bool?> _confirmServerImport({
+    required String fileName,
+    required Map<String, dynamic> preview,
+    required List<String> localWarnings,
+  }) {
+    final rows = (preview['rows'] as List)
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+    final problems = rows
+        .where((r) => r['status'] != 'new' || r['warning'] != null)
+        .toList();
+    final toCreate = (preview['toCreate'] as num?)?.toInt() ?? 0;
+
+    String describe(Map<String, dynamic> r) {
+      final what = r['status'] == 'invalid'
+          ? 'ошибка'
+          : r['status'] == 'duplicate'
+          ? 'пропуск'
+          : 'внимание';
+      final reason = r['message'] ?? r['warning'] ?? '';
+      final name = (r['name'] as String?)?.isNotEmpty == true
+          ? ' «${r['name']}»'
+          : '';
+      return 'Строка ${r['row']}$name — $what: $reason';
+    }
+
+    return showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Импорт из Excel'),
+        content: SizedBox(
+          width: 460,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Файл: $fileName'),
+                const SizedBox(height: 12),
+                Text(
+                  'Будет добавлено: $toCreate',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                Text('Уже есть на складе или повтор: ${preview['duplicates']}'),
+                Text('С ошибками: ${preview['invalid']}'),
+                if (problems.isNotEmpty || localWarnings.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  for (final w in localWarnings.take(5))
+                    Text('• $w', style: const TextStyle(fontSize: 13)),
+                  for (final r in problems.take(20))
+                    Text('• ${describe(r)}', style: const TextStyle(fontSize: 13)),
+                  if (problems.length > 20)
+                    Text(
+                      '• …и ещё ${problems.length - 20}',
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                ],
+                const SizedBox(height: 12),
+                const Text(
+                  'Колонки: Название*, Артикул, Штрихкод, OEM, Бренд, Категория, '
+                  'Цена, Закупочная цена, Количество, Состояние, Склад, Ячейка, Описание',
+                  style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: toCreate == 0
+                ? null
+                : () => Navigator.pop(dialogContext, true),
+            child: Text('Добавить $toCreate'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<bool?> _confirmExcelImport({
@@ -530,6 +667,16 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
           case 'description':
             data['description'] = value;
             break;
+          case 'barcode':
+          case 'oem':
+          case 'brand':
+          case 'internalCode':
+            data[key] = value;
+            break;
+          case 'purchaseCost':
+            final cost = _parseDouble(value);
+            if (cost != null) data['purchaseCost'] = cost;
+            break;
           case 'warehouseCell':
             data['warehouseCell'] = value;
             break;
@@ -555,6 +702,8 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
       data['price'] ??= 0;
       data['quantity'] ??= 0;
       data['condition'] ??= 'new';
+      // Номер строки Excel — для отчёта сервера по строкам.
+      data['row'] = i + 1;
 
       itemsToImport.add(data);
     }

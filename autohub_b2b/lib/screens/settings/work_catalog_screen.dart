@@ -4,10 +4,17 @@ import 'package:intl/intl.dart';
 import 'package:autohub_b2b/models/order_model.dart';
 import 'package:autohub_b2b/services/api/api_client.dart';
 import 'package:autohub_b2b/services/api/api_user_message.dart';
+import 'package:autohub_b2b/core/theme.dart';
+import 'package:autohub_b2b/widgets/add_action_button.dart';
+import 'package:autohub_b2b/widgets/shell_actions.dart';
 
-/// Справочник работ организации: название, нормо-часы и ставка за нормо-час.
+/// Справочник услуг (работ) организации: название, нормо-часы и ставка за нормо-час.
+/// Раздел «Услуги» в меню автосервиса ([embedded] — внутри оболочки main.dart).
 class WorkCatalogScreen extends StatefulWidget {
-  const WorkCatalogScreen({super.key});
+  const WorkCatalogScreen({super.key, this.embedded = false});
+
+  /// Внутри оболочки: на телефоне шапка — оболочки, «+» уходит в неё.
+  final bool embedded;
 
   @override
   State<WorkCatalogScreen> createState() => _WorkCatalogScreenState();
@@ -33,7 +40,9 @@ class _WorkCatalogScreenState extends State<WorkCatalogScreen> {
     try {
       final response = await _dio.get('/api/works');
       final list = (response.data as List)
-          .map((item) => WorkCatalogModel.fromJson(item as Map<String, dynamic>))
+          .map(
+            (item) => WorkCatalogModel.fromJson(item as Map<String, dynamic>),
+          )
           .toList();
       if (!mounted) return;
       setState(() {
@@ -61,7 +70,7 @@ class _WorkCatalogScreenState extends State<WorkCatalogScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Удалить работу?'),
+        title: const Text('Удалить услугу?'),
         content: Text(work.name),
         actions: [
           TextButton(
@@ -82,7 +91,9 @@ class _WorkCatalogScreenState extends State<WorkCatalogScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка удаления'))),
+        SnackBar(
+          content: Text(userFacingApiMessage(e, prefix: 'Ошибка удаления')),
+        ),
       );
     }
   }
@@ -90,66 +101,94 @@ class _WorkCatalogScreenState extends State<WorkCatalogScreen> {
   @override
   Widget build(BuildContext context) {
     final money = NumberFormat('#,###', 'ru_RU');
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Справочник работ'),
-        actions: [
-          IconButton(
-            tooltip: 'Добавить работу',
-            onPressed: () => _edit(),
-            icon: const Icon(Icons.add),
-          ),
-        ],
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-              ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(_error!),
-                      const SizedBox(height: 8),
-                      OutlinedButton(onPressed: _load, child: const Text('Повторить')),
-                    ],
-                  ),
-                )
-              : _works.isEmpty
-                  ? const Center(child: Text('Работ пока нет. Добавьте первую.'))
-                  : ListView.separated(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      itemCount: _works.length,
-                      separatorBuilder: (_, _) => const Divider(height: 1),
-                      itemBuilder: (context, index) {
-                        final work = _works[index];
-                        return ListTile(
-                          title: Text(work.name),
-                          subtitle: Text(
-                            '${work.normHours} н/ч × ${money.format(work.pricePerHour)} ₸',
-                          ),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                '${money.format(work.price)} ₸',
-                                style: Theme.of(context).textTheme.titleSmall,
-                              ),
-                              PopupMenuButton<String>(
-                                onSelected: (value) {
-                                  if (value == 'edit') _edit(work);
-                                  if (value == 'delete') _delete(work);
-                                },
-                                itemBuilder: (_) => const [
-                                  PopupMenuItem(value: 'edit', child: Text('Изменить')),
-                                  PopupMenuItem(value: 'delete', child: Text('Удалить')),
-                                ],
-                              ),
-                            ],
-                          ),
-                          onTap: () => _edit(work),
-                        );
-                      },
+    final shellPhone = widget.embedded && !AddActionButton.isWide(context);
+    final addAction = AddActionButton(
+      tooltip: 'Добавить услугу',
+      onPressed: () => _edit(),
+    );
+    return ShellActions(
+      actions: shellPhone ? [addAction] : const [],
+      child: Scaffold(
+        appBar: shellPhone
+            ? null
+            : AppBar(
+                title: const Text('Услуги'),
+                actions: [addAction, const SizedBox(width: 8)],
+              ),
+        body: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : _error != null
+            ? Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(_error!),
+                    const SizedBox(height: 8),
+                    OutlinedButton(
+                      onPressed: _load,
+                      child: const Text('Повторить'),
                     ),
+                  ],
+                ),
+              )
+            : _works.isEmpty
+            ? Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'Услуг пока нет',
+                      style: TextStyle(color: AppTheme.textSecondary),
+                    ),
+                    const SizedBox(height: 12),
+                    FilledButton(
+                      onPressed: () => _edit(),
+                      child: const Text('Добавить услугу'),
+                    ),
+                  ],
+                ),
+              )
+            : ListView.separated(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                itemCount: _works.length,
+                separatorBuilder: (_, _) => const Divider(height: 1),
+                itemBuilder: (context, index) {
+                  final work = _works[index];
+                  return ListTile(
+                    title: Text(work.name),
+                    subtitle: Text(
+                      '${work.normHours} н/ч × ${money.format(work.pricePerHour)} ₸',
+                    ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '${money.format(work.price)} ₸',
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
+                        PopupMenuButton<String>(
+                          onSelected: (value) {
+                            if (value == 'edit') _edit(work);
+                            if (value == 'delete') _delete(work);
+                          },
+                          itemBuilder: (_) => const [
+                            PopupMenuItem(
+                              value: 'edit',
+                              child: Text('Изменить'),
+                            ),
+                            PopupMenuItem(
+                              value: 'delete',
+                              child: Text('Удалить'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    onTap: () => _edit(work),
+                  );
+                },
+              ),
+      ),
     );
   }
 }
@@ -191,9 +230,15 @@ class _WorkCatalogDialogState extends State<_WorkCatalogDialog> {
     final name = _name.text.trim();
     final hours = double.tryParse(_hours.text.replaceAll(',', '.'));
     final rate = double.tryParse(_rate.text.replaceAll(',', '.'));
-    if (name.isEmpty || hours == null || hours <= 0 || rate == null || rate < 0) {
+    if (name.isEmpty ||
+        hours == null ||
+        hours <= 0 ||
+        rate == null ||
+        rate < 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Проверьте название, нормо-часы и ставку')),
+        const SnackBar(
+          content: Text('Проверьте название, нормо-часы и ставку'),
+        ),
       );
       return;
     }
@@ -210,7 +255,9 @@ class _WorkCatalogDialogState extends State<_WorkCatalogDialog> {
       if (!mounted) return;
       setState(() => _saving = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка сохранения'))),
+        SnackBar(
+          content: Text(userFacingApiMessage(e, prefix: 'Ошибка сохранения')),
+        ),
       );
     }
   }
@@ -218,7 +265,7 @@ class _WorkCatalogDialogState extends State<_WorkCatalogDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(widget.work == null ? 'Новая работа' : 'Работа'),
+      title: Text(widget.work == null ? 'Новая услуга' : 'Услуга'),
       content: SizedBox(
         width: 420,
         child: Column(
@@ -238,7 +285,9 @@ class _WorkCatalogDialogState extends State<_WorkCatalogDialog> {
                 Expanded(
                   child: TextField(
                     controller: _hours,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
                     decoration: const InputDecoration(
                       labelText: 'Нормо-часы',
                       border: OutlineInputBorder(),
@@ -249,7 +298,9 @@ class _WorkCatalogDialogState extends State<_WorkCatalogDialog> {
                 Expanded(
                   child: TextField(
                     controller: _rate,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
                     decoration: const InputDecoration(
                       labelText: 'Ставка, ₸/н·ч',
                       border: OutlineInputBorder(),

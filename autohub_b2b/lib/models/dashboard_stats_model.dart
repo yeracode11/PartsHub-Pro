@@ -4,6 +4,12 @@ import 'package:equatable/equatable.dart';
 class DashboardStats extends Equatable {
   final double totalRevenue;
   final double monthlyRevenue;
+
+  /// Поступило денег за месяц (оплаты минус возвраты). null — старый бэкенд без поля.
+  final double? monthlyPaid;
+
+  /// Долги клиентов: продано, но не оплачено. null — старый бэкенд без поля.
+  final double? receivables;
   final int inventoryCount;
   final int activeOrdersCount;
   final String period;
@@ -11,6 +17,8 @@ class DashboardStats extends Equatable {
   const DashboardStats({
     required this.totalRevenue,
     required this.monthlyRevenue,
+    this.monthlyPaid,
+    this.receivables,
     required this.inventoryCount,
     required this.activeOrdersCount,
     required this.period,
@@ -20,8 +28,10 @@ class DashboardStats extends Equatable {
     return DashboardStats(
       totalRevenue: (json['totalRevenue'] as num?)?.toDouble() ?? 0.0,
       monthlyRevenue: (json['monthlyRevenue'] as num?)?.toDouble() ?? 0.0,
-      inventoryCount: (json['inventoryCount'] as int?) ?? 0,
-      activeOrdersCount: (json['activeOrdersCount'] as int?) ?? 0,
+      monthlyPaid: (json['monthlyPaid'] as num?)?.toDouble(),
+      receivables: (json['receivables'] as num?)?.toDouble(),
+      inventoryCount: (json['inventoryCount'] as num?)?.toInt() ?? 0,
+      activeOrdersCount: (json['activeOrdersCount'] as num?)?.toInt() ?? 0,
       period: json['period'] as String? ?? '',
     );
   }
@@ -30,6 +40,8 @@ class DashboardStats extends Equatable {
     return {
       'totalRevenue': totalRevenue,
       'monthlyRevenue': monthlyRevenue,
+      'monthlyPaid': monthlyPaid,
+      'receivables': receivables,
       'inventoryCount': inventoryCount,
       'activeOrdersCount': activeOrdersCount,
       'period': period,
@@ -51,6 +63,8 @@ class DashboardStats extends Equatable {
   List<Object?> get props => [
         totalRevenue,
         monthlyRevenue,
+        monthlyPaid,
+        receivables,
         inventoryCount,
         activeOrdersCount,
         period,

@@ -27,6 +27,8 @@ class ReceiptDocumentData {
     this.paymentInfo,
     this.notes,
     this.vehicleInfo,
+    this.statement,
+    this.signatures = const [],
     this.currencySymbol = '₸',
     this.logoAssetPath = 'assets/icons/auto-plus-logo.png',
   });
@@ -42,6 +44,12 @@ class ReceiptDocumentData {
   final String? paymentInfo;
   final String? notes;
   final String? vehicleInfo;
+
+  /// Текст перед подписями: «Работы выполнены в полном объёме…».
+  final String? statement;
+
+  /// Подписи внизу документа: «Клиент», «Исполнитель»…
+  final List<String> signatures;
   final String logoAssetPath;
 
   /// Демо‑данные для экрана настроек (iOS).
@@ -74,7 +82,41 @@ class ReceiptDocumentData {
   }
 
   /// Заказ-наряд: работы и запчасти отдельными разделами.
-  static ReceiptDocumentData workOrder(OrderModel order) {
+  /// Заказ-наряд: работы и запчасти по заказу автосервиса.
+  static ReceiptDocumentData workOrder(OrderModel order, {String? companyName}) =>
+      _serviceDocument(order, 'Заказ-наряд', companyName);
+
+  /// Смета до начала работ: клиент подписывает согласие с суммой.
+  static ReceiptDocumentData estimate(OrderModel order, {String? companyName}) =>
+      _serviceDocument(
+        order,
+        'Смета',
+        companyName,
+        statement:
+            'Со стоимостью и перечнем работ ознакомлен(а) и согласен(на). '
+            'Окончательная сумма может измениться только по согласованию с клиентом.',
+        signatures: const ['Клиент', 'Мастер-приёмщик'],
+      );
+
+  /// Акт выполненных работ: клиент подтверждает приёмку.
+  static ReceiptDocumentData act(OrderModel order, {String? companyName}) =>
+      _serviceDocument(
+        order,
+        'Акт выполненных работ',
+        companyName,
+        statement:
+            'Работы выполнены в полном объёме и в срок. '
+            'Автомобиль получен, претензий по объёму и качеству работ не имею.',
+        signatures: const ['Клиент', 'Исполнитель'],
+      );
+
+  static ReceiptDocumentData _serviceDocument(
+    OrderModel order,
+    String title,
+    String? companyName, {
+    String? statement,
+    List<String> signatures = const [],
+  }) {
     final lines = <ReceiptLineData>[
       ...?order.works?.map(
         (work) => ReceiptLineData(
@@ -99,8 +141,8 @@ class ReceiptDocumentData {
     ];
 
     return ReceiptDocumentData(
-      companyName: 'Auto+ Pro',
-      companySubtitle: 'Заказ-наряд',
+      companyName: _company(companyName),
+      companySubtitle: title,
       orderNumber: order.orderNumber ?? '#${order.id ?? '—'}',
       issuedAt: order.createdAt,
       customerName: _customerName(order),
@@ -109,8 +151,14 @@ class ReceiptDocumentData {
       notes: order.notes,
       lines: lines,
       total: order.total,
+      statement: statement,
+      signatures: signatures,
     );
   }
+
+  /// В документе для клиента — название организации, а не платформы.
+  static String _company(String? name) =>
+      name != null && name.trim().isNotEmpty ? name.trim() : 'Auto+ Pro';
 
   static String? _vehicleInfo(OrderModel order) {
     final vehicle = order.vehicle;
@@ -132,7 +180,7 @@ class ReceiptDocumentData {
     return (name != null && name.isNotEmpty) ? name : null;
   }
 
-  static ReceiptDocumentData fromOrder(OrderModel order) {
+  static ReceiptDocumentData fromOrder(OrderModel order, {String? companyName}) {
     final items = order.items ?? [];
     final lines = items.map((i) {
       final rawName = i.item?['name'] ?? i.item?['title'];
@@ -146,7 +194,7 @@ class ReceiptDocumentData {
     }).toList();
 
     return ReceiptDocumentData(
-      companyName: 'Auto+ Pro',
+      companyName: _company(companyName),
       orderNumber: order.orderNumber ?? '#${order.id ?? '—'}',
       issuedAt: order.createdAt,
       customerName: _customerName(order),

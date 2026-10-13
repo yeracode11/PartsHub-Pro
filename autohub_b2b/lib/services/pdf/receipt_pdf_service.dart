@@ -86,19 +86,26 @@ class ReceiptPdfService {
         pw.MultiPage(
           pageFormat: pageFormat,
           margin: margin,
-          build: (context) => layout == ReceiptLayout.thermal80mm
-              ? _buildThermal80(
-                  data,
-                  logo: logo,
-                  regular: regular,
-                  bold: bold,
-                )
-              : _buildA4(
-                  data,
-                  logo: logo,
-                  regular: regular,
-                  bold: bold,
-                ),
+          build: (context) => [
+            ...(layout == ReceiptLayout.thermal80mm
+                ? _buildThermal80(
+                    data,
+                    logo: logo,
+                    regular: regular,
+                    bold: bold,
+                  )
+                : _buildA4(
+                    data,
+                    logo: logo,
+                    regular: regular,
+                    bold: bold,
+                  )),
+            ..._buildSignatures(
+              data,
+              regular: regular,
+              thermal: layout == ReceiptLayout.thermal80mm,
+            ),
+          ],
         ),
       );
 
@@ -206,6 +213,41 @@ class ReceiptPdfService {
         ),
         pw.SizedBox(height: 2),
         pw.Text(data.notes!, style: pw.TextStyle(fontSize: 6, font: regular)),
+      ],
+    ];
+  }
+
+  /// Заявление («Работы выполнены…») и строки подписей — для сметы и акта.
+  List<pw.Widget> _buildSignatures(
+    ReceiptDocumentData data, {
+    required pw.Font regular,
+    required bool thermal,
+  }) {
+    if (data.statement == null && data.signatures.isEmpty) return const [];
+    final fontSize = thermal ? 6.5 : 10.0;
+    final style = pw.TextStyle(fontSize: fontSize, font: regular);
+    return [
+      pw.SizedBox(height: thermal ? 10 : 28),
+      if (data.statement != null) ...[
+        pw.Text(data.statement!, style: style),
+        pw.SizedBox(height: thermal ? 10 : 24),
+      ],
+      for (final label in data.signatures) ...[
+        pw.Row(
+          crossAxisAlignment: pw.CrossAxisAlignment.end,
+          children: [
+            pw.Text('$label:  ', style: style),
+            pw.Expanded(
+              child: pw.Container(
+                height: fontSize,
+                decoration: const pw.BoxDecoration(
+                  border: pw.Border(bottom: pw.BorderSide(width: 0.5)),
+                ),
+              ),
+            ),
+          ],
+        ),
+        pw.SizedBox(height: thermal ? 12 : 22),
       ],
     ];
   }

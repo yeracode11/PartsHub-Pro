@@ -121,53 +121,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ],
 
           // Статистические карточки
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final crossAxisCount = isMobile ? 2 : 4;
-              final spacing = isMobile ? 12.0 : 24.0;
-              final aspectRatio = isMobile ? 2.0 : 2.4;
-
-              return GridView.count(
-                crossAxisCount: crossAxisCount,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                crossAxisSpacing: spacing,
-                mainAxisSpacing: spacing,
-                childAspectRatio: aspectRatio,
-                children: [
-                  _buildStatCard(
-                    context,
-                    title: 'Общий доход',
-                    value: '${numberFormat.format(state.stats.totalRevenue)} ₸',
-                    hero: true,
-                    isMobile: isMobile,
-                  ),
-                  _buildStatCard(
-                    context,
-                    title: 'Доход за месяц',
-                    value:
-                        '${numberFormat.format(state.stats.monthlyRevenue)} ₸',
-                    accent: AppTheme.successColor,
-                    isMobile: isMobile,
-                  ),
-                  _buildStatCard(
-                    context,
-                    title: 'Товаров на складе',
-                    value: '${state.stats.inventoryCount}',
-                    accent: AppTheme.warningColor,
-                    isMobile: isMobile,
-                  ),
-                  _buildStatCard(
-                    context,
-                    title: 'Активные заказы',
-                    value: '${state.stats.activeOrdersCount}',
-                    accent: AppTheme.violetColor,
-                    isMobile: isMobile,
-                  ),
-                ],
-              );
-            },
-          ),
+          _buildStats(context, state, numberFormat, isMobile: isMobile),
 
           SizedBox(height: isMobile ? 16 : 32),
 
@@ -208,6 +162,112 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ],
         ],
       ),
+    );
+  }
+
+  /// Деньги месяца: «Поступило» — реальные деньги, «Продано» — оформленные заказы,
+  /// «Долги клиентов» — продано, но не оплачено. Старый бэкенд без этих полей —
+  /// прежний набор карточек.
+  Widget _buildStats(
+    BuildContext context,
+    DashboardLoaded state,
+    NumberFormat numberFormat, {
+    required bool isMobile,
+  }) {
+    final stats = state.stats;
+    final spacing = isMobile ? 12.0 : 24.0;
+    String tenge(double value) => '${numberFormat.format(value)} ₸';
+
+    Widget grid(List<Widget> cards, int columns) => GridView.count(
+      crossAxisCount: columns,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisSpacing: spacing,
+      mainAxisSpacing: spacing,
+      childAspectRatio: isMobile ? 2.0 : 2.4,
+      children: cards,
+    );
+
+    if (stats.monthlyPaid == null) {
+      return grid([
+        _buildStatCard(
+          context,
+          title: 'Общий доход',
+          value: tenge(stats.totalRevenue),
+          hero: true,
+          isMobile: isMobile,
+        ),
+        _buildStatCard(
+          context,
+          title: 'Доход за месяц',
+          value: tenge(stats.monthlyRevenue),
+          accent: AppTheme.successColor,
+          isMobile: isMobile,
+        ),
+        _buildStatCard(
+          context,
+          title: 'Товаров на складе',
+          value: '${stats.inventoryCount}',
+          accent: AppTheme.warningColor,
+          isMobile: isMobile,
+        ),
+        _buildStatCard(
+          context,
+          title: 'Активные заказы',
+          value: '${stats.activeOrdersCount}',
+          accent: AppTheme.violetColor,
+          isMobile: isMobile,
+        ),
+      ], isMobile ? 2 : 4);
+    }
+
+    final debts = stats.receivables ?? 0;
+    final paid = _buildStatCard(
+      context,
+      title: 'Поступило за месяц',
+      value: tenge(stats.monthlyPaid!),
+      hero: true,
+      isMobile: isMobile,
+    );
+    final others = [
+      _buildStatCard(
+        context,
+        title: 'Продано за месяц',
+        value: tenge(stats.monthlyRevenue),
+        accent: AppTheme.successColor,
+        isMobile: isMobile,
+      ),
+      _buildStatCard(
+        context,
+        title: 'Долги клиентов',
+        value: tenge(debts),
+        accent: debts > 0 ? AppTheme.warningColor : AppTheme.textSecondary,
+        isMobile: isMobile,
+      ),
+      _buildStatCard(
+        context,
+        title: 'Активные заказы',
+        value: '${stats.activeOrdersCount}',
+        accent: AppTheme.violetColor,
+        isMobile: isMobile,
+      ),
+      _buildStatCard(
+        context,
+        title: 'Товаров на складе',
+        value: '${stats.inventoryCount}',
+        accent: AppTheme.primaryColor,
+        isMobile: isMobile,
+      ),
+    ];
+
+    if (!isMobile) return grid([paid, ...others], 5);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(height: 92, child: paid),
+        SizedBox(height: spacing),
+        grid(others, 2),
+      ],
     );
   }
 
@@ -312,6 +372,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   )
                 : LineChart(
                     LineChartData(
+                      // Верх оси — круглое число, кратное шагу: подписи не налезают.
+                      minY: 0,
+                      maxY: _chartMaxY(spots),
                       gridData: FlGridData(
                         show: true,
                         drawVerticalLine: false,
@@ -417,6 +480,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ],
       ),
     );
+  }
+
+  double _chartMaxY(List<FlSpot> spots) {
+    final interval = _gridInterval(spots);
+    final maxY = spots.fold<double>(0, (max, spot) => spot.y > max ? spot.y : max);
+    return maxY <= 0 ? interval : (maxY / interval).ceil() * interval;
   }
 
   double _gridInterval(List<FlSpot> spots) {

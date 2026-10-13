@@ -3,6 +3,7 @@ import 'package:autohub_b2b/core/theme.dart';
 import 'package:autohub_b2b/widgets/unauthorized_placeholder.dart';
 import 'package:autohub_b2b/services/api/api_client.dart';
 import 'package:autohub_b2b/models/vehicle_model.dart';
+import 'package:autohub_b2b/models/vehicle_service_record_model.dart';
 import 'package:autohub_b2b/models/customer_model.dart';
 import 'package:autohub_b2b/screens/crm/crm_screen.dart';
 import 'package:dio/dio.dart';
@@ -25,6 +26,7 @@ class VehicleDetailScreen extends StatefulWidget {
 class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
   final dio = ApiClient().dio;
   VehicleModel? vehicle;
+  List<VehicleServiceRecordModel>? serviceHistory;
   bool isLoading = true;
   bool isForbidden = false;
   String? forbiddenMessage;
@@ -42,12 +44,18 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
     });
 
     try {
-      final response = await dio.get('/api/vehicles/${widget.vehicleId}');
+      final results = await Future.wait([
+        dio.get('/api/vehicles/${widget.vehicleId}'),
+        _loadServiceHistory(),
+      ]);
+      if (!mounted) return;
       setState(() {
-        vehicle = VehicleModel.fromJson(response.data);
+        vehicle = VehicleModel.fromJson((results[0] as Response).data);
+        serviceHistory = results[1] as List<VehicleServiceRecordModel>?;
         isLoading = false;
       });
     } on DioException catch (e) {
+      if (!mounted) return;
       if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
         setState(() {
           isForbidden = true;
@@ -60,18 +68,6 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
         });
       } else {
         setState(() => isLoading = false);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(userFacingApiMessage(e, prefix: 'Ошибка загрузки')),
-              backgroundColor: AppTheme.errorColor,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      setState(() => isLoading = false);
-      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(userFacingApiMessage(e, prefix: 'Ошибка загрузки')),
@@ -79,190 +75,78 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
           ),
         );
       }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(userFacingApiMessage(e, prefix: 'Ошибка загрузки')),
+          backgroundColor: AppTheme.errorColor,
+        ),
+      );
     }
   }
 
-  Future<void> _updateMileage() async {
-    final mileageController = TextEditingController(
-      text: vehicle?.currentMileage.toString() ?? '0',
-    );
+  /// null — бэкенд без сервисной истории (старая версия): раздел не показываем.
+  Future<List<VehicleServiceRecordModel>?> _loadServiceHistory() async {
+    try {
+      final response = await dio.get(
+        '/api/vehicles/${widget.vehicleId}/service-history',
+      );
+      return (response.data as List)
+          .whereType<Map<String, dynamic>>()
+          .map(VehicleServiceRecordModel.fromJson)
+          .toList();
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) return null;
+      rethrow;
+    }
+  }
 
-    final newMileage = await showDialog<int>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Обновить пробег'),
-        content: TextField(
-          controller: mileageController,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-            labelText: 'Новый пробег (км)',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Отмена'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final value = int.tryParse(mileageController.text);
-              Navigator.pop(context, value);
-            },
-            child: const Text('Сохранить'),
-          ),
-        ],
+  void _showMessage(String text, {bool error = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(text),
+        backgroundColor: error ? AppTheme.errorColor : AppTheme.successColor,
       ),
     );
+  }
 
-    if (newMileage != null) {
-      try {
-        await dio.put(
-          '/api/vehicles/${widget.vehicleId}/mileage',
-          data: {'mileage': newMileage},
-        );
-        _loadVehicleDetails();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Пробег обновлен'),
-              backgroundColor: AppTheme.successColor,
-            ),
-          );
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка')), backgroundColor: AppTheme.errorColor),
-          );
-        }
-      }
+  Future<void> _updateMileage() async {
+    final current = vehicle?.currentMileage ?? 0;
+    final newMileage = await showDialog<int>(
+      context: context,
+      builder: (context) => _MileageDialog(currentMileage: current),
+    );
+    if (newMileage == null) return;
+
+    try {
+      await dio.put(
+        '/api/vehicles/${widget.vehicleId}/mileage',
+        data: {'mileage': newMileage},
+      );
+      await _loadVehicleDetails();
+      _showMessage('Пробег обновлен');
+    } catch (e) {
+      _showMessage(userFacingApiMessage(e, prefix: 'Ошибка'), error: true);
     }
   }
 
   Future<void> _recordService() async {
-    final mileageController = TextEditingController(
-      text: vehicle?.currentMileage.toString() ?? '0',
-    );
-    final nextMileageController = TextEditingController();
-    DateTime? nextServiceDate;
-
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Записать ТО'),
-          content: SizedBox(
-            width: 400,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: mileageController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Пробег при ТО (км) *',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: nextMileageController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Следующее ТО при пробеге (км)',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                InkWell(
-                  onTap: () async {
-                    final date = await showDatePicker(
-                      context: context,
-                      initialDate: DateTime.now().add(
-                        const Duration(days: 180),
-                      ),
-                      firstDate: DateTime.now(),
-                      lastDate: DateTime.now().add(const Duration(days: 730)),
-                    );
-                    if (date != null) {
-                      setDialogState(() {
-                        nextServiceDate = date;
-                      });
-                    }
-                  },
-                  child: InputDecorator(
-                    decoration: const InputDecoration(
-                      labelText: 'Следующее ТО по дате',
-                      border: OutlineInputBorder(),
-                      suffixIcon: Icon(Icons.calendar_today),
-                    ),
-                    child: Text(
-                      nextServiceDate != null
-                          ? DateFormat('dd.MM.yyyy').format(nextServiceDate!)
-                          : 'Выбрать дату',
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Отмена'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                final mileage = int.tryParse(mileageController.text);
-                if (mileage == null) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Укажите пробег'),
-                      backgroundColor: AppTheme.errorColor,
-                    ),
-                  );
-                  return;
-                }
-
-                Navigator.pop(context, {
-                  'mileage': mileage,
-                  'serviceDate': DateTime.now().toIso8601String(),
-                  'nextServiceMileage': int.tryParse(
-                    nextMileageController.text,
-                  ),
-                  'nextServiceDate': nextServiceDate?.toIso8601String(),
-                });
-              },
-              child: const Text('Сохранить'),
-            ),
-          ],
-        ),
-      ),
+      builder: (context) =>
+          _ServiceDialog(currentMileage: vehicle?.currentMileage ?? 0),
     );
+    if (result == null) return;
 
-    if (result != null) {
-      try {
-        await dio.post(
-          '/api/vehicles/${widget.vehicleId}/service',
-          data: result,
-        );
-        _loadVehicleDetails();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('ТО записано'),
-              backgroundColor: AppTheme.successColor,
-            ),
-          );
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(userFacingApiMessage(e, prefix: 'Ошибка')), backgroundColor: AppTheme.errorColor),
-          );
-        }
-      }
+    try {
+      await dio.post('/api/vehicles/${widget.vehicleId}/service', data: result);
+      await _loadVehicleDetails();
+      _showMessage('ТО записано');
+    } catch (e) {
+      _showMessage(userFacingApiMessage(e, prefix: 'Ошибка'), error: true);
     }
   }
 
@@ -298,8 +182,7 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
     try {
       final res = await dio.get('/api/customers/${vehicle!.customerId}');
       if (!mounted) return;
-      final customer =
-          CustomerModel.fromJson(res.data as Map<String, dynamic>);
+      final customer = CustomerModel.fromJson(res.data as Map<String, dynamic>);
       await showCustomerDialog(
         context,
         customer: customer,
@@ -393,9 +276,16 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
                   value: 'delete',
                   child: Row(
                     children: [
-                      Icon(Icons.delete_outline, color: AppTheme.errorColor, size: 20),
+                      Icon(
+                        Icons.delete_outline,
+                        color: AppTheme.errorColor,
+                        size: 20,
+                      ),
                       SizedBox(width: 8),
-                      Text('Удалить', style: TextStyle(color: AppTheme.errorColor)),
+                      Text(
+                        'Удалить',
+                        style: TextStyle(color: AppTheme.errorColor),
+                      ),
                     ],
                   ),
                 ),
@@ -432,6 +322,10 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
 
                   // Обслуживание
                   _buildServiceCard(),
+                  if (serviceHistory != null) ...[
+                    const SizedBox(height: 24),
+                    _buildServiceHistory(),
+                  ],
                   const SizedBox(height: 24),
 
                   // История заказов
@@ -443,11 +337,14 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
   }
 
   Widget _buildOwnerCard() {
-    final hasPhone = vehicle?.customerPhone != null &&
+    final hasPhone =
+        vehicle?.customerPhone != null &&
         vehicle!.customerPhone!.trim().isNotEmpty;
-    final hasEmail = vehicle?.customerEmail != null &&
+    final hasEmail =
+        vehicle?.customerEmail != null &&
         vehicle!.customerEmail!.trim().isNotEmpty;
-    final hasNotes = vehicle?.customerNotes != null &&
+    final hasNotes =
+        vehicle?.customerNotes != null &&
         vehicle!.customerNotes!.trim().isNotEmpty;
 
     return Card(
@@ -464,15 +361,22 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
                   color: AppTheme.primaryColor,
                 ),
                 const SizedBox(width: 8),
-                const Text(
-                  'Владелец (CRM)',
-                  style: AppTheme.sectionTitle,
+                // Заголовок сжимается, а не выталкивает кнопку за край на узком экране.
+                const Expanded(
+                  child: Text(
+                    'Владелец',
+                    style: AppTheme.sectionTitle,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-                const Spacer(),
                 TextButton.icon(
                   onPressed: _openCustomerInCrm,
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    visualDensity: VisualDensity.compact,
+                  ),
                   icon: const Icon(Icons.open_in_new, size: 16),
-                  label: const Text('Карточка в CRM'),
+                  label: const Text('В CRM'),
                 ),
               ],
             ),
@@ -698,10 +602,7 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (isMobile) ...[
-              const Text(
-                'Обслуживание',
-                style: AppTheme.sectionTitle,
-              ),
+              const Text('Обслуживание', style: AppTheme.sectionTitle),
               const SizedBox(height: 12),
               SizedBox(
                 width: double.infinity,
@@ -723,10 +624,7 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
             ] else ...[
               Row(
                 children: [
-                  const Text(
-                    'Обслуживание',
-                    style: AppTheme.sectionTitle,
-                  ),
+                  const Text('Обслуживание', style: AppTheme.sectionTitle),
                   const Spacer(),
                   OutlinedButton.icon(
                     onPressed: _updateMileage,
@@ -828,10 +726,9 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
                       ),
                     ),
                   ),
-                if (vehicle!.lastServiceDate != null &&
-                    vehicle!.nextServiceDate != null)
+                if (vehicle!.lastServiceDate != null && _hasNextService)
                   const SizedBox(width: 16),
-                if (vehicle!.nextServiceDate != null)
+                if (_hasNextService)
                   Expanded(
                     child: Container(
                       padding: const EdgeInsets.all(16),
@@ -869,9 +766,11 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            DateFormat(
-                              'dd.MM.yyyy',
-                            ).format(vehicle!.nextServiceDate!),
+                            vehicle!.nextServiceDate != null
+                                ? DateFormat(
+                                    'dd.MM.yyyy',
+                                  ).format(vehicle!.nextServiceDate!)
+                                : '${NumberFormat('#,###', 'ru_RU').format(vehicle!.nextServiceMileage)} км',
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
@@ -880,11 +779,12 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
                                   : AppTheme.successColor,
                             ),
                           ),
-                          if (vehicle!.daysUntilService != null)
+                          if (vehicle!.kmUntilService != null &&
+                              vehicle!.nextServiceDate == null)
                             Text(
-                              vehicle!.needsService
-                                  ? 'Просрочено на ${-vehicle!.daysUntilService!} дней'
-                                  : 'Через ${vehicle!.daysUntilService} дней',
+                              vehicle!.kmUntilService! <= 0
+                                  ? 'Пробег превышен на ${NumberFormat('#,###', 'ru_RU').format(-vehicle!.kmUntilService!)} км'
+                                  : 'Осталось ${NumberFormat('#,###', 'ru_RU').format(vehicle!.kmUntilService)} км',
                               style: TextStyle(
                                 fontSize: 12,
                                 color: vehicle!.needsService
@@ -892,7 +792,20 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
                                     : AppTheme.successColor,
                               ),
                             ),
-                          if (vehicle!.nextServiceMileage != null)
+                          if (vehicle!.daysUntilService != null)
+                            Text(
+                              vehicle!.daysUntilService! < 0
+                                  ? 'Просрочено на ${-vehicle!.daysUntilService!} дн.'
+                                  : 'Через ${vehicle!.daysUntilService} дн.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: vehicle!.needsService
+                                    ? AppTheme.warningColor
+                                    : AppTheme.successColor,
+                              ),
+                            ),
+                          if (vehicle!.nextServiceMileage != null &&
+                              vehicle!.nextServiceDate != null)
                             Text(
                               '${NumberFormat('#,###', 'ru_RU').format(vehicle!.nextServiceMileage)} км',
                               style: TextStyle(
@@ -921,7 +834,11 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
                   children: [
                     Row(
                       children: [
-                        Icon(Icons.note, size: 16, color: AppTheme.primaryColor),
+                        Icon(
+                          Icons.note,
+                          size: 16,
+                          color: AppTheme.primaryColor,
+                        ),
                         const SizedBox(width: 8),
                         Text(
                           'Примечания',
@@ -951,6 +868,70 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
     );
   }
 
+  bool get _hasNextService =>
+      vehicle!.nextServiceDate != null || vehicle!.nextServiceMileage != null;
+
+  Widget _buildServiceHistory() {
+    final records = serviceHistory!;
+    final km = NumberFormat('#,###', 'ru_RU');
+    final date = DateFormat('dd.MM.yyyy');
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('История обслуживания', style: AppTheme.sectionTitle),
+            const SizedBox(height: 12),
+            if (records.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  'Записей пока нет. Нажмите «Записать ТО».',
+                  style: TextStyle(color: AppTheme.textSecondary),
+                ),
+              )
+            else
+              for (var i = 0; i < records.length; i++) ...[
+                if (i > 0) const Divider(height: 24),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${date.format(records[i].serviceDate)} · ${km.format(records[i].mileage)} км',
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          if (records[i].description != null) ...[
+                            const SizedBox(height: 2),
+                            Text(records[i].description!),
+                          ],
+                          if (records[i].nextServiceMileage != null ||
+                              records[i].nextServiceDate != null) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              'Следующее: ${[if (records[i].nextServiceDate != null) date.format(records[i].nextServiceDate!), if (records[i].nextServiceMileage != null) '${km.format(records[i].nextServiceMileage)} км'].join(' или ')}',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: AppTheme.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildOrdersHistory() {
     final orders = vehicle!.orders ?? [];
 
@@ -960,10 +941,7 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'История заказов',
-              style: AppTheme.sectionTitle,
-            ),
+            const Text('История заказов', style: AppTheme.sectionTitle),
             const SizedBox(height: 16),
             if (orders.isEmpty)
               Center(
@@ -1006,7 +984,7 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Text(
-                          '${order['totalAmount']} ₸',
+                          '${NumberFormat('#,###', 'ru_RU').format(num.tryParse('${order['totalAmount']}') ?? 0)} ₸',
                           style: const TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 16,
@@ -1087,5 +1065,256 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
       default:
         return status;
     }
+  }
+}
+
+class _MileageDialog extends StatefulWidget {
+  const _MileageDialog({required this.currentMileage});
+
+  final int currentMileage;
+
+  @override
+  State<_MileageDialog> createState() => _MileageDialogState();
+}
+
+class _MileageDialogState extends State<_MileageDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late final _controller = TextEditingController(
+    text: widget.currentMileage.toString(),
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    if (!_formKey.currentState!.validate()) return;
+    Navigator.pop(context, int.parse(_controller.text.trim()));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Обновить пробег'),
+      content: Form(
+        key: _formKey,
+        child: TextFormField(
+          controller: _controller,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          decoration: InputDecoration(
+            labelText: 'Новый пробег (км)',
+            helperText:
+                'Сейчас ${NumberFormat('#,###', 'ru_RU').format(widget.currentMileage)} км',
+          ),
+          validator: (value) {
+            final mileage = int.tryParse(value?.trim() ?? '');
+            if (mileage == null || mileage < 0) return 'Укажите пробег';
+            if (mileage < widget.currentMileage) {
+              return 'Не меньше текущего пробега';
+            }
+            return null;
+          },
+          onFieldSubmitted: (_) => _submit(),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Отмена'),
+        ),
+        FilledButton(onPressed: _submit, child: const Text('Сохранить')),
+      ],
+    );
+  }
+}
+
+class _ServiceDialog extends StatefulWidget {
+  const _ServiceDialog({required this.currentMileage});
+
+  final int currentMileage;
+
+  @override
+  State<_ServiceDialog> createState() => _ServiceDialogState();
+}
+
+class _ServiceDialogState extends State<_ServiceDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late final _mileage = TextEditingController(
+    text: widget.currentMileage.toString(),
+  );
+  final _description = TextEditingController();
+  final _nextMileage = TextEditingController();
+  DateTime _serviceDate = DateTime.now();
+  DateTime? _nextServiceDate;
+  final _dateFormat = DateFormat('dd.MM.yyyy');
+
+  @override
+  void dispose() {
+    _mileage.dispose();
+    _description.dispose();
+    _nextMileage.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickServiceDate() async {
+    final now = DateTime.now();
+    final date = await showDatePicker(
+      context: context,
+      initialDate: _serviceDate,
+      firstDate: DateTime(now.year - 10),
+      lastDate: now,
+    );
+    if (date != null) setState(() => _serviceDate = date);
+  }
+
+  Future<void> _pickNextDate() async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate:
+          _nextServiceDate ?? _serviceDate.add(const Duration(days: 180)),
+      firstDate: _serviceDate.add(const Duration(days: 1)),
+      lastDate: _serviceDate.add(const Duration(days: 365 * 3)),
+    );
+    if (date != null) setState(() => _nextServiceDate = date);
+  }
+
+  String _isoDate(DateTime date) => DateFormat('yyyy-MM-dd').format(date);
+
+  void _submit() {
+    if (!_formKey.currentState!.validate()) return;
+    final next = _nextMileage.text.trim();
+    Navigator.pop(context, {
+      'mileage': int.parse(_mileage.text.trim()),
+      'serviceDate': _isoDate(_serviceDate),
+      'description': _description.text.trim().isEmpty
+          ? null
+          : _description.text.trim(),
+      'nextServiceMileage': next.isEmpty ? null : int.parse(next),
+      'nextServiceDate': _nextServiceDate == null
+          ? null
+          : _isoDate(_nextServiceDate!),
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Записать ТО'),
+      content: SizedBox(
+        width: 400,
+        child: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _DateField(
+                  label: 'Дата ТО',
+                  value: _dateFormat.format(_serviceDate),
+                  onTap: _pickServiceDate,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _mileage,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Пробег при ТО (км) *',
+                  ),
+                  validator: (value) {
+                    final mileage = int.tryParse(value?.trim() ?? '');
+                    return mileage == null || mileage < 0
+                        ? 'Укажите пробег'
+                        : null;
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _description,
+                  maxLines: 2,
+                  textCapitalization: TextCapitalization.sentences,
+                  decoration: const InputDecoration(
+                    labelText: 'Что сделано',
+                    hintText: 'Например: замена масла и фильтров',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _nextMileage,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Следующее ТО при пробеге (км)',
+                  ),
+                  validator: (value) {
+                    final text = value?.trim() ?? '';
+                    if (text.isEmpty) return null;
+                    final next = int.tryParse(text);
+                    final mileage = int.tryParse(_mileage.text.trim()) ?? 0;
+                    if (next == null) return 'Укажите число';
+                    if (next <= mileage) return 'Больше пробега при ТО';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 12),
+                _DateField(
+                  label: 'Следующее ТО по дате',
+                  value: _nextServiceDate == null
+                      ? 'Не указано'
+                      : _dateFormat.format(_nextServiceDate!),
+                  onTap: _pickNextDate,
+                  onClear: _nextServiceDate == null
+                      ? null
+                      : () => setState(() => _nextServiceDate = null),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Отмена'),
+        ),
+        FilledButton(onPressed: _submit, child: const Text('Сохранить')),
+      ],
+    );
+  }
+}
+
+class _DateField extends StatelessWidget {
+  const _DateField({
+    required this.label,
+    required this.value,
+    required this.onTap,
+    this.onClear,
+  });
+
+  final String label;
+  final String value;
+  final VoidCallback onTap;
+  final VoidCallback? onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: label,
+          suffixIcon: onClear == null
+              ? const Icon(Icons.calendar_today, size: 20)
+              : IconButton(
+                  icon: const Icon(Icons.close, size: 20),
+                  tooltip: 'Очистить',
+                  onPressed: onClear,
+                ),
+        ),
+        child: Text(value),
+      ),
+    );
   }
 }

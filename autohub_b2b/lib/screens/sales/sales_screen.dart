@@ -1,5 +1,6 @@
 import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
+import 'package:autohub_b2b/utils/business_features.dart';
 import 'package:autohub_b2b/widgets/add_action_button.dart';
 import 'package:autohub_b2b/widgets/shell_actions.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -1190,7 +1191,9 @@ class _OrderDialogState extends State<_OrderDialog> {
         _linkChanged = true;
         _customerId = value;
         final garage = _selectedCustomer?.vehicles ?? const <VehicleModel>[];
-        _vehicleId = garage.length == 1 ? garage.first.id : null;
+        _vehicleId = usesClientVehicles(context) && garage.length == 1
+            ? garage.first.id
+            : null;
       }),
     );
 
@@ -1225,6 +1228,9 @@ class _OrderDialogState extends State<_OrderDialog> {
               _vehicleId = value;
             }),
     );
+
+    // Авторазбору автомобиль клиента не нужен — только покупатель.
+    if (!usesClientVehicles(context)) return customerField;
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,

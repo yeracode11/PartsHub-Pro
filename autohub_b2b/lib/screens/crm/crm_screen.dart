@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:autohub_b2b/utils/business_features.dart';
 import 'package:autohub_b2b/widgets/shell_actions.dart';
 import 'package:autohub_b2b/widgets/add_action_button.dart';
 import 'package:autohub_b2b/core/theme.dart';
@@ -415,156 +416,157 @@ class _CrmScreenState extends State<CrmScreen> {
                     ],
                   ),
 
-                  // Секция Автопарка / Гаража клиента
-                  Padding(
-                    padding: const EdgeInsets.only(top: 10),
-                    child: Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: AppTheme.backgroundColor,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: AppTheme.borderColor),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.directions_car_outlined,
-                                size: 16,
-                                color: AppTheme.textSecondary,
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                'Гараж (${customer.vehiclesCount}):',
-                                style: Theme.of(context).textTheme.bodySmall
-                                    ?.copyWith(
-                                      fontWeight: FontWeight.w600,
-                                      color: AppTheme.textSecondary,
-                                    ),
-                              ),
-                              const Spacer(),
-                              InkWell(
-                                onTap: () => _addVehicleForCustomer(customer),
-                                borderRadius: BorderRadius.circular(4),
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 2,
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        Icons.add,
-                                        size: 14,
-                                        color: AppTheme.primaryColor,
-                                      ),
-                                      const SizedBox(width: 2),
-                                      Text(
-                                        'Добавить авто',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: AppTheme.primaryColor,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
+                  // Секция Автопарка / Гаража клиента (не у авторазбора)
+                  if (usesClientVehicles(context))
+                    Padding(
+                      padding: const EdgeInsets.only(top: 10),
+                      child: Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppTheme.backgroundColor,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: AppTheme.borderColor),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.directions_car_outlined,
+                                  size: 16,
+                                  color: AppTheme.textSecondary,
                                 ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-                          if (customer.hasVehicles)
-                            Wrap(
-                              spacing: 6,
-                              runSpacing: 6,
-                              children: customer.vehicles.map((v) {
-                                return InkWell(
-                                  onTap: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => VehicleDetailScreen(
-                                          vehicleId: v.id,
-                                        ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Гараж (${customer.vehiclesCount}):',
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(
+                                        fontWeight: FontWeight.w600,
+                                        color: AppTheme.textSecondary,
                                       ),
-                                    ).then((_) => _loadCustomers());
-                                  },
-                                  borderRadius: BorderRadius.circular(6),
-                                  child: Container(
+                                ),
+                                const Spacer(),
+                                InkWell(
+                                  onTap: () => _addVehicleForCustomer(customer),
+                                  borderRadius: BorderRadius.circular(4),
+                                  child: Padding(
                                     padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 5,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: v.needsService
-                                          ? AppTheme.warningColor.withValues(
-                                              alpha: 0.12,
-                                            )
-                                          : AppTheme.surfaceColor,
-                                      borderRadius: BorderRadius.circular(6),
-                                      border: Border.all(
-                                        color: v.needsService
-                                            ? AppTheme.warningColor
-                                            : AppTheme.borderColor,
-                                      ),
+                                      horizontal: 6,
+                                      vertical: 2,
                                     ),
                                     child: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         Icon(
-                                          Icons.directions_car,
+                                          Icons.add,
                                           size: 14,
-                                          color: v.needsService
-                                              ? AppTheme.warningColor
-                                              : AppTheme.primaryColor,
+                                          color: AppTheme.primaryColor,
                                         ),
-                                        const SizedBox(width: 4),
+                                        const SizedBox(width: 2),
                                         Text(
-                                          '${v.brand} ${v.model}${v.plateNumber.isNotEmpty ? ' • ${v.plateNumber}' : ''}',
+                                          'Добавить авто',
                                           style: TextStyle(
                                             fontSize: 12,
-                                            fontWeight: FontWeight.w500,
-                                            color: v.needsService
-                                                ? AppTheme.warningColor
-                                                : AppTheme.textPrimary,
+                                            color: AppTheme.primaryColor,
+                                            fontWeight: FontWeight.w600,
                                           ),
                                         ),
-                                        if (v.needsService) ...[
-                                          const SizedBox(width: 4),
-                                          const Text(
-                                            'ТО',
-                                            style: TextStyle(
-                                              fontSize: 10,
-                                              color: AppTheme.warningColor,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ],
                                       ],
                                     ),
                                   ),
-                                );
-                              }).toList(),
-                            )
-                          else
-                            Text(
-                              customer.carModel != null &&
-                                      customer.carModel!.isNotEmpty
-                                  ? 'Указана модель: ${customer.carModel}'
-                                  : 'Нет добавленных автомобилей',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: AppTheme.textSecondary,
-                              ),
+                                ),
+                              ],
                             ),
-                        ],
+                            const SizedBox(height: 6),
+                            if (customer.hasVehicles)
+                              Wrap(
+                                spacing: 6,
+                                runSpacing: 6,
+                                children: customer.vehicles.map((v) {
+                                  return InkWell(
+                                    onTap: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => VehicleDetailScreen(
+                                            vehicleId: v.id,
+                                          ),
+                                        ),
+                                      ).then((_) => _loadCustomers());
+                                    },
+                                    borderRadius: BorderRadius.circular(6),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 5,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: v.needsService
+                                            ? AppTheme.warningColor.withValues(
+                                                alpha: 0.12,
+                                              )
+                                            : AppTheme.surfaceColor,
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(
+                                          color: v.needsService
+                                              ? AppTheme.warningColor
+                                              : AppTheme.borderColor,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            Icons.directions_car,
+                                            size: 14,
+                                            color: v.needsService
+                                                ? AppTheme.warningColor
+                                                : AppTheme.primaryColor,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            '${v.brand} ${v.model}${v.plateNumber.isNotEmpty ? ' • ${v.plateNumber}' : ''}',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w500,
+                                              color: v.needsService
+                                                  ? AppTheme.warningColor
+                                                  : AppTheme.textPrimary,
+                                            ),
+                                          ),
+                                          if (v.needsService) ...[
+                                            const SizedBox(width: 4),
+                                            const Text(
+                                              'ТО',
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                color: AppTheme.warningColor,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                }).toList(),
+                              )
+                            else
+                              Text(
+                                customer.carModel != null &&
+                                        customer.carModel!.isNotEmpty
+                                    ? 'Указана модель: ${customer.carModel}'
+                                    : 'Нет добавленных автомобилей',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppTheme.textSecondary,
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
 
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
@@ -631,15 +633,16 @@ class _CrmScreenState extends State<CrmScreen> {
                     ),
                   ),
                 ),
-                Expanded(
-                  flex: 3,
-                  child: Text(
-                    'Гараж (Автомобили)',
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: AppTheme.textSecondary,
+                if (usesClientVehicles(context))
+                  Expanded(
+                    flex: 3,
+                    child: Text(
+                      'Гараж (Автомобили)',
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: AppTheme.textSecondary,
+                      ),
                     ),
                   ),
-                ),
                 Expanded(
                   flex: 2,
                   child: Text(
@@ -709,119 +712,121 @@ class _CrmScreenState extends State<CrmScreen> {
                         ),
                       ),
                       Expanded(flex: 2, child: Text(customer.email ?? '-')),
-                      Expanded(
-                        flex: 3,
-                        child: customer.hasVehicles
-                            ? Wrap(
-                                spacing: 4,
-                                runSpacing: 4,
-                                crossAxisAlignment: WrapCrossAlignment.center,
-                                children: [
-                                  ...customer.vehicles.map(
-                                    (v) => InkWell(
-                                      onTap: () {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (_) => VehicleDetailScreen(
-                                              vehicleId: v.id,
+                      if (usesClientVehicles(context))
+                        Expanded(
+                          flex: 3,
+                          child: customer.hasVehicles
+                              ? Wrap(
+                                  spacing: 4,
+                                  runSpacing: 4,
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  children: [
+                                    ...customer.vehicles.map(
+                                      (v) => InkWell(
+                                        onTap: () {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (_) =>
+                                                  VehicleDetailScreen(
+                                                    vehicleId: v.id,
+                                                  ),
                                             ),
+                                          ).then((_) => _loadCustomers());
+                                        },
+                                        borderRadius: BorderRadius.circular(4),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 6,
+                                            vertical: 3,
                                           ),
-                                        ).then((_) => _loadCustomers());
-                                      },
-                                      borderRadius: BorderRadius.circular(4),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 6,
-                                          vertical: 3,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: v.needsService
-                                              ? AppTheme.warningColor
-                                                    .withValues(alpha: 0.12)
-                                              : AppTheme.backgroundColor,
-                                          borderRadius: BorderRadius.circular(
-                                            4,
-                                          ),
-                                          border: Border.all(
+                                          decoration: BoxDecoration(
                                             color: v.needsService
                                                 ? AppTheme.warningColor
-                                                : AppTheme.borderColor,
-                                          ),
-                                        ),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Icon(
-                                              Icons.directions_car,
-                                              size: 13,
+                                                      .withValues(alpha: 0.12)
+                                                : AppTheme.backgroundColor,
+                                            borderRadius: BorderRadius.circular(
+                                              4,
+                                            ),
+                                            border: Border.all(
                                               color: v.needsService
                                                   ? AppTheme.warningColor
-                                                  : AppTheme.primaryColor,
+                                                  : AppTheme.borderColor,
                                             ),
-                                            const SizedBox(width: 4),
-                                            Text(
-                                              '${v.brand} ${v.model}${v.plateNumber.isNotEmpty ? ' (${v.plateNumber})' : ''}',
-                                              style: TextStyle(
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.w500,
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                Icons.directions_car,
+                                                size: 13,
                                                 color: v.needsService
                                                     ? AppTheme.warningColor
-                                                    : AppTheme.textPrimary,
+                                                    : AppTheme.primaryColor,
                                               ),
-                                            ),
-                                          ],
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                '${v.brand} ${v.model}${v.plateNumber.isNotEmpty ? ' (${v.plateNumber})' : ''}',
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w500,
+                                                  color: v.needsService
+                                                      ? AppTheme.warningColor
+                                                      : AppTheme.textPrimary,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
                                         ),
                                       ),
                                     ),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(
-                                      Icons.add_circle_outline,
-                                      size: 16,
-                                    ),
-                                    onPressed: () =>
-                                        _addVehicleForCustomer(customer),
-                                    tooltip: 'Добавить авто в гараж',
-                                    visualDensity: VisualDensity.compact,
-                                    padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(),
-                                  ),
-                                ],
-                              )
-                            : Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      (customer.carModel != null &&
-                                              customer.carModel!.isNotEmpty)
-                                          ? customer.carModel!
-                                          : '—',
-                                      style: TextStyle(
-                                        color:
-                                            (customer.carModel != null &&
-                                                customer.carModel!.isNotEmpty)
-                                            ? AppTheme.textPrimary
-                                            : AppTheme.textSecondary,
+                                    IconButton(
+                                      icon: const Icon(
+                                        Icons.add_circle_outline,
+                                        size: 16,
                                       ),
-                                      overflow: TextOverflow.ellipsis,
+                                      onPressed: () =>
+                                          _addVehicleForCustomer(customer),
+                                      tooltip: 'Добавить авто в гараж',
+                                      visualDensity: VisualDensity.compact,
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(),
                                     ),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(
-                                      Icons.add_circle_outline,
-                                      size: 16,
+                                  ],
+                                )
+                              : Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        (customer.carModel != null &&
+                                                customer.carModel!.isNotEmpty)
+                                            ? customer.carModel!
+                                            : '—',
+                                        style: TextStyle(
+                                          color:
+                                              (customer.carModel != null &&
+                                                  customer.carModel!.isNotEmpty)
+                                              ? AppTheme.textPrimary
+                                              : AppTheme.textSecondary,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
                                     ),
-                                    onPressed: () =>
-                                        _addVehicleForCustomer(customer),
-                                    tooltip: 'Добавить авто в гараж',
-                                    visualDensity: VisualDensity.compact,
-                                    padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(),
-                                  ),
-                                ],
-                              ),
-                      ),
+                                    IconButton(
+                                      icon: const Icon(
+                                        Icons.add_circle_outline,
+                                        size: 16,
+                                      ),
+                                      onPressed: () =>
+                                          _addVehicleForCustomer(customer),
+                                      tooltip: 'Добавить авто в гараж',
+                                      visualDensity: VisualDensity.compact,
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(),
+                                    ),
+                                  ],
+                                ),
+                        ),
                       Expanded(
                         flex: 2,
                         child: Text(dateFormat.format(customer.createdAt)),
@@ -1145,15 +1150,17 @@ class _CustomerFormDialogState extends State<CustomerFormDialog> {
           keyboardType: TextInputType.emailAddress,
         ),
         const SizedBox(height: 16),
-        TextField(
-          controller: _carModelController,
-          decoration: const InputDecoration(
-            labelText: 'Примечание по авто (строка)',
-            border: OutlineInputBorder(),
-            prefixIcon: Icon(Icons.directions_car),
+        if (usesClientVehicles(context)) ...[
+          TextField(
+            controller: _carModelController,
+            decoration: const InputDecoration(
+              labelText: 'Примечание по авто (строка)',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.directions_car),
+            ),
           ),
-        ),
-        const SizedBox(height: 16),
+          const SizedBox(height: 16),
+        ],
         TextField(
           controller: _notesController,
           decoration: const InputDecoration(
@@ -1164,8 +1171,8 @@ class _CustomerFormDialogState extends State<CustomerFormDialog> {
           maxLines: 3,
         ),
 
-        // Секция Автопарка клиента в CRM
-        if (widget.customer != null) ...[
+        // Секция Автопарка клиента в CRM (не у авторазбора)
+        if (widget.customer != null && usesClientVehicles(context)) ...[
           const SizedBox(height: 24),
           const Divider(),
           const SizedBox(height: 12),
@@ -1281,7 +1288,7 @@ class _CustomerFormDialogState extends State<CustomerFormDialog> {
                       ],
                     ),
                     subtitle: Text(
-                      'Пробег: ${v.currentMileage} км${v.vin != null && v.vin!.isNotEmpty ? ' • VIN: ${v.vin}' : ''}',
+                      'Пробег: ${NumberFormat('#,###', 'ru_RU').format(v.currentMileage)} км${v.vin != null && v.vin!.isNotEmpty ? ' • VIN: ${v.vin}' : ''}',
                       style: TextStyle(
                         fontSize: 12,
                         color: AppTheme.textSecondary,

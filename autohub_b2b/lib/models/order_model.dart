@@ -213,6 +213,42 @@ class WorkStageModel {
   }
 }
 
+/// Отметка «клиент согласовал смету» (POST /api/orders/:id/estimate-approval).
+class EstimateApprovalModel extends Equatable {
+  final DateTime approvedAt;
+  final double approvedTotal;
+  final String method;
+  final String? note;
+
+  const EstimateApprovalModel({
+    required this.approvedAt,
+    required this.approvedTotal,
+    required this.method,
+    this.note,
+  });
+
+  static EstimateApprovalModel? fromOrderJson(Map<String, dynamic> json) {
+    final at = DateTime.tryParse(json['estimateApprovedAt']?.toString() ?? '');
+    if (at == null) return null;
+    return EstimateApprovalModel(
+      approvedAt: at.toLocal(),
+      approvedTotal: OrderWorkModel._asDouble(json['estimateApprovedTotal']),
+      method: json['estimateApprovalMethod']?.toString() ?? '',
+      note: json['estimateApprovalNote'] as String?,
+    );
+  }
+
+  String get methodLabel => switch (method) {
+    'phone' => 'по телефону',
+    'whatsapp' => 'в WhatsApp',
+    'in_person' => 'лично',
+    _ => method,
+  };
+
+  @override
+  List<Object?> get props => [approvedAt, approvedTotal, method, note];
+}
+
 class OrderModel extends Equatable {
   final int? id;
   final String? orderNumber;
@@ -234,6 +270,9 @@ class OrderModel extends Equatable {
   final List<OrderPaymentModel> payments;
   final double paidAmount;
   final double dueAmount;
+
+  /// null — смета ещё не согласована с клиентом.
+  final EstimateApprovalModel? estimateApproval;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -258,6 +297,7 @@ class OrderModel extends Equatable {
     this.payments = const [],
     this.paidAmount = 0,
     this.dueAmount = 0,
+    this.estimateApproval,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -307,6 +347,7 @@ class OrderModel extends Equatable {
       payments: payments ?? this.payments,
       paidAmount: paidAmount ?? this.paidAmount,
       dueAmount: dueAmount ?? this.dueAmount,
+      estimateApproval: estimateApproval,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -415,6 +456,7 @@ class OrderModel extends Equatable {
       dueAmount: json['dueAmount'] != null
           ? OrderWorkModel._asDouble(json['dueAmount'])
           : total,
+      estimateApproval: EstimateApprovalModel.fromOrderJson(json),
       createdAt: DateTime.parse(json['createdAt'] as String),
       updatedAt: DateTime.parse(json['updatedAt'] as String),
     );
@@ -442,6 +484,7 @@ class OrderModel extends Equatable {
         payments,
         paidAmount,
         dueAmount,
+        estimateApproval,
         createdAt,
         updatedAt,
       ];
