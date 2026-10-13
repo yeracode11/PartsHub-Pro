@@ -2,16 +2,28 @@ import { BadRequestException, ConflictException } from '@nestjs/common';
 import { VehiclesService } from './vehicles.service';
 
 describe('VehiclesService', () => {
+  // Транзакция: менеджер отдаёт те же моки репозиториев.
+  const txRecords = { create: jest.fn((v) => v), save: jest.fn() };
+  const txVehicles = { update: jest.fn() };
+  const manager = {
+    transaction: jest.fn(async (work: any) => work(manager)),
+    getRepository: jest.fn((entity: any) =>
+      entity.name === 'VehicleServiceRecord' ? txRecords : txVehicles,
+    ),
+  };
   const vehicleRepository = {
     findOne: jest.fn(),
     create: jest.fn((v) => v),
     save: jest.fn(),
     update: jest.fn(),
+    manager,
   };
   const customerRepository = { count: jest.fn() };
+  const serviceRecordRepository = { find: jest.fn() };
   const service = new VehiclesService(
     vehicleRepository as any,
     customerRepository as any,
+    serviceRecordRepository as any,
   );
 
   beforeEach(() => {
@@ -80,5 +92,93 @@ describe('VehiclesService', () => {
       { id: 1, organizationId: 'org-1' },
       { color: 'Белый' },
     );
+  });
+
+  describe('mileage and service history', () => {
+    const vehicle = {
+      id: 7,
+      organizationId: 'org-1',
+      currentMileage: 100000,
+      lastServiceDate: '2026-06-01',
+      lastServiceMileage: 95000,
+    };
+
+    beforeEach(() => {
+      vehicleRepository.findOne.mockResolvedValue({ ...vehicle });
+    });
+
+    it('rejects mileage lower than current and negative values', async () => {
+      await expect(service.updateMileage(7, 'org-1', 90000)).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+      await expect(service.updateMileage(7, 'org-1', -5)).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+      expect(vehicleRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('records service into history and updates the vehicle cache', async () => {
+      await service.recordService(
+        7,
+        'org-1',
+        {
+          mileage: 105000,
+          serviceDate: '2026-10-01',
+          description: ' Замена масла ',
+          nextServiceMileage: 115000,
+          nextServiceDate: '2027-04-01',
+        },
+        'user-1',
+      );
+
+      expect(txRecords.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          organizationId: 'org-1',
+          vehicleId: 7,
+          mileage: 105000,
+          serviceDate: '2026-10-01',
+          description: 'Замена масла',
+          createdById: 'user-1',
+        }),
+      );
+      expect(txVehicles.update).toHaveBeenCalledWith(
+        { id: 7, organizationId: 'org-1' },
+        expect.objectContaining({
+          currentMileage: 105000,
+          lastServiceMileage: 105000,
+          lastServiceDate: '2026-10-01',
+          nextServiceMileage: 115000,
+        }),
+      );
+    });
+
+    it('back-dated service does not roll back mileage or last service', async () => {
+      await service.recordService(7, 'org-1', {
+        mileage: 80000,
+        serviceDate: '2025-12-01',
+      });
+
+      expect(txRecords.save).toHaveBeenCalled();
+      const patch = txVehicles.update.mock.calls[0][1];
+      expect(patch).toEqual({ currentMileage: 100000 });
+    });
+
+    it('validates next service against the service itself', async () => {
+      await expect(
+        service.recordService(7, 'org-1', {
+          mileage: 105000,
+          serviceDate: '2026-10-01',
+          nextServiceMileage: 104000,
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      await expect(
+        service.recordService(7, 'org-1', {
+          mileage: 105000,
+          serviceDate: '2026-10-01',
+          nextServiceDate: '2026-09-01',
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(txRecords.save).not.toHaveBeenCalled();
+    });
   });
 });

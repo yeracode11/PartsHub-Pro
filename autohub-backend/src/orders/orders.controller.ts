@@ -33,17 +33,12 @@ export class OrdersController {
     private readonly saleReturnsService: SaleReturnsService,
   ) {}
 
+  /**
+   * Только организация из JWT. Раньше без неё подставлялась первая организация в БД —
+   * пользователь без организации получал доступ к чужим данным.
+   */
   private async resolveOrganizationId(user: any): Promise<string | null> {
-    if (user && user.organizationId) {
-      return user.organizationId;
-    }
-    
-    const orgs = await this.organizationsService.findAll();
-    if (orgs.length > 0) {
-      return orgs[0].id;
-    }
-    
-    return null;
+    return user?.organizationId ?? null;
   }
 
   @Get('recent')
@@ -113,6 +108,31 @@ export class OrdersController {
       return { error: 'No active organization' } as any;
     }
     return this.ordersService.create(organizationId, data, undefined, user);
+  }
+
+  /** Клиент согласовал смету заказ-наряда. */
+  @Post(':id/estimate-approval')
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  async approveEstimate(
+    @Param('id') id: string,
+    @CurrentUser() user: any,
+    @Body() body: { method?: string; note?: string },
+  ) {
+    const organizationId = await this.resolveOrganizationId(user);
+    if (!organizationId) {
+      return { error: 'No active organization' } as any;
+    }
+    return this.ordersService.approveEstimate(+id, organizationId, body, user);
+  }
+
+  @Delete(':id/estimate-approval')
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  async revokeEstimateApproval(@Param('id') id: string, @CurrentUser() user: any) {
+    const organizationId = await this.resolveOrganizationId(user);
+    if (!organizationId) {
+      return { error: 'No active organization' } as any;
+    }
+    return this.ordersService.revokeEstimateApproval(+id, organizationId);
   }
 
   @Post(':id/payments')

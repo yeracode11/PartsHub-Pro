@@ -92,6 +92,24 @@ export class Order {
   @Column({ type: 'timestamptz', nullable: true })
   reservedUntil: Date | null; // Срок резерва (для запчастей)
 
+  // Согласование сметы с клиентом (заказ-наряд автосервиса)
+  @Column({ type: 'timestamptz', nullable: true })
+  estimateApprovedAt: Date | null;
+
+  /** Сумма на момент согласования — чтобы видеть, если смету потом изменили. */
+  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+  estimateApprovedTotal: number | null;
+
+  /** Как согласовали: phone, whatsapp, in_person. */
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  estimateApprovalMethod: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  estimateApprovalNote: string | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  estimateApprovedById: string | null;
+
   @Column({ type: 'jsonb', nullable: true })
   workStages: OrderWorkStage[] | null; // Этапы заказ-наряда (для автосервисов)
 

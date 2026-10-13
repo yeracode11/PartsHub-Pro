@@ -1,10 +1,61 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between } from 'typeorm';
+import { Repository } from 'typeorm';
 import { Order } from '../orders/entities/order.entity';
 import { Item } from '../items/entities/item.entity';
 import { OrderItem } from '../order-items/entities/order-item.entity';
 import { IncomingDoc, IncomingDocStatus } from '../incoming/entities/incoming-doc.entity';
+import { OrderPayment } from '../orders/entities/order-payment.entity';
+import { InventoryMovement, MovementType } from '../inventory/entities/inventory-movement.entity';
+import { ItemStatus } from '../items/entities/item.entity';
+import { businessToday } from '../donors/donor-status';
+
+/** Не продажа: черновик/корзина, отмена, полный возврат. */
+const NOT_SALES = ['draft', 'cart', 'cancelled', 'returned'];
+/** Заказ закрыт — больше не «активный». */
+const FINISHED = ['delivered', 'completed'];
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function businessTimeZone(): string {
+  return process.env.APP_TIME_ZONE?.trim() || 'Asia/Almaty';
+}
+
+function percentChange(current: number, previous: number): number {
+  return previous > 0 ? ((current - previous) / previous) * 100 : 0;
+}
+
+function money(value: string | number | null | undefined): number {
+  return Math.round(Number(value ?? 0) * 100) / 100;
+}
+
+/** Начало текущего месяца в часовом поясе бизнеса (APP_TIME_ZONE), как момент UTC. */
+export function businessMonthStart(now = new Date()): Date {
+  const timeZone = businessTimeZone();
+  const [year, month] = businessToday(now).split('-').map(Number);
+  const guess = Date.UTC(year, month - 1, 1);
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).formatToParts(new Date(guess));
+  const part = (type: string) =>
+    Number(parts.find((p) => p.type === type)?.value ?? 0);
+  const zoned = Date.UTC(
+    part('year'),
+    part('month') - 1,
+    part('day'),
+    part('hour'),
+    part('minute'),
+    part('second'),
+  );
+  return new Date(guess - (zoned - guess));
+}
 
 @Injectable()
 export class DashboardService {
@@ -19,81 +70,110 @@ export class DashboardService {
     private readonly orderItemRepository: Repository<OrderItem>,
     @InjectRepository(IncomingDoc)
     private readonly incomingDocRepository: Repository<IncomingDoc>,
+    @InjectRepository(OrderPayment)
+    private readonly orderPaymentRepository: Repository<OrderPayment>,
   ) {}
 
+  /**
+   * Деньги на дашборде.
+   * - totalRevenue / monthlyRevenue — «продано»: оформленные заказы без отменённых,
+   *   возвращённых и черновиков (раньше сюда попадали все заказы).
+   * - monthlyPaid — фактически поступило за месяц: оплаты минус возвраты денег.
+   * - receivables — долги клиентов: продано, но ещё не оплачено.
+   */
   async getStats(organizationId: string) {
-    // Все заказы организации
-    const allOrders = await this.orderRepository.find({
-      where: { organizationId },
-    });
-
-    // Заказы за текущий месяц
     const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const monthOrders = allOrders.filter(
-      (o) => o.createdAt >= monthStart,
-    );
+    const monthStart = businessMonthStart(now);
 
-    // Активные заказы (pending или processing)
-    const activeOrders = allOrders.filter(
-      (o) => o.status === 'pending' || o.status === 'processing',
-    );
+    const sold = await this.orderRepository
+      .createQueryBuilder('o')
+      .select('COALESCE(SUM(o."totalAmount"), 0)', 'total')
+      .addSelect(
+        'COALESCE(SUM(CASE WHEN o."createdAt" >= :monthStart THEN o."totalAmount" ELSE 0 END), 0)',
+        'month',
+      )
+      .addSelect(
+        `COUNT(*) FILTER (WHERE o.status NOT IN (:...finished))`,
+        'active',
+      )
+      .where('o.organizationId = :organizationId', { organizationId })
+      .andWhere('o.status NOT IN (:...notSales)', { notSales: NOT_SALES })
+      .setParameters({ monthStart, finished: FINISHED })
+      .getRawOne<{ total: string; month: string; active: string }>();
 
-    // Количество товаров
+    // Подписанная сумма: возврат денег уменьшает поступления.
+    const signedAmount = `CASE WHEN p.kind = 'refund' OR p.amount < 0 THEN -ABS(p.amount) ELSE p.amount END`;
+
+    const paid = await this.orderPaymentRepository
+      .createQueryBuilder('p')
+      .select(`COALESCE(SUM(${signedAmount}), 0)`, 'month')
+      .where('p.organizationId = :organizationId', { organizationId })
+      .andWhere('p.createdAt >= :monthStart', { monthStart })
+      .getRawOne<{ month: string }>();
+
+    const debts = await this.orderRepository
+      .createQueryBuilder('o')
+      .select(
+        `COALESCE(SUM(GREATEST(o."totalAmount" - COALESCE(paid.sum, 0), 0)), 0)`,
+        'total',
+      )
+      .leftJoin(
+        (sub) =>
+          sub
+            .select('p."orderId"', 'orderId')
+            .addSelect(`SUM(${signedAmount})`, 'sum')
+            .from(OrderPayment, 'p')
+            .where('p.organizationId = :organizationId')
+            .groupBy('p."orderId"'),
+        'paid',
+        'paid."orderId" = o.id',
+      )
+      .where('o.organizationId = :organizationId', { organizationId })
+      .andWhere('o.status NOT IN (:...notSales)', { notSales: NOT_SALES })
+      .getRawOne<{ total: string }>();
+
     const itemCount = await this.itemRepository.count({
       where: { organizationId },
     });
 
-    const totalRevenue = allOrders.reduce(
-      (sum, o) => sum + Number(o.totalAmount),
-      0,
-    );
-    const monthlyRevenue = monthOrders.reduce(
-      (sum, o) => sum + Number(o.totalAmount),
-      0,
-    );
-
     return {
-      totalRevenue,
-      monthlyRevenue,
+      totalRevenue: money(sold?.total),
+      monthlyRevenue: money(sold?.month),
+      monthlyPaid: money(paid?.month),
+      receivables: money(debts?.total),
       inventoryCount: itemCount,
-      activeOrdersCount: activeOrders.length,
-      period: now.toISOString().substring(0, 7),
+      activeOrdersCount: Number(sold?.active ?? 0),
+      period: businessToday(now).substring(0, 7),
     };
   }
 
   async getSalesChart(organizationId: string, period: string) {
     const days = period === '7d' ? 7 : period === '30d' ? 30 : 90;
+    const timeZone = businessTimeZone();
+    const now = new Date();
+    const since = new Date(now.getTime() - (days + 1) * DAY_MS);
+
+    // Сумма продаж по дням бизнеса (APP_TIME_ZONE), без отмен, возвратов и черновиков.
+    const rows = await this.orderRepository
+      .createQueryBuilder('o')
+      .select(
+        // createdAt — timestamp без пояса в часовом поясе самой БД (на проде UTC).
+        `to_char((o."createdAt" AT TIME ZONE current_setting('TimeZone')) AT TIME ZONE :timeZone, 'YYYY-MM-DD')`,
+        'day',
+      )
+      .addSelect('SUM(o."totalAmount")', 'amount')
+      .where('o.organizationId = :organizationId', { organizationId })
+      .andWhere('o.status NOT IN (:...notSales)', { notSales: NOT_SALES })
+      .andWhere('o."createdAt" >= :since', { since })
+      .setParameter('timeZone', timeZone)
+      .groupBy('day')
+      .getRawMany<{ day: string; amount: string }>();
+    const byDay = new Map(rows.map((row) => [row.day, money(row.amount)]));
+
     const data: { date: string; amount: number }[] = [];
-
-    const endDate = new Date();
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - days);
-
-    // Получаем заказы за период
-    const orders = await this.orderRepository.find({
-      where: {
-        organizationId,
-        createdAt: Between(startDate, endDate),
-      },
-    });
-
-    // Группируем по датам
-    for (let i = 0; i < days; i++) {
-      const date = new Date();
-      date.setDate(date.getDate() - (days - i - 1));
-      const dateStr = date.toISOString().substring(0, 10);
-
-      const dayOrders = orders.filter(
-        (o) => o.createdAt.toISOString().substring(0, 10) === dateStr,
-      );
-
-      const amount = dayOrders.reduce(
-        (sum, o) => sum + Number(o.totalAmount),
-        0,
-      );
-
-      data.push({ date: dateStr, amount });
+    for (let i = days - 1; i >= 0; i--) {
+      const date = businessToday(new Date(now.getTime() - i * DAY_MS));
+      data.push({ date, amount: byDay.get(date) ?? 0 });
     }
 
     return { period, data };
@@ -128,104 +208,229 @@ export class DashboardService {
     return { categories };
   }
 
-  // Расширенная аналитика
+  // Расширенная аналитика: текущий и прошлый месяц по времени бизнеса.
   async getAdvancedAnalytics(organizationId: string) {
     const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+    const monthStart = businessMonthStart(now);
+    const lastMonthStart = businessMonthStart(new Date(monthStart.getTime() - 1));
 
-    // Заказы
-    const allOrders = await this.orderRepository.find({
-      where: { organizationId },
-      relations: ['items'],
-    });
+    const totals = await this.orderRepository
+      .createQueryBuilder('o')
+      .select(
+        `COALESCE(SUM(o."totalAmount") FILTER (WHERE o."createdAt" >= :monthStart), 0)`,
+        'revenue',
+      )
+      .addSelect(
+        `COALESCE(SUM(o."totalAmount") FILTER (WHERE o."createdAt" < :monthStart), 0)`,
+        'lastRevenue',
+      )
+      .addSelect(`COUNT(*) FILTER (WHERE o."createdAt" >= :monthStart)`, 'orders')
+      .addSelect(`COUNT(*) FILTER (WHERE o."createdAt" < :monthStart)`, 'lastOrders')
+      .where('o.organizationId = :organizationId', { organizationId })
+      .andWhere('o.status NOT IN (:...notSales)', { notSales: NOT_SALES })
+      .andWhere('o."createdAt" >= :lastMonthStart', { lastMonthStart })
+      .setParameter('monthStart', monthStart)
+      .getRawOne<{ revenue: string; lastRevenue: string; orders: string; lastOrders: string }>();
 
-    const currentMonthOrders = allOrders.filter((o) => o.createdAt >= monthStart);
-    const lastMonthOrders = allOrders.filter(
-      (o) => o.createdAt >= lastMonthStart && o.createdAt < monthStart,
-    );
+    const revenue = money(totals?.revenue);
+    const lastRevenue = money(totals?.lastRevenue);
+    const ordersCount = Number(totals?.orders ?? 0);
+    const lastOrdersCount = Number(totals?.lastOrders ?? 0);
+    const avgOrderValue = ordersCount > 0 ? revenue / ordersCount : 0;
+    const lastAvgOrderValue = lastOrdersCount > 0 ? lastRevenue / lastOrdersCount : 0;
 
-    // Выручка
-    const currentMonthRevenue = currentMonthOrders.reduce(
-      (sum, o) => sum + Number(o.totalAmount),
-      0,
-    );
-    const lastMonthRevenue = lastMonthOrders.reduce(
-      (sum, o) => sum + Number(o.totalAmount),
-      0,
-    );
-    const revenueChange = lastMonthRevenue > 0
-      ? ((currentMonthRevenue - lastMonthRevenue) / lastMonthRevenue) * 100
-      : 0;
+    // Себестоимость проданных запчастей — по закупочной цене товара.
+    // Позиции без закупочной цены считаем отдельно: прибыль по ним неизвестна.
+    const cost = await this.orderItemRepository
+      .createQueryBuilder('oi')
+      .innerJoin('oi.order', 'o')
+      .innerJoin('oi.item', 'i')
+      .select(`COALESCE(SUM(oi.quantity * i."purchaseCost"), 0)`, 'cost')
+      .addSelect(`COUNT(*) FILTER (WHERE i."purchaseCost" IS NULL)`, 'unknown')
+      .where('o.organizationId = :organizationId', { organizationId })
+      .andWhere('o.status NOT IN (:...notSales)', { notSales: NOT_SALES })
+      .andWhere('o."createdAt" >= :monthStart', { monthStart })
+      .getRawOne<{ cost: string; unknown: string }>();
+    const costOfGoods = money(cost?.cost);
+    const profit = revenue - costOfGoods;
 
-    // Количество заказов
-    const currentMonthOrdersCount = currentMonthOrders.length;
-    const lastMonthOrdersCount = lastMonthOrders.length;
-    const ordersChange = lastMonthOrdersCount > 0
-      ? ((currentMonthOrdersCount - lastMonthOrdersCount) / lastMonthOrdersCount) * 100
-      : 0;
+    // Деньги: фактические поступления месяца (оплаты минус возвраты).
+    const signedAmount = `CASE WHEN p.kind = 'refund' OR p.amount < 0 THEN -ABS(p.amount) ELSE p.amount END`;
+    const paidRow = await this.orderPaymentRepository
+      .createQueryBuilder('p')
+      .select(`COALESCE(SUM(${signedAmount}), 0)`, 'paid')
+      .where('p.organizationId = :organizationId', { organizationId })
+      .andWhere('p.createdAt >= :monthStart', { monthStart })
+      .getRawOne<{ paid: string }>();
+    const paid = money(paidRow?.paid);
 
-    // Средний чек
-    const avgOrderValue = currentMonthOrdersCount > 0
-      ? currentMonthRevenue / currentMonthOrdersCount
-      : 0;
-    const lastMonthAvgOrderValue = lastMonthOrdersCount > 0
-      ? lastMonthRevenue / lastMonthOrdersCount
-      : 0;
-    const avgOrderChange = lastMonthAvgOrderValue > 0
-      ? ((avgOrderValue - lastMonthAvgOrderValue) / lastMonthAvgOrderValue) * 100
-      : 0;
+    const statusCounts = await this.orderRepository
+      .createQueryBuilder('o')
+      .select(`COUNT(*) FILTER (WHERE o."paymentStatus" = 'paid')`, 'paid')
+      .addSelect(`COUNT(*) FILTER (WHERE o."paymentStatus" <> 'paid')`, 'unpaid')
+      .where('o.organizationId = :organizationId', { organizationId })
+      .andWhere('o.status NOT IN (:...notSales)', { notSales: NOT_SALES })
+      .andWhere('o."createdAt" >= :monthStart', { monthStart })
+      .getRawOne<{ paid: string; unpaid: string }>();
 
-    // Оплаченные заказы
-    const paidOrders = currentMonthOrders.filter((o) => o.paymentStatus === 'paid');
-    const paidRevenue = paidOrders.reduce((sum, o) => sum + Number(o.totalAmount), 0);
-    const unpaidRevenue = currentMonthRevenue - paidRevenue;
-
-    // Приходные накладные
-    const incomingDocs = await this.incomingDocRepository.find({
-      where: { organizationId, status: IncomingDocStatus.DONE },
-    });
-
-    const currentMonthIncoming = incomingDocs.filter((d) => d.createdAt >= monthStart);
-    const incomingAmount = currentMonthIncoming.reduce(
-      (sum, d) => sum + Number(d.totalAmount),
-      0,
-    );
-
-    // Прибыль (выручка - закупки)
-    const profit = currentMonthRevenue - incomingAmount;
-    const profitMargin = currentMonthRevenue > 0 ? (profit / currentMonthRevenue) * 100 : 0;
+    const incoming = await this.incomingDocRepository
+      .createQueryBuilder('d')
+      .select('COALESCE(SUM(d."totalAmount"), 0)', 'amount')
+      .addSelect('COUNT(*)', 'count')
+      .where('d.organizationId = :organizationId', { organizationId })
+      .andWhere('d.status = :done', { done: IncomingDocStatus.DONE })
+      .andWhere('d.createdAt >= :monthStart', { monthStart })
+      .getRawOne<{ amount: string; count: string }>();
 
     return {
       revenue: {
-        current: currentMonthRevenue,
-        last: lastMonthRevenue,
-        change: revenueChange,
+        current: revenue,
+        last: lastRevenue,
+        change: percentChange(revenue, lastRevenue),
       },
       orders: {
-        current: currentMonthOrdersCount,
-        last: lastMonthOrdersCount,
-        change: ordersChange,
+        current: ordersCount,
+        last: lastOrdersCount,
+        change: percentChange(ordersCount, lastOrdersCount),
       },
       avgOrderValue: {
-        current: avgOrderValue,
-        last: lastMonthAvgOrderValue,
-        change: avgOrderChange,
+        current: money(avgOrderValue),
+        last: money(lastAvgOrderValue),
+        change: percentChange(avgOrderValue, lastAvgOrderValue),
       },
       payments: {
-        paid: paidRevenue,
-        unpaid: unpaidRevenue,
-        paidCount: paidOrders.length,
-        unpaidCount: currentMonthOrdersCount - paidOrders.length,
+        paid,
+        unpaid: money(Math.max(revenue - paid, 0)),
+        paidCount: Number(statusCounts?.paid ?? 0),
+        unpaidCount: Number(statusCounts?.unpaid ?? 0),
       },
       incoming: {
-        amount: incomingAmount,
-        count: currentMonthIncoming.length,
+        amount: money(incoming?.amount),
+        count: Number(incoming?.count ?? 0),
       },
+      // Валовая прибыль: продажи минус закупочная стоимость проданных запчастей.
+      // Зарплата и прочие расходы не вычитаются.
       profit: {
-        amount: profit,
-        margin: profitMargin,
+        amount: money(profit),
+        margin: revenue > 0 ? (profit / revenue) * 100 : 0,
+        costOfGoods,
+        itemsWithoutCost: Number(cost?.unknown ?? 0),
+      },
+    };
+  }
+
+  /**
+   * Стоимость склада и мёртвый остаток. «Без движения» считаем от последней продажи
+   * или поступления (журнал inventory_movements), а если их не было — от появления детали.
+   * Архивные товары и нулевой остаток не учитываются.
+   */
+  async getInventoryValue(organizationId: string, deadDays = 90, limit = 50) {
+    const lastActivity = this.itemRepository.manager
+      .createQueryBuilder()
+      .select('m."itemId"', 'itemId')
+      .addSelect('MAX(m."createdAt")', 'at')
+      .from(InventoryMovement, 'm')
+      .where('m."organizationId" = :organizationId')
+      .andWhere('m.type IN (:...activity)')
+      .groupBy('m."itemId"');
+
+    const base = () =>
+      this.itemRepository
+        .createQueryBuilder('i')
+        .leftJoin(`(${lastActivity.getQuery()})`, 'act', 'act."itemId" = i.id')
+        .where('i.organizationId = :organizationId', { organizationId })
+        .andWhere('i.quantity > 0')
+        .andWhere('i.status <> :archived', { archived: ItemStatus.ARCHIVED })
+        .setParameter('activity', [MovementType.SALE, MovementType.RECEIVING]);
+
+    const idleDays = `GREATEST(0, EXTRACT(DAY FROM (now() - COALESCE(act.at, i."createdAt"))))::int`;
+    const cost = `i.quantity * i."purchaseCost"`;
+    const price = `i.quantity * i.price`;
+
+    const buckets = await base()
+      .select(
+        `CASE
+          WHEN ${idleDays} <= 30 THEN '0-30'
+          WHEN ${idleDays} <= 90 THEN '31-90'
+          WHEN ${idleDays} <= 180 THEN '91-180'
+          WHEN ${idleDays} <= 365 THEN '181-365'
+          ELSE '365+' END`,
+        'bucket',
+      )
+      .addSelect('COUNT(*)', 'items')
+      .addSelect('SUM(i.quantity)', 'units')
+      .addSelect(`COALESCE(SUM(${cost}), 0)`, 'costValue')
+      .addSelect(`COALESCE(SUM(${price}), 0)`, 'priceValue')
+      .addSelect(`COUNT(*) FILTER (WHERE i."purchaseCost" IS NULL)`, 'withoutCost')
+      .groupBy('bucket')
+      .getRawMany<Record<string, string>>();
+
+    const order = ['0-30', '31-90', '91-180', '181-365', '365+'];
+    const aging = order.map((bucket) => {
+      const row = buckets.find((b) => b.bucket === bucket);
+      return {
+        bucket,
+        items: Number(row?.items ?? 0),
+        units: Number(row?.units ?? 0),
+        costValue: money(row?.costValue),
+        priceValue: money(row?.priceValue),
+      };
+    });
+    const totals = aging.reduce(
+      (sum, b) => ({
+        items: sum.items + b.items,
+        units: sum.units + b.units,
+        costValue: money(sum.costValue + b.costValue),
+        priceValue: money(sum.priceValue + b.priceValue),
+      }),
+      { items: 0, units: 0, costValue: 0, priceValue: 0 },
+    );
+    const withoutCost = buckets.reduce((sum, b) => sum + Number(b.withoutCost ?? 0), 0);
+
+    const dead = await base()
+      .select('i.id', 'id')
+      .addSelect('i.name', 'name')
+      .addSelect('i.sku', 'sku')
+      .addSelect('i.quantity', 'quantity')
+      .addSelect('i.price', 'price')
+      .addSelect('i."purchaseCost"', 'purchaseCost')
+      .addSelect('i."donorId"', 'donorId')
+      .addSelect(idleDays, 'idleDays')
+      .addSelect(`${price}`, 'priceValue')
+      .andWhere(`${idleDays} >= :deadDays`, { deadDays })
+      .orderBy('"priceValue"', 'DESC')
+      .limit(limit)
+      .getRawMany<Record<string, string | null>>();
+
+    const deadRow = await base()
+      .select('COUNT(*)', 'items')
+      .addSelect(`COALESCE(SUM(${price}), 0)`, 'priceValue')
+      .addSelect(`COALESCE(SUM(${cost}), 0)`, 'costValue')
+      .andWhere(`${idleDays} >= :deadDays`, { deadDays })
+      .getRawOne<Record<string, string>>();
+    const deadTotals = {
+      items: Number(deadRow?.items ?? 0),
+      priceValue: money(deadRow?.priceValue),
+      costValue: money(deadRow?.costValue),
+    };
+
+    return {
+      totals: { ...totals, withoutCost },
+      aging,
+      deadDays,
+      deadStock: {
+        ...deadTotals,
+        top: dead.map((row) => ({
+          id: Number(row.id),
+          name: row.name,
+          sku: row.sku,
+          quantity: Number(row.quantity),
+          price: money(row.price),
+          purchaseCost: row.purchaseCost == null ? null : money(row.purchaseCost),
+          donorId: row.donorId,
+          idleDays: Number(row.idleDays),
+          priceValue: money(row.priceValue),
+        })),
       },
     };
   }

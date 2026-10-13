@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -36,6 +37,7 @@ export interface ItemWriteOptions extends ItemReadOptions {
 }
 
 const CODE_MATCH_LIMIT = 20;
+const IMPORT_MAX_ROWS = 5000;
 const ITEM_AUDIT_ENTITY = 'item';
 const ITEM_AUDITED_FIELDS = ['price', 'purchaseCost', 'status'] as const;
 
@@ -302,39 +304,193 @@ export class ItemsService {
     const input = parseItemCatalogInput(data, {
       canEditCost: !!options.includeFinance,
     });
-    const openingQuantity = Number(input.fields.quantity ?? 0);
-    delete input.fields.quantity;
     const id = await this.withBarcodeGuard(() =>
-      this.itemRepository.manager.transaction(async (manager) => {
-        const saved = await manager.save(
-          Item,
-          manager.create(Item, {
-            ...input.fields,
-            quantity: 0,
-            organizationId,
-            syncedToB2C: true, // Автоматически синхронизируем новые товары в B2C
-          }),
-        );
-        await this.replaceRelations(manager, saved.id, organizationId, input);
-        if (Number.isInteger(openingQuantity) && openingQuantity > 0) {
-          await this.inventoryService.apply(
-            {
-              organizationId,
-              itemId: saved.id,
-              type: MovementType.RECEIVING,
-              quantityDelta: openingQuantity,
-              userId: options.actorId,
-              documentType: 'item',
-              documentId: String(saved.id),
-              reason: 'создание',
-            },
-            manager,
-          );
-        }
-        return saved.id;
-      }),
+      this.itemRepository.manager.transaction((manager) =>
+        this.createWithin(manager, organizationId, input, options),
+      ),
     );
     return this.findOne(id, organizationId, options);
+  }
+
+  /** Создание товара в чужой транзакции: начальный остаток идёт в журнал склада. */
+  private async createWithin(
+    manager: EntityManager,
+    organizationId: string,
+    input: ItemCatalogInput,
+    options: ItemWriteOptions,
+    reason = 'создание',
+  ): Promise<number> {
+    const fields = { ...input.fields } as Record<string, unknown>;
+    const openingQuantity = Number(fields.quantity ?? 0);
+    delete fields.quantity;
+    const saved = await manager.save(
+      Item,
+      manager.create(Item, {
+        ...(fields as Partial<Item>),
+        quantity: 0,
+        organizationId,
+        syncedToB2C: true, // Автоматически синхронизируем новые товары в B2C
+      }),
+    );
+    await this.replaceRelations(manager, saved.id, organizationId, input);
+    if (Number.isInteger(openingQuantity) && openingQuantity > 0) {
+      await this.inventoryService.apply(
+        {
+          organizationId,
+          itemId: saved.id,
+          type: MovementType.RECEIVING,
+          quantityDelta: openingQuantity,
+          userId: options.actorId,
+          documentType: 'item',
+          documentId: String(saved.id),
+          reason,
+        },
+        manager,
+      );
+    }
+    return saved.id;
+  }
+
+  /**
+   * Импорт склада пакетом. dryRun — только проверка и отчёт, без записи.
+   * Без dryRun все новые строки создаются в одной транзакции (всё или ничего).
+   * Дубль по артикулу или штрихкоду (в базе или выше в файле) пропускается,
+   * совпадение по OEM — только предупреждение.
+   */
+  async importRows(
+    organizationId: string,
+    body: unknown,
+    options: ItemWriteOptions = {},
+  ) {
+    const payload = (body && typeof body === 'object' ? body : {}) as {
+      rows?: unknown;
+      dryRun?: unknown;
+    };
+    if (!Array.isArray(payload.rows) || payload.rows.length === 0) {
+      throw new BadRequestException('Нет строк для импорта');
+    }
+    if (payload.rows.length > IMPORT_MAX_ROWS) {
+      throw new BadRequestException(
+        `За один раз не больше ${IMPORT_MAX_ROWS} строк — разбейте файл`,
+      );
+    }
+    const dryRun = payload.dryRun !== false;
+
+    type Parsed = {
+      row: number;
+      name: string;
+      input?: ItemCatalogInput;
+      status: 'new' | 'duplicate' | 'invalid';
+      message?: string;
+      existingId?: number;
+      warning?: string;
+    };
+    const parsed: Parsed[] = payload.rows.map((raw, index) => {
+      const data = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+      const row = Number(data.row) || index + 2;
+      const name = String(data.name ?? '').trim();
+      try {
+        if (!name) throw new BadRequestException('Нет названия');
+        const price = Number(data.price ?? 0);
+        if (!Number.isFinite(price) || price < 0) throw new BadRequestException('Неверная цена');
+        const quantity = Number(data.quantity ?? 0);
+        if (!Number.isInteger(quantity) || quantity < 0) {
+          throw new BadRequestException('Количество — целое число от 0');
+        }
+        const { row: _row, ...fields } = data;
+        const input = parseItemCatalogInput(
+          { ...fields, name, price, quantity },
+          { canEditCost: !!options.includeFinance },
+        );
+        return { row, name, input, status: 'new' };
+      } catch (error) {
+        return { row, name, status: 'invalid', message: (error as Error).message };
+      }
+    });
+
+    const valid = parsed.filter((p) => p.status === 'new');
+    const values = (key: 'sku' | 'barcode' | 'oemNormalized') =>
+      [
+        ...new Set(
+          valid
+            .map((p) => p.input!.fields[key] as string | null | undefined)
+            .filter((v): v is string => !!v && v.trim() !== ''),
+        ),
+      ];
+    const skus = values('sku').map((v) => v.toLowerCase());
+    const barcodes = values('barcode');
+    const oems = values('oemNormalized');
+
+    const existing = await this.itemRepository
+      .createQueryBuilder('i')
+      .select(['i.id', 'i.sku', 'i.barcode', 'i.oemNormalized'])
+      .where('i.organizationId = :organizationId', { organizationId })
+      .andWhere(
+        new Brackets((qb) => {
+          qb.where('1 = 0');
+          if (skus.length) qb.orWhere('LOWER(i.sku) IN (:...skus)', { skus });
+          if (barcodes.length) qb.orWhere('i.barcode IN (:...barcodes)', { barcodes });
+          if (oems.length) qb.orWhere('i."oemNormalized" IN (:...oems)', { oems });
+        }),
+      )
+      .getMany();
+    const bySku = new Map(existing.filter((i) => i.sku).map((i) => [i.sku!.toLowerCase(), i.id]));
+    const byBarcode = new Map(existing.filter((i) => i.barcode).map((i) => [i.barcode!, i.id]));
+    const byOem = new Map(existing.filter((i) => i.oemNormalized).map((i) => [i.oemNormalized!, i.id]));
+
+    const seenSku = new Map<string, number>();
+    const seenBarcode = new Map<string, number>();
+    for (const item of valid) {
+      const sku = (item.input!.fields.sku as string | null | undefined)?.trim().toLowerCase();
+      const barcode = (item.input!.fields.barcode as string | null | undefined)?.trim();
+      const oem = item.input!.fields.oemNormalized as string | null | undefined;
+      if (sku && bySku.has(sku)) {
+        Object.assign(item, { status: 'duplicate', existingId: bySku.get(sku), message: 'Артикул уже есть на складе' });
+      } else if (barcode && byBarcode.has(barcode)) {
+        Object.assign(item, { status: 'duplicate', existingId: byBarcode.get(barcode), message: 'Штрихкод уже есть на складе' });
+      } else if (sku && seenSku.has(sku)) {
+        Object.assign(item, { status: 'duplicate', message: `Артикул повторяется в строке ${seenSku.get(sku)}` });
+      } else if (barcode && seenBarcode.has(barcode)) {
+        Object.assign(item, { status: 'duplicate', message: `Штрихкод повторяется в строке ${seenBarcode.get(barcode)}` });
+      } else {
+        if (sku) seenSku.set(sku, item.row);
+        if (barcode) seenBarcode.set(barcode, item.row);
+        if (oem && byOem.has(oem)) item.warning = 'Товар с таким OEM уже есть';
+      }
+    }
+
+    const toCreate = parsed.filter((p) => p.status === 'new');
+    const createdIds = new Map<number, number>();
+    if (!dryRun && toCreate.length > 0) {
+      await this.withBarcodeGuard(() =>
+        this.itemRepository.manager.transaction(async (manager) => {
+          for (const item of toCreate) {
+            createdIds.set(
+              item.row,
+              await this.createWithin(manager, organizationId, item.input!, options, 'импорт'),
+            );
+          }
+        }),
+      );
+    }
+
+    return {
+      dryRun,
+      total: parsed.length,
+      toCreate: toCreate.length,
+      created: dryRun ? 0 : toCreate.length,
+      duplicates: parsed.filter((p) => p.status === 'duplicate').length,
+      invalid: parsed.filter((p) => p.status === 'invalid').length,
+      rows: parsed.map((p) => ({
+        row: p.row,
+        name: p.name,
+        status: p.status === 'new' && !dryRun ? 'created' : p.status,
+        message: p.message ?? null,
+        warning: p.warning ?? null,
+        existingId: p.existingId ?? null,
+        itemId: createdIds.get(p.row) ?? null,
+      })),
+    };
   }
 
   async update(

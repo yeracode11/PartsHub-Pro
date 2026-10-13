@@ -7,7 +7,39 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Not, Repository } from 'typeorm';
 import { Vehicle } from './entities/vehicle.entity';
+import { VehicleServiceRecord } from './entities/vehicle-service-record.entity';
 import { Customer } from '../customers/entities/customer.entity';
+import { businessToday } from '../donors/donor-status';
+
+export interface RecordServiceInput {
+  mileage: number;
+  serviceDate?: string | Date;
+  description?: string | null;
+  orderId?: number | null;
+  nextServiceMileage?: number | null;
+  nextServiceDate?: string | Date | null;
+}
+
+/** Целое неотрицательное число или ошибка 400. */
+function mileageValue(value: unknown, field: string): number {
+  const number = Number(value);
+  if (value === null || value === undefined || value === '' || !Number.isInteger(number) || number < 0) {
+    throw new BadRequestException(`${field}: укажите целое неотрицательное число`);
+  }
+  return number;
+}
+
+/** Дата 'YYYY-MM-DD' из строки или Date; пустое — null. */
+function dateValue(value: unknown, field: string): string | null {
+  if (value === null || value === undefined || value === '') return null;
+  const date = value instanceof Date ? value : new Date(String(value));
+  if (Number.isNaN(date.getTime())) {
+    throw new BadRequestException(`${field}: неверная дата`);
+  }
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(value))
+    ? String(value)
+    : businessToday(date);
+}
 
 const IMMUTABLE_FIELDS = ['id', 'organizationId', 'createdAt', 'updatedAt'];
 
@@ -18,6 +50,8 @@ export class VehiclesService {
     private readonly vehicleRepository: Repository<Vehicle>,
     @InjectRepository(Customer)
     private readonly customerRepository: Repository<Customer>,
+    @InjectRepository(VehicleServiceRecord)
+    private readonly serviceRecordRepository: Repository<VehicleServiceRecord>,
   ) {}
 
   /** Госномер и VIN храним в одном виде, иначе «123 ABC 02» и «123abc02» станут разными машинами. */
@@ -208,50 +242,103 @@ export class VehiclesService {
   }
 
   /**
-   * Обновить пробег
+   * Обновить пробег. Пробег не уменьшается: ошибочно введённое значение
+   * исправляется в форме автомобиля.
    */
   async updateMileage(
     id: number,
     organizationId: string,
-    mileage: number,
+    mileage: unknown,
   ) {
-    await this.findOne(id, organizationId);
+    const vehicle = await this.findOne(id, organizationId);
+    const value = mileageValue(mileage, 'Пробег');
+    if (value < (vehicle.currentMileage ?? 0)) {
+      throw new BadRequestException(
+        `Пробег не может быть меньше текущего (${vehicle.currentMileage} км)`,
+      );
+    }
 
     await this.vehicleRepository.update(
       { id, organizationId },
-      { currentMileage: mileage },
+      { currentMileage: value },
     );
 
     return await this.findOne(id, organizationId);
   }
 
   /**
-   * Записать ТО (техническое обслуживание)
+   * Записать ТО: новая строка сервисной истории + обновление «последнее/следующее ТО»
+   * у автомобиля, в одной транзакции.
    */
   async recordService(
     id: number,
     organizationId: string,
-    data: {
-      mileage: number;
-      serviceDate: Date;
-      nextServiceMileage?: number;
-      nextServiceDate?: Date;
-    },
+    data: RecordServiceInput,
+    userId?: string | null,
   ) {
-    await this.findOne(id, organizationId);
+    const vehicle = await this.findOne(id, organizationId);
 
-    await this.vehicleRepository.update(
-      { id, organizationId },
-      {
-        lastServiceMileage: data.mileage,
-        lastServiceDate: data.serviceDate,
-        currentMileage: data.mileage,
-        nextServiceMileage: data.nextServiceMileage,
-        nextServiceDate: data.nextServiceDate,
-      },
-    );
+    const mileage = mileageValue(data.mileage, 'Пробег при ТО');
+    const serviceDate = dateValue(data.serviceDate, 'Дата ТО') ?? businessToday();
+    if (serviceDate > businessToday()) {
+      throw new BadRequestException('Дата ТО не может быть в будущем');
+    }
+    const nextServiceMileage =
+      data.nextServiceMileage === null || data.nextServiceMileage === undefined || (data.nextServiceMileage as unknown) === ''
+        ? null
+        : mileageValue(data.nextServiceMileage, 'Следующее ТО по пробегу');
+    if (nextServiceMileage !== null && nextServiceMileage <= mileage) {
+      throw new BadRequestException('Следующее ТО по пробегу должно быть больше пробега при ТО');
+    }
+    const nextServiceDate = dateValue(data.nextServiceDate, 'Следующее ТО по дате');
+    if (nextServiceDate !== null && nextServiceDate <= serviceDate) {
+      throw new BadRequestException('Дата следующего ТО должна быть позже даты ТО');
+    }
+    const description = data.description?.toString().trim() || null;
+    const orderId = data.orderId ? Number(data.orderId) : null;
+
+    await this.vehicleRepository.manager.transaction(async (manager) => {
+      await manager.getRepository(VehicleServiceRecord).save(
+        manager.getRepository(VehicleServiceRecord).create({
+          organizationId,
+          vehicleId: id,
+          serviceDate,
+          mileage,
+          description,
+          orderId,
+          nextServiceMileage,
+          nextServiceDate,
+          createdById: userId ?? null,
+        }),
+      );
+
+      // Запись задним числом не должна откатывать актуальные данные машины.
+      const isLatest =
+        !vehicle.lastServiceDate || serviceDate >= dateValue(vehicle.lastServiceDate, 'lastServiceDate')!;
+      const patch: Partial<Vehicle> = {
+        currentMileage: Math.max(vehicle.currentMileage ?? 0, mileage),
+      };
+      if (isLatest) {
+        Object.assign(patch, {
+          lastServiceMileage: mileage,
+          lastServiceDate: serviceDate,
+          nextServiceMileage,
+          nextServiceDate,
+        });
+      }
+      await manager.getRepository(Vehicle).update({ id, organizationId }, patch as any);
+    });
 
     return await this.findOne(id, organizationId);
+  }
+
+  /** Сервисная история автомобиля, новые записи сверху. */
+  async getServiceHistory(id: number, organizationId: string) {
+    await this.findOne(id, organizationId);
+    return this.serviceRecordRepository.find({
+      where: { vehicleId: id, organizationId },
+      order: { serviceDate: 'DESC', id: 'DESC' },
+    });
   }
 
   /**

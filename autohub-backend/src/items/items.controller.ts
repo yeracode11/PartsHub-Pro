@@ -76,6 +76,16 @@ export class ItemsController {
     return this.itemsService.syncAllToB2C(user.organizationId);
   }
 
+  /**
+   * POST /api/items/import — импорт склада пакетом строк (из Excel).
+   * { rows: [...], dryRun: true } — только проверка и отчёт по строкам.
+   */
+  @Post('import')
+  @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.STOREKEEPER)
+  importRows(@CurrentUser() user: any, @Body() body: unknown) {
+    return this.itemsService.importRows(user.organizationId, body, writeOptions(user));
+  }
+
   @Post()
   @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.STOREKEEPER) // Только эти роли могут создавать
   create(@CurrentUser() user: any, @Body() data: unknown) {

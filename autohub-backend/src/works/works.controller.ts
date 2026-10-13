@@ -24,12 +24,12 @@ export class WorksController {
     private readonly organizationsService: OrganizationsService,
   ) {}
 
+  /**
+   * Только организация из JWT. Раньше без неё подставлялась первая организация в БД —
+   * пользователь без организации получал доступ к чужим данным.
+   */
   private async resolveOrganizationId(user: any): Promise<string | null> {
-    if (user?.organizationId) {
-      return user.organizationId;
-    }
-    const orgs = await this.organizationsService.findAll();
-    return orgs.length > 0 ? orgs[0].id : null;
+    return user?.organizationId ?? null;
   }
 
   @Get()
@@ -42,7 +42,7 @@ export class WorksController {
   }
 
   @Post()
-  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.STO)
   async create(@CurrentUser() user: any, @Body() data: WorkCatalogInput) {
     const organizationId = await this.resolveOrganizationId(user);
     if (!organizationId) {
@@ -52,7 +52,7 @@ export class WorksController {
   }
 
   @Put(':id')
-  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.STO)
   async update(
     @Param('id') id: string,
     @CurrentUser() user: any,
@@ -66,7 +66,7 @@ export class WorksController {
   }
 
   @Delete(':id')
-  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.STO)
   async remove(@Param('id') id: string, @CurrentUser() user: any) {
     const organizationId = await this.resolveOrganizationId(user);
     if (!organizationId) {

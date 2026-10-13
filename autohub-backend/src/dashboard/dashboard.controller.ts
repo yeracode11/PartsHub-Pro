@@ -3,7 +3,8 @@ import { DashboardService } from './dashboard.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
-import { OrganizationsService } from '../organizations/organizations.service';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { UserRole } from '../common/enums/user-role.enum';
 
 @Controller('api/dashboard')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -12,22 +13,21 @@ export class DashboardController {
 
   constructor(
     private readonly dashboardService: DashboardService,
-    private readonly organizationsService: OrganizationsService,
   ) {}
 
+  /**
+   * Только организация из JWT. Раньше без неё бралась первая организация в БД,
+   * и пользователь без организации видел чужую выручку.
+   */
   private async resolveOrganizationId(user: any): Promise<string | null> {
-    if (user && user.organizationId) {
-      return user.organizationId;
-    }
-    const orgs = await this.organizationsService.findAll();
-    return orgs?.[0]?.id ?? null;
+    return user?.organizationId ?? null;
   }
 
   @Get('stats')
   async getStats(@CurrentUser() user: any) {
     const organizationId = await this.resolveOrganizationId(user);
     if (!organizationId) {
-      return { totalRevenue: 0, monthlyRevenue: 0, inventoryCount: 0, activeOrdersCount: 0, period: new Date().toISOString().substring(0, 7) };
+      return { totalRevenue: 0, monthlyRevenue: 0, monthlyPaid: 0, receivables: 0, inventoryCount: 0, activeOrdersCount: 0, period: new Date().toISOString().substring(0, 7) };
     }
     return this.dashboardService.getStats(organizationId);
   }
@@ -51,6 +51,19 @@ export class DashboardController {
       return { categories: [] } as any;
     }
     return this.dashboardService.getCategoryStats(organizationId);
+  }
+
+  /** Стоимость склада и мёртвый остаток. Закупочные цены — только владелец и менеджер. */
+  @Get('inventory-value')
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  async getInventoryValue(@CurrentUser() user: any, @Query('deadDays') deadDays?: string) {
+    const organizationId = await this.resolveOrganizationId(user);
+    if (!organizationId) return null;
+    const days = Number(deadDays);
+    return this.dashboardService.getInventoryValue(
+      organizationId,
+      Number.isInteger(days) && days >= 30 && days <= 730 ? days : 90,
+    );
   }
 
   @Get('advanced')

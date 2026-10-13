@@ -29,10 +29,12 @@ export class ScheduleController {
     private readonly organizationsService: OrganizationsService,
   ) {}
 
+  /**
+   * Только организация из JWT. Раньше без неё подставлялась первая организация в БД —
+   * пользователь без организации получал доступ к чужим данным.
+   */
   private async resolveOrganizationId(user: any): Promise<string | null> {
-    if (user?.organizationId) return user.organizationId;
-    const orgs = await this.organizationsService.findAll();
-    return orgs.length > 0 ? orgs[0].id : null;
+    return user?.organizationId ?? null;
   }
 
   @Get('posts')

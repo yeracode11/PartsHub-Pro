@@ -126,7 +126,7 @@ export class VehiclesController {
   async updateMileage(
     @CurrentUser() user: any,
     @Param('id') id: string,
-    @Body('mileage') mileage: number,
+    @Body('mileage') mileage: unknown,
   ) {
     return await this.vehiclesService.updateMileage(
       parseInt(id, 10),
@@ -149,6 +149,19 @@ export class VehiclesController {
       parseInt(id, 10),
       user.organizationId,
       data,
+      user.id ?? null,
+    );
+  }
+
+  /**
+   * GET /api/vehicles/:id/service-history - сервисная история
+   */
+  @Get(':id/service-history')
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  async getServiceHistory(@CurrentUser() user: any, @Param('id') id: string) {
+    return await this.vehiclesService.getServiceHistory(
+      parseInt(id, 10),
+      user.organizationId,
     );
   }
 }

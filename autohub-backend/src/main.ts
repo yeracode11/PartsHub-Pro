@@ -90,6 +90,9 @@ async function bootstrap() {
     logger: appLogger,
     rawBody: true,
   });
+  // Импорт склада (POST /api/items/import) шлёт до 5000 строк: стандартных 100 КБ мало.
+  // rawBody сохраняется — он нужен для проверки подписи Meta webhook.
+  app.useBodyParser('json', { limit: '5mb' });
   appLogger.log(
     `Loki bootstrap log. env=${process.env.LOKI_ENV || process.env.NODE_ENV || 'development'}`,
     'Bootstrap',

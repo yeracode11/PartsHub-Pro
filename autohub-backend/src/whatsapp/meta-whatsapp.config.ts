@@ -65,4 +65,8 @@ export class MetaWhatsAppConfig {
   messagesUrl(phoneNumberId: string): string {
     return `${this.apiUrl}/${this.apiVersion}/${phoneNumberId}/messages`;
   }
+
+  messageTemplatesUrl(wabaId: string): string {
+    return `${this.apiUrl}/${this.apiVersion}/${wabaId}/message_templates`;
+  }
 }

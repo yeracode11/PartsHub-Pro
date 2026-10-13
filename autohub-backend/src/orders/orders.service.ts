@@ -21,6 +21,8 @@ import {
 } from './order-status';
 import { ReservationsService } from './reservations.service';
 
+const ESTIMATE_APPROVAL_METHODS = ['phone', 'whatsapp', 'in_person'];
+
 @Injectable()
 export class OrdersService {
   private readonly logger = new Logger(OrdersService.name);
@@ -239,6 +241,12 @@ export class OrdersService {
       payments: _payments,
       paidAmount: _paidAmount,
       dueAmount: _dueAmount,
+      // Согласование ставится только через POST /orders/:id/estimate-approval.
+      estimateApprovedAt: _estimateApprovedAt,
+      estimateApprovedTotal: _estimateApprovedTotal,
+      estimateApprovalMethod: _estimateApprovalMethod,
+      estimateApprovalNote: _estimateApprovalNote,
+      estimateApprovedById: _estimateApprovedById,
       ...orderData
     } = data as any;
     const previousStatus = existingOrder.status;
@@ -415,6 +423,51 @@ export class OrdersService {
     const totalAmount = Math.round((partsTotal + worksTotal) * 100) / 100;
     await this.orderRepository.update({ id: orderId, organizationId }, { totalAmount });
     await this.syncPaymentStatus(orderId, organizationId);
+  }
+
+  /** Клиент согласовал смету: фиксируем способ, кто отметил и сумму на этот момент. */
+  async approveEstimate(
+    orderId: number,
+    organizationId: string,
+    input: { method?: string; note?: string },
+    actor?: { id?: string },
+  ) {
+    const method = String(input?.method ?? '');
+    if (!ESTIMATE_APPROVAL_METHODS.includes(method)) {
+      throw new BadRequestException('Укажите, как клиент согласовал: phone, whatsapp или in_person');
+    }
+    const order = await this.orderRepository.findOne({ where: { id: orderId, organizationId } });
+    if (!order) throw new NotFoundException('Заказ не найден');
+    if (order.status === 'cancelled') {
+      throw new BadRequestException('Отменённый заказ согласовать нельзя');
+    }
+    await this.orderRepository.update(
+      { id: orderId, organizationId },
+      {
+        estimateApprovedAt: new Date(),
+        estimateApprovedTotal: order.totalAmount,
+        estimateApprovalMethod: method,
+        estimateApprovalNote: input?.note?.toString().trim().slice(0, 500) || null,
+        estimateApprovedById: actor?.id ?? null,
+      },
+    );
+    return this.findOne(orderId, organizationId);
+  }
+
+  /** Снять отметку согласования (например, смету пересчитали и надо согласовать заново). */
+  async revokeEstimateApproval(orderId: number, organizationId: string) {
+    const result = await this.orderRepository.update(
+      { id: orderId, organizationId },
+      {
+        estimateApprovedAt: null,
+        estimateApprovedTotal: null,
+        estimateApprovalMethod: null,
+        estimateApprovalNote: null,
+        estimateApprovedById: null,
+      },
+    );
+    if (!result.affected) throw new NotFoundException('Заказ не найден');
+    return this.findOne(orderId, organizationId);
   }
 
   async addPayment(

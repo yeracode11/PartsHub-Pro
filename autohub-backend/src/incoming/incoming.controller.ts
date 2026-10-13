@@ -32,20 +32,12 @@ export class IncomingController {
   ) {}
 
   // Получение organizationId с fallback
+  /**
+   * Только организация из JWT. Раньше без неё подставлялась первая организация в БД —
+   * пользователь без организации получал доступ к чужим данным.
+   */
   private async resolveOrganizationId(user: any): Promise<string | null> {
-    try {
-      if (user?.organizationId) {
-        return user.organizationId;
-      }
-      // Fallback: находим первую активную организацию
-      const orgs = await this.organizationsService.findAll();
-      if (orgs.length > 0) {
-        return orgs[0].id;
-      }
-      return null;
-    } catch (error) {
-      return null;
-    }
+    return user?.organizationId ?? null;
   }
 
   // Создание приходной накладной
