@@ -435,40 +435,39 @@ class _MainScreenState extends State<MainScreen> {
                           padding: const EdgeInsets.all(24),
                           child: Row(
                             children: [
-                              Image.asset(
-                                'assets/icons/partshub-logo.png',
-                                width: 66,
-                                height: 66,
-                                fit: BoxFit.contain,
-                              ),
-                              const SizedBox(width: 12),
-                              const Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text.rich(
-                                    TextSpan(
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      crossAxisAlignment: CrossAxisAlignment.end,
                                       children: [
-                                        TextSpan(text: 'Jolda '),
-                                        TextSpan(
-                                          text: 'CRM',
-                                          style: TextStyle(color: AppTheme.primaryColor),
+                                        Image.asset(
+                                          'assets/icons/jolda-logo.png',
+                                          height: 26,
+                                          fit: BoxFit.contain,
+                                        ),
+                                        const SizedBox(width: 6),
+                                        const Text(
+                                          'CRM',
+                                          style: TextStyle(
+                                            fontSize: 21,
+                                            fontWeight: FontWeight.bold,
+                                            color: AppTheme.textPrimary,
+                                          ),
                                         ),
                                       ],
                                     ),
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                      color: AppTheme.textPrimary,
+                                    const SizedBox(height: 4),
+                                    const Text(
+                                      'B2B платформа',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: AppTheme.textSecondary,
+                                      ),
                                     ),
-                                  ),
-                                  Text(
-                                    'B2B платформа',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: AppTheme.textSecondary,
-                                    ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                             ],
                           ),
@@ -712,40 +711,39 @@ class _MainScreenState extends State<MainScreen> {
             padding: const EdgeInsets.fromLTRB(24, 48, 24, 24),
             child: Row(
               children: [
-                Image.asset(
-                  'assets/icons/partshub-logo.png',
-                  width: 72,
-                  height: 72,
-                  fit: BoxFit.contain,
-                ),
-                const SizedBox(width: 12),
-                const Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text.rich(
-                      TextSpan(
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          TextSpan(text: 'Jolda '),
-                          TextSpan(
-                            text: 'CRM',
-                            style: TextStyle(color: AppTheme.primaryColor),
+                          Image.asset(
+                            'assets/icons/jolda-logo.png',
+                            height: 26,
+                            fit: BoxFit.contain,
+                          ),
+                          const SizedBox(width: 6),
+                          const Text(
+                            'CRM',
+                            style: TextStyle(
+                              fontSize: 21,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.textPrimary,
+                            ),
                           ),
                         ],
                       ),
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: AppTheme.textPrimary,
+                      const SizedBox(height: 4),
+                      const Text(
+                        'B2B платформа',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: AppTheme.textSecondary,
+                        ),
                       ),
-                    ),
-                    Text(
-                      'B2B платформа',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: AppTheme.textSecondary,
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ],
             ),

@@ -74,9 +74,9 @@ h1, h2, h3, .brand { font-family: var(--font-head); }
 .header { position: sticky; top: 0; z-index: 20; background: rgb(255 255 255 / 0.92); backdrop-filter: saturate(1.4) blur(10px); border-bottom: 1px solid var(--hair); }
 .header-inner { display: flex; align-items: center; justify-content: space-between; height: var(--header-h); gap: 16px; }
 .brand { font-weight: 600; font-size: 18px; text-decoration: none; letter-spacing: -0.02em; color: var(--ink); }
-.brand { display: inline-flex; align-items: center; gap: 10px; }
-.brand-mark { display: block; flex: none; }
-.brand-name span { color: var(--primary); }
+.brand { display: inline-flex; align-items: flex-end; gap: 7px; }
+.brand-mark { display: block; flex: none; height: 30px; width: auto; }
+.brand-name { font-size: 22px; font-weight: 700; line-height: 1; color: var(--ink); margin-bottom: 0; }
 .nav { display: flex; align-items: center; gap: 36px; }
 .nav a { font-size: 15px; font-weight: 600; color: var(--text-2); text-decoration: none; }
 .nav a:hover { color: var(--ink); }

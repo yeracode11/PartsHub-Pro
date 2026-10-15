@@ -30,7 +30,7 @@ class ReceiptDocumentData {
     this.statement,
     this.signatures = const [],
     this.currencySymbol = '₸',
-    this.logoAssetPath = 'assets/icons/partshub-logo.png',
+    this.logoAssetPath = 'assets/icons/jolda-mark.png',
   });
 
   final String companyName;

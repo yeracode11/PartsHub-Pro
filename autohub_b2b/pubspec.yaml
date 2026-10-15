@@ -100,7 +100,8 @@ flutter:
 
   # To add assets to your application, add an assets section, like this:
   assets:
-    - assets/icons/partshub-logo.png
+    - assets/icons/jolda-mark.png
+    - assets/icons/jolda-logo.png
     - assets/fonts/Roboto-Regular.ttf
     - assets/fonts/Roboto-Bold.ttf
 
@@ -135,10 +136,19 @@ flutter:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/icons/partshub-logo.png"
+  image_path: "assets/icons/jolda-icon.png"
   # Android 8+ adaptive icon: белый фон + тот же логотип
   adaptive_icon_background: "#FFFFFF"
-  adaptive_icon_foreground: "assets/icons/partshub-logo.png"
+  adaptive_icon_foreground: "assets/icons/jolda-icon-foreground.png"
   # Меньше % = меньше «полей» вокруг графики = крупнее логотип на лаунчере (по умолчанию 16)
   adaptive_icon_foreground_inset: 8
   remove_alpha_ios: true
+  macos:
+    generate: true
+  windows:
+    generate: true
+    icon_size: 256
+  web:
+    generate: true
+    background_color: "#FFFFFF"
+    theme_color: "#2563EB"
