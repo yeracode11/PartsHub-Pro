@@ -65,8 +65,8 @@ class TsplBleLabelService {
     final int xRight = W - 16;
     int y = 16;
 
-    // --- Заголовок «Auto+ Pro» ---
-    buf.writeln('TEXT $xLeft,$y,"4",0,1,1,"Auto+ Pro"');
+    // --- Заголовок «PartsHub Pro» ---
+    buf.writeln('TEXT $xLeft,$y,"4",0,1,1,"PartsHub Pro"');
     y += 42;
 
     // Горизонтальная линия.
@@ -145,7 +145,7 @@ class TsplBleLabelService {
     buf.writeln('CLS');
     buf.writeln('CODEPAGE UTF-8');
     buf.writeln('TEXT 16,20,"4",0,1,1,"TSPL TEST"');
-    buf.writeln('TEXT 16,70,"2",0,1,1,"Auto+ BLE OK"');
+    buf.writeln('TEXT 16,70,"2",0,1,1,"PartsHub BLE OK"');
     buf.writeln('PRINT 1,1');
     return buf.toString();
   }

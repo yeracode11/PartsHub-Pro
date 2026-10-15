@@ -30,7 +30,7 @@ class ReceiptDocumentData {
     this.statement,
     this.signatures = const [],
     this.currencySymbol = '₸',
-    this.logoAssetPath = 'assets/icons/auto-plus-logo.png',
+    this.logoAssetPath = 'assets/icons/partshub-logo.png',
   });
 
   final String companyName;
@@ -56,7 +56,7 @@ class ReceiptDocumentData {
   static ReceiptDocumentData sample() {
     final now = DateTime.now();
     return ReceiptDocumentData(
-      companyName: 'Auto+ Pro',
+      companyName: 'PartsHub Pro',
       companySubtitle: 'Демонстрационный документ',
       orderNumber: 'DEMO-${now.millisecondsSinceEpoch % 100000}',
       issuedAt: now,
@@ -158,7 +158,7 @@ class ReceiptDocumentData {
 
   /// В документе для клиента — название организации, а не платформы.
   static String _company(String? name) =>
-      name != null && name.trim().isNotEmpty ? name.trim() : 'Auto+ Pro';
+      name != null && name.trim().isNotEmpty ? name.trim() : 'PartsHub Pro';
 
   static String? _vehicleInfo(OrderModel order) {
     final vehicle = order.vehicle;

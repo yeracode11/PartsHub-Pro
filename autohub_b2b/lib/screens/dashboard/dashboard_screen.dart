@@ -178,13 +178,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final spacing = isMobile ? 12.0 : 24.0;
     String tenge(double value) => '${numberFormat.format(value)} ₸';
 
-    Widget grid(List<Widget> cards, int columns) => GridView.count(
-      crossAxisCount: columns,
+    // На десктопе высота карточки фиксирована: при childAspectRatio в узкой
+    // колонке (5 карточек в ряд) содержимое не помещалось по высоте.
+    Widget grid(List<Widget> cards, int columns) => GridView(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      crossAxisSpacing: spacing,
-      mainAxisSpacing: spacing,
-      childAspectRatio: isMobile ? 2.0 : 2.4,
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: columns,
+        crossAxisSpacing: spacing,
+        mainAxisSpacing: spacing,
+        childAspectRatio: isMobile ? 2.0 : 2.4,
+        mainAxisExtent: isMobile ? null : 96,
+      ),
       children: cards,
     );
 

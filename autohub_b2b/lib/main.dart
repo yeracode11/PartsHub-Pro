@@ -80,7 +80,7 @@ class AutoHubApp extends StatelessWidget {
       ],
       child: MaterialApp(
         navigatorKey: rootNavigatorKey,
-        title: 'Auto+ Pro',
+        title: 'PartsHub Pro',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
         builder: (context, child) {
@@ -436,7 +436,7 @@ class _MainScreenState extends State<MainScreen> {
                           child: Row(
                             children: [
                               Image.asset(
-                                'assets/icons/auto-plus-logo.png',
+                                'assets/icons/partshub-logo.png',
                                 width: 66,
                                 height: 66,
                                 fit: BoxFit.contain,
@@ -445,8 +445,16 @@ class _MainScreenState extends State<MainScreen> {
                               const Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    'Auto+',
+                                  Text.rich(
+                                    TextSpan(
+                                      children: [
+                                        TextSpan(text: 'Parts'),
+                                        TextSpan(
+                                          text: 'Hub',
+                                          style: TextStyle(color: AppTheme.primaryColor),
+                                        ),
+                                      ],
+                                    ),
                                     style: TextStyle(
                                       fontSize: 18,
                                       fontWeight: FontWeight.bold,
@@ -705,7 +713,7 @@ class _MainScreenState extends State<MainScreen> {
             child: Row(
               children: [
                 Image.asset(
-                  'assets/icons/auto-plus-logo.png',
+                  'assets/icons/partshub-logo.png',
                   width: 72,
                   height: 72,
                   fit: BoxFit.contain,
@@ -714,8 +722,16 @@ class _MainScreenState extends State<MainScreen> {
                 const Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Auto+',
+                    Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(text: 'Parts'),
+                          TextSpan(
+                            text: 'Hub',
+                            style: TextStyle(color: AppTheme.primaryColor),
+                          ),
+                        ],
+                      ),
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,

@@ -297,7 +297,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final p = _packageInfo;
     showAboutDialog(
       context: context,
-      applicationName: 'Auto+ Pro',
+      applicationName: 'PartsHub Pro',
       applicationVersion: p != null ? '${p.version} (${p.buildNumber})' : '—',
       applicationLegalese: '© 2026 AutoHub B2B',
       children: const [

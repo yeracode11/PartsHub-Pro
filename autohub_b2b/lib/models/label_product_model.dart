@@ -63,7 +63,7 @@ class LabelProductData {
     this.qrPayload,
     /// Явное значение для CODE128 (только печатаемый ASCII 32–126). Если null — из [sku].
     this.barcodeData,
-    this.logoAssetPath = 'assets/icons/auto-plus-logo.png',
+    this.logoAssetPath = 'assets/icons/partshub-logo.png',
     this.warehouseCell,
   });
 

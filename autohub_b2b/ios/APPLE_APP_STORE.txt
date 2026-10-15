@@ -1,4 +1,4 @@
-App Store — чеклист для autohub_b2b (Auto+ Pro)
+App Store — чеклист для autohub_b2b (PartsHub Pro)
 ==============================================
 
 Bundle ID (должен совпадать везде): com.autohub.autohubB2b
