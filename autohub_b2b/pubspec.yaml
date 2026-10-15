@@ -130,7 +130,7 @@ flutter:
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
 
-# Иконки для магазинов и сборок: исходник — логотип PartsHub
+# Иконки для магазинов и сборок: исходник — логотип Jolda
 # Сгенерировать: dart run flutter_launcher_icons
 flutter_launcher_icons:
   android: true

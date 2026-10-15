@@ -16,7 +16,7 @@ const unbounded = Unbounded({
   variable: '--font-display',
 });
 
-const title = 'PartsHub Pro — учёт и продажи для авторазборок и СТО в Казахстане';
+const title = 'Jolda CRM — учёт и продажи для авторазборок и СТО в Казахстане';
 const description =
   'Склад, продажи, клиенты, запись и заказ-наряды в одном приложении для авторазборок, СТО и магазинов запчастей. Работает без интернета. Запросите демо.';
 
@@ -24,7 +24,7 @@ export const metadata: Metadata = {
   metadataBase: siteUrl ? new URL(siteUrl) : undefined,
   title,
   description,
-  applicationName: 'PartsHub Pro',
+  applicationName: 'Jolda CRM',
   keywords: [
     'программа для авторазборки',
     'учёт склада автозапчастей',
@@ -35,16 +35,16 @@ export const metadata: Metadata = {
   alternates: { canonical: '/' },
   robots: siteUrl ? { index: true, follow: true } : { index: false, follow: false },
   openGraph: {
-    title: 'PartsHub Pro — учёт и продажи для автобизнеса',
+    title: 'Jolda CRM — учёт и продажи для автобизнеса',
     description: 'Склад, продажи, клиенты, запись и заказ-наряды в одном приложении. Запросите демо.',
     url: '/',
-    siteName: 'PartsHub Pro',
+    siteName: 'Jolda CRM',
     locale: 'ru_KZ',
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'PartsHub Pro — учёт и продажи для автобизнеса',
+    title: 'Jolda CRM — учёт и продажи для автобизнеса',
     description: 'Склад, продажи, клиенты, запись и заказ-наряды в одном приложении.',
   },
   formatDetection: { telephone: false },

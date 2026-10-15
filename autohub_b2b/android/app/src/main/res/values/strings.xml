@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Имя под иконкой на лаунчере и в списке приложений (Google Play берёт отдельное имя в консоли) -->
-    <string name="app_name">PartsHub Pro</string>
+    <string name="app_name">Jolda CRM</string>
 </resources>

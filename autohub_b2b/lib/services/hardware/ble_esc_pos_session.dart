@@ -706,7 +706,7 @@ class BleEscPosSession {
     return [
       ...g.reset(),
       ...g.text(
-        'PartsHub Pro',
+        'Jolda CRM',
         styles: const PosStyles(align: PosAlign.center, bold: true),
       ),
       ...g.feed(1),
@@ -739,7 +739,7 @@ class BleEscPosSession {
     return [
       ...g.reset(),
       ...g.text(
-        'PartsHub Pro',
+        'Jolda CRM',
         styles: const PosStyles(align: PosAlign.center, bold: true),
       ),
       ...g.emptyLines(1),

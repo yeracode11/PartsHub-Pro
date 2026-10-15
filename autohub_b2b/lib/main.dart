@@ -80,7 +80,7 @@ class AutoHubApp extends StatelessWidget {
       ],
       child: MaterialApp(
         navigatorKey: rootNavigatorKey,
-        title: 'PartsHub Pro',
+        title: 'Jolda CRM',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
         builder: (context, child) {
@@ -448,9 +448,9 @@ class _MainScreenState extends State<MainScreen> {
                                   Text.rich(
                                     TextSpan(
                                       children: [
-                                        TextSpan(text: 'Parts'),
+                                        TextSpan(text: 'Jolda '),
                                         TextSpan(
-                                          text: 'Hub',
+                                          text: 'CRM',
                                           style: TextStyle(color: AppTheme.primaryColor),
                                         ),
                                       ],
@@ -725,9 +725,9 @@ class _MainScreenState extends State<MainScreen> {
                     Text.rich(
                       TextSpan(
                         children: [
-                          TextSpan(text: 'Parts'),
+                          TextSpan(text: 'Jolda '),
                           TextSpan(
-                            text: 'Hub',
+                            text: 'CRM',
                             style: TextStyle(color: AppTheme.primaryColor),
                           ),
                         ],

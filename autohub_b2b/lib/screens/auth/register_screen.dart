@@ -49,7 +49,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       builder: (context, state) {
         return AuthScreenShell(
           wideForm: true,
-          subtitle: 'Создайте аккаунт PartsHub Pro',
+          subtitle: 'Создайте аккаунт Jolda CRM',
           errorMessage: _errorMessage,
           leading: AuthIconButton(
             icon: Icons.arrow_back,

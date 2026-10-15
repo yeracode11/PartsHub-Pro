@@ -58,14 +58,14 @@ export default function Home() {
               <PhoneFrame
                 className="phone-a"
                 name="parts-dashboard"
-                alt="Дашборд PartsHub Pro: поступило за месяц, продано, долги клиентов, график продаж"
+                alt="Дашборд Jolda CRM: поступило за месяц, продано, долги клиентов, график продаж"
                 priority
                 sizes="(max-width: 960px) 250px, 252px"
               />
               <PhoneFrame
                 className="phone-b"
                 name="parts-warehouse"
-                alt="Экран «Товары» в PartsHub Pro"
+                alt="Экран «Товары» в Jolda CRM"
                 priority
                 sizes="(max-width: 960px) 250px, 252px"
               />

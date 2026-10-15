@@ -10,7 +10,7 @@ export function Header() {
       <div className="container header-inner">
         <a href="#top" className="brand" aria-label={`${brand.name} — наверх`}>
           <img src="/logo.svg" alt="" width={28} height={28} className="brand-mark" />
-          <span className="brand-name">Parts<span>Hub</span> Pro</span>
+          <span className="brand-name">Jolda <span>CRM</span></span>
         </a>
         <nav className="nav" aria-label="Разделы страницы">
           {nav.map((i) => (

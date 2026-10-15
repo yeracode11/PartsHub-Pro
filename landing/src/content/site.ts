@@ -5,7 +5,7 @@
  */
 
 export const brand = {
-  name: 'PartsHub Pro',
+  name: 'Jolda CRM',
   region: 'Казахстан',
 };
 
@@ -19,7 +19,7 @@ export const nav = [
 
 export const hero = {
   title: 'Склад, продажи и клиенты автобизнеса — в одном приложении',
-  lead: 'PartsHub Pro для авторазборок и СТО в Казахстане. Работает на телефоне и компьютере, в том числе без интернета.',
+  lead: 'Jolda CRM для авторазборок и СТО в Казахстане. Работает на телефоне и компьютере, в том числе без интернета.',
   primaryCta: 'Запросить демо',
   secondaryCta: 'Смотреть возможности',
   facts: [
@@ -30,7 +30,7 @@ export const hero = {
 };
 
 export const audience = {
-  title: 'Для кого PartsHub Pro',
+  title: 'Для кого Jolda CRM',
   lead: 'Состав разделов зависит от типа бизнеса: лишнего в меню нет.',
   items: [
     {
@@ -256,7 +256,7 @@ export const faq = [
 
 export const form = {
   title: 'Запросить демо',
-  lead: 'Оставьте заявку, и мы покажем PartsHub Pro на примере вашего бизнеса.',
+  lead: 'Оставьте заявку, и мы покажем Jolda CRM на примере вашего бизнеса.',
   points: [
     'Покажем разделы под ваш тип бизнеса',
     'Обсудим перенос склада из Excel',

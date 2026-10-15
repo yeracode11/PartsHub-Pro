@@ -4,7 +4,7 @@ import 'package:autohub_b2b/widgets/auth/auth_design.dart';
 class AuthScreenShell extends StatelessWidget {
   const AuthScreenShell({
     super.key,
-    this.title = 'PartsHub Pro',
+    this.title = 'Jolda CRM',
     this.subtitle = 'Управление автобизнесом',
     this.sectionTitle,
     required this.form,
