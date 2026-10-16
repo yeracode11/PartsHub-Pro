@@ -237,7 +237,20 @@ class NationalPhoneInputFormatter extends TextInputFormatter {
     TextEditingValue oldValue,
     TextEditingValue newValue,
   ) {
-    final digits = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+    var digits = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+    final oldDigits = oldValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+    // Стёрт только разделитель маски — «)», пробел или «-». Цифры те же, и маска
+    // вернула бы его на место, курсор бы «упёрся». Удаляем цифру перед курсором.
+    if (newValue.text.length < oldValue.text.length && digits == oldDigits) {
+      final cursor = newValue.selection.baseOffset.clamp(0, newValue.text.length);
+      final before = newValue.text
+          .substring(0, cursor)
+          .replaceAll(RegExp(r'[^0-9]'), '')
+          .length;
+      if (before > 0) {
+        digits = digits.substring(0, before - 1) + digits.substring(before);
+      }
+    }
     if (digits.isEmpty) return const TextEditingValue();
 
     var national = digits;

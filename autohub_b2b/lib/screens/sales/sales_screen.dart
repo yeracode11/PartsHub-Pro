@@ -295,6 +295,24 @@ class _SalesScreenState extends State<SalesScreen> {
     return parts.isEmpty ? null : parts.join(' — ');
   }
 
+  /// «Название ×2, Название ×1 и ещё 3» — что продано в заказе. Без позиций — null.
+  String? _itemsSummary(OrderModel order) {
+    final items = order.items;
+    if (items == null || items.isEmpty) return null;
+    String line(OrderItemModel oi) {
+      final name = oi.item?['name']?.toString().trim();
+      final title = (name != null && name.isNotEmpty)
+          ? name
+          : 'Товар #${oi.itemId}';
+      return oi.quantity > 1 ? '$title ×${oi.quantity}' : title;
+    }
+
+    const shown = 2;
+    final text = items.take(shown).map(line).join(', ');
+    final rest = items.length - shown;
+    return rest > 0 ? '$text и ещё $rest' : text;
+  }
+
   Widget _buildOrdersCards() {
     final numberFormat = NumberFormat('#,###', 'ru_RU');
     final dateFormat = DateFormat('dd.MM.yyyy HH:mm');
@@ -392,6 +410,16 @@ class _SalesScreenState extends State<SalesScreen> {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
+                  if (_itemsSummary(order) != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4, right: 12),
+                      child: Text(
+                        _itemsSummary(order)!,
+                        style: const TextStyle(fontSize: 13),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 6,
@@ -437,6 +465,15 @@ class _SalesScreenState extends State<SalesScreen> {
                   flex: 2,
                   child: Text(
                     'Номер заказа',
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  flex: 4,
+                  child: Text(
+                    'Товары',
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
                       color: AppTheme.textSecondary,
                     ),
@@ -505,6 +542,17 @@ class _SalesScreenState extends State<SalesScreen> {
                         child: Text(
                           order.orderNumber ?? '#${order.id}',
                           style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                      Expanded(
+                        flex: 4,
+                        child: Padding(
+                          padding: const EdgeInsets.only(right: 12),
+                          child: Text(
+                            _itemsSummary(order) ?? '—',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                       ),
                       Expanded(
