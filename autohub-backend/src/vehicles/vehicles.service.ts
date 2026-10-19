@@ -137,15 +137,40 @@ export class VehiclesService {
     }
   }
 
+  /** Экранирует % и _ , чтобы пользовательский ввод не работал как шаблон LIKE. */
+  static escapeLike(value: string): string {
+    return value.replace(/[\\%_]/g, (char) => `\\${char}`);
+  }
+
   /**
-   * Получить все автомобили организации
+   * Получить автомобили организации. Без параметров — все; `q` ищет по
+   * госномеру, VIN, марке, модели и имени владельца; `limit`/`offset` — страница.
    */
-  async findAll(organizationId: string) {
-    return await this.vehicleRepository.find({
-      where: { organizationId, isActive: true },
-      relations: ['customer'],
-      order: { createdAt: 'DESC' },
-    });
+  async findAll(
+    organizationId: string,
+    options: { q?: string; limit?: number; offset?: number } = {},
+  ) {
+    const query = this.vehicleRepository
+      .createQueryBuilder('vehicle')
+      .leftJoinAndSelect('vehicle.customer', 'customer')
+      .where('vehicle.organizationId = :organizationId', { organizationId })
+      .andWhere('vehicle.isActive = :isActive', { isActive: true })
+      .orderBy('vehicle.createdAt', 'DESC')
+      .addOrderBy('vehicle.id', 'DESC');
+
+    const term = options.q?.trim();
+    if (term) {
+      const text = `%${VehiclesService.escapeLike(term.toLowerCase())}%`;
+      const plate = `%${VehiclesService.escapeLike(VehiclesService.normalizePlate(term)!)}%`;
+      query.andWhere(
+        '(vehicle.plateNumber LIKE :plate OR LOWER(vehicle.vin) LIKE :text OR LOWER(vehicle.brand) LIKE :text OR LOWER(vehicle.model) LIKE :text OR LOWER(customer.name) LIKE :text)',
+        { plate, text },
+      );
+    }
+    if (options.limit !== undefined) {
+      query.take(options.limit).skip(options.offset ?? 0);
+    }
+    return await query.getMany();
   }
 
   /**

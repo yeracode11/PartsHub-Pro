@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:autohub_b2b/widgets/shell_actions.dart';
 import 'package:autohub_b2b/core/theme.dart';
@@ -16,6 +18,38 @@ import 'package:autohub_b2b/widgets/add_action_button.dart';
 
 final _mileageFormat = NumberFormat('#,###', 'ru_RU');
 
+const _pageSize = 50;
+const _searchDelay = Duration(milliseconds: 300);
+
+/// Подпись о ближайшем ТО для строки списка; null — данных о ТО нет.
+/// Дни считаются календарными, [now] задаётся в тестах.
+@visibleForTesting
+String? vehicleServiceLabel(VehicleModel vehicle, {DateTime? now}) {
+  final today = now ?? DateTime.now();
+  final km = vehicle.kmUntilService;
+  final date = vehicle.nextServiceDate;
+  final days = date == null
+      ? null
+      : DateTime(
+          date.year,
+          date.month,
+          date.day,
+        ).difference(DateTime(today.year, today.month, today.day)).inDays;
+
+  if (days != null && days < 0) return 'ТО просрочено на ${-days} дн.';
+  if (km != null && km < 0) {
+    return 'ТО просрочено на ${_mileageFormat.format(-km)} км';
+  }
+  if (days == 0) return 'ТО сегодня';
+  if (km == 0) return 'ТО по пробегу сейчас';
+
+  final parts = [
+    if (km != null) '${_mileageFormat.format(km)} км',
+    if (days != null) '$days дн.',
+  ];
+  return parts.isEmpty ? null : 'ТО через ${parts.join(' или ')}';
+}
+
 class VehiclesScreen extends StatefulWidget {
   const VehiclesScreen({super.key});
 
@@ -28,10 +62,16 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
   List<VehicleModel> vehicles = [];
   List<VehicleModel> filteredVehicles = [];
   bool isLoading = true;
+  bool isLoadingMore = false;
+  bool hasMore = false;
+  int _requestId = 0;
+  final _searchController = TextEditingController();
+  Timer? _searchTimer;
   String searchQuery = '';
   bool isForbidden = false;
   String? forbiddenMessage;
   bool isOffline = false;
+  String? loadError;
 
   @override
   void initState() {
@@ -39,23 +79,39 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
     _loadVehicles();
   }
 
+  @override
+  void dispose() {
+    _searchTimer?.cancel();
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  /// Загружает первую страницу с учётом поиска; ответ устаревшего запроса отбрасывается.
   Future<void> _loadVehicles() async {
+    final requestId = ++_requestId;
     setState(() {
       isLoading = true;
       isForbidden = false;
       isOffline = false;
+      loadError = null;
     });
 
     try {
-      final response = await dio.get('/api/vehicles');
+      final response = await dio.get(
+        '/api/vehicles',
+        queryParameters: _pageQuery(0),
+      );
       final List<dynamic> data = response.data;
+      if (!mounted || requestId != _requestId) return;
 
       setState(() {
         vehicles = data.map((json) => VehicleModel.fromJson(json)).toList();
-        filteredVehicles = vehicles;
+        filteredVehicles = _applyFilter(searchQuery);
+        hasMore = data.length >= _pageSize;
         isLoading = false;
       });
     } catch (e) {
+      if (!mounted || requestId != _requestId) return;
       if (e is DioException &&
           (e.response?.statusCode == 401 || e.response?.statusCode == 403)) {
         setState(() {
@@ -73,35 +129,75 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
           isLoading = false;
         });
       } else {
-        setState(() => isLoading = false);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(userFacingApiMessage(e, prefix: 'Ошибка загрузки')),
-              backgroundColor: AppTheme.errorColor,
-            ),
-          );
-        }
+        setState(() {
+          loadError = userFacingApiMessage(e, prefix: 'Ошибка загрузки');
+          isLoading = false;
+        });
       }
     }
+  }
+
+  Map<String, dynamic> _pageQuery(int offset) => {
+    'limit': _pageSize,
+    'offset': offset,
+    if (searchQuery.trim().isNotEmpty) 'q': searchQuery.trim(),
+  };
+
+  Future<void> _loadMore() async {
+    if (isLoadingMore || !hasMore) return;
+    final requestId = _requestId;
+    setState(() => isLoadingMore = true);
+    try {
+      final response = await dio.get(
+        '/api/vehicles',
+        queryParameters: _pageQuery(vehicles.length),
+      );
+      final List<dynamic> data = response.data;
+      if (!mounted || requestId != _requestId) return;
+      final known = vehicles.map((v) => v.id).toSet();
+      final next = data
+          .map((json) => VehicleModel.fromJson(json))
+          .where((v) => !known.contains(v.id))
+          .toList();
+      setState(() {
+        vehicles = [...vehicles, ...next];
+        filteredVehicles = _applyFilter(searchQuery);
+        // Бэкенд без постраничности отдаёт всё сразу: новых записей нет.
+        hasMore = next.isNotEmpty && data.length >= _pageSize;
+        isLoadingMore = false;
+      });
+    } catch (e) {
+      if (!mounted || requestId != _requestId) return;
+      setState(() => isLoadingMore = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(userFacingApiMessage(e, prefix: 'Ошибка загрузки')),
+          backgroundColor: AppTheme.errorColor,
+        ),
+      );
+    }
+  }
+
+  /// Дополнительный клиентский фильтр: страхует от бэкенда без параметра `q`.
+  List<VehicleModel> _applyFilter(String query) {
+    if (query.isEmpty) return vehicles;
+    final searchLower = query.toLowerCase();
+    return vehicles.where((vehicle) {
+      return vehicle.brand.toLowerCase().contains(searchLower) ||
+          vehicle.model.toLowerCase().contains(searchLower) ||
+          vehicle.plateNumber.toLowerCase().contains(searchLower) ||
+          (vehicle.vin?.toLowerCase().contains(searchLower) ?? false) ||
+          vehicle.customerName.toLowerCase().contains(searchLower);
+    }).toList();
   }
 
   void _filterVehicles(String query) {
     setState(() {
       searchQuery = query;
-      if (query.isEmpty) {
-        filteredVehicles = vehicles;
-      } else {
-        filteredVehicles = vehicles.where((vehicle) {
-          final searchLower = query.toLowerCase();
-          return vehicle.brand.toLowerCase().contains(searchLower) ||
-              vehicle.model.toLowerCase().contains(searchLower) ||
-              vehicle.plateNumber.toLowerCase().contains(searchLower) ||
-              (vehicle.vin?.toLowerCase().contains(searchLower) ?? false) ||
-              vehicle.customerName.toLowerCase().contains(searchLower);
-        }).toList();
-      }
+      filteredVehicles = _applyFilter(query);
     });
+    _searchTimer?.cancel();
+    _searchTimer = Timer(_searchDelay, _loadVehicles);
   }
 
   void _showAddVehicleDialog() {
@@ -122,7 +218,9 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
     final confirm = await DialogHelper.showConfirmSimple(
       context: context,
       title: 'Удалить автомобиль?',
-      message: 'Вы уверены, что хотите удалить ${vehicle.displayName}?',
+      message:
+          'Удалить ${vehicle.displayName}? Автомобиль исчезнет из списка, '
+          'заказы и история ТО сохранятся.',
       confirmText: 'Удалить',
       isDestructive: true,
     );
@@ -182,11 +280,13 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
                         TextSpan(
                           text: 'Автомобили',
                           children: [
-                            if (!isLoading && !isForbidden && !isOffline)
+                            if (!isLoading &&
+                                !isForbidden &&
+                                !isOffline &&
+                                loadError == null)
                               TextSpan(
-                                text: searchQuery.isEmpty
-                                    ? '  ${vehicles.length}'
-                                    : '  ${filteredVehicles.length} из ${vehicles.length}',
+                                text:
+                                    '  ${filteredVehicles.length}${hasMore ? '+' : ''}',
                                 style: const TextStyle(
                                   color: AppTheme.textSecondary,
                                   fontWeight: FontWeight.w400,
@@ -210,7 +310,10 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
                 actions: wide
                     ? const []
                     : [AddActionButton(onPressed: _showAddVehicleDialog)],
-                child: const _VehicleSearch(),
+                child: _VehicleSearch(
+                  controller: _searchController,
+                  onChanged: _filterVehicles,
+                ),
               ),
             ),
             Expanded(child: _listBody()),
@@ -229,6 +332,28 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
     }
     if (isLoading) return const Center(child: CircularProgressIndicator());
     if (isOffline) return OfflinePlaceholder(onRetry: _loadVehicles);
+    if (loadError != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                loadError!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: AppTheme.textSecondary),
+              ),
+              const SizedBox(height: 16),
+              OutlinedButton(
+                onPressed: _loadVehicles,
+                child: const Text('Повторить'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     if (filteredVehicles.isEmpty) {
       return Center(
         child: Padding(
@@ -255,34 +380,48 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
 
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(8, 0, 8, 24),
-      itemCount: filteredVehicles.length,
+      itemCount: filteredVehicles.length + (hasMore ? 1 : 0),
       separatorBuilder: (_, _) =>
           const Divider(height: 1, indent: 16, endIndent: 16),
-      itemBuilder: (context, index) => _VehicleRow(
-        vehicle: filteredVehicles[index],
-        onOpen: () => _openVehicleDetail(filteredVehicles[index]),
-        onEdit: () => _showEditVehicleDialog(filteredVehicles[index]),
-        onDelete: () => _deleteVehicle(filteredVehicles[index]),
-      ),
+      itemBuilder: (context, index) {
+        if (index == filteredVehicles.length) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Center(
+              child: isLoadingMore
+                  ? const CircularProgressIndicator()
+                  : OutlinedButton(
+                      onPressed: _loadMore,
+                      child: const Text('Показать ещё'),
+                    ),
+            ),
+          );
+        }
+        final vehicle = filteredVehicles[index];
+        return _VehicleRow(
+          vehicle: vehicle,
+          onOpen: () => _openVehicleDetail(vehicle),
+          onEdit: () => _showEditVehicleDialog(vehicle),
+          onDelete: () => _deleteVehicle(vehicle),
+        );
+      },
     );
   }
 }
 
-class _VehicleSearch extends StatefulWidget {
-  const _VehicleSearch();
+class _VehicleSearch extends StatelessWidget {
+  const _VehicleSearch({required this.controller, required this.onChanged});
 
-  @override
-  State<_VehicleSearch> createState() => _VehicleSearchState();
-}
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
 
-class _VehicleSearchState extends State<_VehicleSearch> {
   @override
   Widget build(BuildContext context) {
-    final screen = context.findAncestorStateOfType<_VehiclesScreenState>();
     return TextField(
-      onChanged: screen?._filterVehicles,
+      controller: controller,
+      onChanged: onChanged,
       decoration: const InputDecoration(
-        hintText: 'Марка, номер или VIN',
+        hintText: 'Марка, номер, VIN или владелец',
         prefixIcon: Icon(Icons.search),
         border: OutlineInputBorder(),
         isDense: true,
@@ -306,11 +445,7 @@ class _VehicleRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final service = vehicle.needsService
-        ? 'Нужно ТО'
-        : vehicle.nextServiceDate != null
-        ? 'ТО через ${vehicle.daysUntilService} дн.'
-        : null;
+    final service = vehicleServiceLabel(vehicle);
 
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),

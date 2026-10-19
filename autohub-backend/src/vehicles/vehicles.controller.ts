@@ -9,6 +9,8 @@ import {
   Query,
   UseGuards,
   NotFoundException,
+  BadRequestException,
+  ValidationPipe,
 } from '@nestjs/common';
 import { VehiclesService } from './vehicles.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -16,6 +18,19 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { UserRole } from '../common/enums/user-role.enum';
+import { CreateVehicleDto, UpdateVehicleDto } from './dto/vehicle.dto';
+
+const bodyPipe = new ValidationPipe({ whitelist: true, transform: true });
+
+/** Необязательное целое из query: пусто — undefined, мусор — 400. */
+function queryInt(value: string | undefined, field: string, min: number, max: number) {
+  if (value === undefined || value === '') return undefined;
+  const number = Number(value);
+  if (!Number.isInteger(number) || number < min || number > max) {
+    throw new BadRequestException(`${field}: целое число от ${min} до ${max}`);
+  }
+  return number;
+}
 
 @Controller('api/vehicles')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -23,12 +38,23 @@ export class VehiclesController {
   constructor(private readonly vehiclesService: VehiclesService) {}
 
   /**
-   * GET /api/vehicles - получить все автомобили
+   * GET /api/vehicles - автомобили организации.
+   * Без параметров — все (как раньше); ?q= фильтрует по госномеру, VIN,
+   * марке, модели и владельцу; ?limit=&offset= включают постраничную выдачу.
    */
   @Get()
   @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.STOREKEEPER, UserRole.WORKER)
-  async findAll(@CurrentUser() user: any) {
-    return await this.vehiclesService.findAll(user.organizationId);
+  async findAll(
+    @CurrentUser() user: any,
+    @Query('q') q?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return await this.vehiclesService.findAll(user.organizationId, {
+      q,
+      limit: queryInt(limit, 'limit', 1, 200),
+      offset: queryInt(offset, 'offset', 0, 1_000_000),
+    });
   }
 
   /**
@@ -85,7 +111,10 @@ export class VehiclesController {
    */
   @Post()
   @Roles(UserRole.OWNER, UserRole.MANAGER)
-  async create(@CurrentUser() user: any, @Body() data: any) {
+  async create(
+    @CurrentUser() user: any,
+    @Body(bodyPipe) data: CreateVehicleDto,
+  ) {
     return await this.vehiclesService.create(user.organizationId, data);
   }
 
@@ -97,7 +126,7 @@ export class VehiclesController {
   async update(
     @CurrentUser() user: any,
     @Param('id') id: string,
-    @Body() data: any,
+    @Body(bodyPipe) data: UpdateVehicleDto,
   ) {
     return await this.vehiclesService.update(
       parseInt(id, 10),

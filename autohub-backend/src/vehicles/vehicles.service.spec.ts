@@ -31,6 +31,52 @@ describe('VehiclesService', () => {
     vehicleRepository.create.mockImplementation((v) => v);
   });
 
+  it('escapes LIKE wildcards in user input', () => {
+    expect(VehiclesService.escapeLike('50%_a\\b')).toBe('50\\%\\_a\\\\b');
+  });
+
+  describe('findAll', () => {
+    const makeQuery = () => {
+      const query: any = {};
+      for (const name of [
+        'leftJoinAndSelect',
+        'where',
+        'andWhere',
+        'orderBy',
+        'addOrderBy',
+        'take',
+        'skip',
+      ]) {
+        query[name] = jest.fn().mockReturnValue(query);
+      }
+      query.getMany = jest.fn().mockResolvedValue([]);
+      return query;
+    };
+
+    it('returns everything of the organization without options', async () => {
+      const query = makeQuery();
+      (vehicleRepository as any).createQueryBuilder = jest.fn(() => query);
+      await service.findAll('org');
+      expect(query.where).toHaveBeenCalledWith(
+        'vehicle.organizationId = :organizationId',
+        { organizationId: 'org' },
+      );
+      expect(query.take).not.toHaveBeenCalled();
+      expect(query.andWhere).toHaveBeenCalledTimes(1); // только isActive
+    });
+
+    it('filters by escaped query and pages', async () => {
+      const query = makeQuery();
+      (vehicleRepository as any).createQueryBuilder = jest.fn(() => query);
+      await service.findAll('org', { q: ' 123 ab% ', limit: 50, offset: 100 });
+      const [, params] = query.andWhere.mock.calls[1];
+      expect(params.plate).toBe('%123AB\\%%');
+      expect(params.text).toBe('%123 ab\\%%');
+      expect(query.take).toHaveBeenCalledWith(50);
+      expect(query.skip).toHaveBeenCalledWith(100);
+    });
+  });
+
   it('normalizes plate number and VIN', () => {
     expect(VehiclesService.normalizePlate(' 123 abc 02 ')).toBe('123ABC02');
     expect(VehiclesService.normalizeVin(' jtdbe32k123456789 ')).toBe(
