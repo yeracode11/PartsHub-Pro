@@ -4,6 +4,8 @@ export const QWEN_INTENTS = [
   'check_price',
   'create_order',
   'order_status',
+  'installation_warranty',
+  'engine_origin',
   'warranty',
   'greeting',
   'unknown',

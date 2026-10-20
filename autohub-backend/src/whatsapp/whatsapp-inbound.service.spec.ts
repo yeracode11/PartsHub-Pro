@@ -173,7 +173,7 @@ describe('WhatsAppInboundService', () => {
     );
   });
 
-  it('unknown intent falls back to echo', async () => {
+  it('unknown intent is handed to a manager instead of echoing', async () => {
     historyService.findByExternalMessageId.mockResolvedValue(null);
     tenantResolver.resolveByPhoneNumberId.mockResolvedValue({
       organizationId: 'org-1',
@@ -205,7 +205,7 @@ describe('WhatsAppInboundService', () => {
     expect(metaWhatsAppService.sendTextMessage).toHaveBeenCalledWith(
       expect.any(String),
       expect.any(String),
-      'Получил: камри 70 передние колодки есть?',
+      'Ваш вопрос принят, менеджер ответит в ближайшее время.',
       expect.any(String),
     );
   });
@@ -262,7 +262,7 @@ describe('WhatsAppInboundService', () => {
     expect(metaWhatsAppService.sendTextMessage).not.toHaveBeenCalled();
   });
 
-  it('still sends echo when Qwen returns null', async () => {
+  it('hands over to a manager when Qwen returns null', async () => {
     historyService.findByExternalMessageId.mockResolvedValue(null);
     tenantResolver.resolveByPhoneNumberId.mockResolvedValue({
       organizationId: 'org-1',
@@ -279,7 +279,12 @@ describe('WhatsAppInboundService', () => {
     await service.handleWebhookPayload(textPayload);
 
     expect(qwenService.parseIntent).toHaveBeenCalled();
-    expect(metaWhatsAppService.sendTextMessage).toHaveBeenCalled();
+    expect(metaWhatsAppService.sendTextMessage).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(String),
+      'Ваш вопрос принят, менеджер ответит в ближайшее время.',
+      expect.any(String),
+    );
   });
 
   it('saves non-text without echo or Qwen', async () => {

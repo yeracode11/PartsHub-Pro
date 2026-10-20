@@ -86,8 +86,9 @@ describe('StockService multi-tenant', () => {
 
     const reply = await service.buildCheckStockReply('org-A', baseIntent);
 
-    expect(reply).toContain('не найдены');
+    expect(reply).toContain('не нашли');
     expect(reply).toContain('Toyota Camry XV70');
+    expect(reply).not.toContain('нет в наличии');
   });
 
   it('BMW E60 steering_rack: finds product without "5 Series" in name', async () => {

@@ -8,6 +8,18 @@ import { MetaWhatsAppConfig } from './meta-whatsapp.config';
 import { QwenService } from '../ai/qwen.service';
 import { QwenIntentResult } from '../ai/qwen-intent.types';
 import { StockService } from '../inventory/stock.service';
+import {
+  formatGreeting,
+  formatHandoff,
+  formatParserUnavailable,
+} from '../inventory/stock-response.formatter';
+
+/** Намерения, на которые отвечаем проверкой каталога. */
+const CATALOG_INTENTS: ReadonlySet<string> = new Set([
+  'check_stock',
+  'check_price',
+  'search_part',
+]);
 
 @Injectable()
 export class WhatsAppInboundService {
@@ -141,7 +153,7 @@ export class WhatsAppInboundService {
       event.recipientWaId,
       replyText,
       event.messageId,
-      intent?.intent === 'check_stock' ? 'stock' : 'echo',
+      intent && CATALOG_INTENTS.has(intent.intent) ? 'stock' : 'echo',
     );
   }
 
@@ -191,7 +203,11 @@ export class WhatsAppInboundService {
     inboundText: string,
     intent: QwenIntentResult | null,
   ): Promise<string> {
-    if (intent?.intent === 'check_stock') {
+    if (!intent) {
+      return formatParserUnavailable(inboundText);
+    }
+
+    if (CATALOG_INTENTS.has(intent.intent)) {
       try {
         const stockReply = await this.stockService.buildCheckStockReply(
           organizationId,
@@ -201,14 +217,21 @@ export class WhatsAppInboundService {
         return stockReply;
       } catch (error) {
         this.logger.error(
-          `[STOCK] check_stock failed: ${
+          `[STOCK] ${intent.intent} failed: ${
             error instanceof Error ? error.message : String(error)
           }`,
         );
+        return formatParserUnavailable(inboundText);
       }
     }
 
-    return `Получил: ${inboundText}`;
+    if (intent.intent === 'greeting') {
+      return formatGreeting(intent.language);
+    }
+
+    // order_status, гарантия, происхождение двигателя, unknown: данных для ответа
+    // у бота нет — ничего не выдумываем, передаём менеджеру.
+    return formatHandoff(intent.language);
   }
 
   private async sendWhatsAppText(

@@ -5,6 +5,7 @@ import { QwenIntentResult } from '../ai/qwen-intent.types';
 import { Item } from '../items/entities/item.entity';
 import { itemMatchesStockIntent } from './part-search-keywords.util';
 import {
+  formatNeedPart,
   formatStockFound,
   formatStockNotFound,
 } from './stock-response.formatter';
@@ -61,6 +62,10 @@ export class StockService {
     organizationId: string,
     intent: QwenIntentResult,
   ): Promise<string> {
+    // Клиент не назвал деталь: спрашиваем, а не отвечаем про любой товар марки.
+    if (!intent.part.name?.trim()) {
+      return formatNeedPart(intent);
+    }
     const items = await this.findMatchingItems(organizationId, intent);
     if (items.length === 0) {
       return formatStockNotFound(intent);
