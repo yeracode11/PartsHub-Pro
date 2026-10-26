@@ -59,7 +59,7 @@ node scripts/optimize-screens.mjs <папка-с-png>
 - SEO: title/description, Open Graph и Twitter-карточка, canonical, JSON-LD (`SoftwareApplication` и `FAQPage` из `src/content/site.ts`, без цен и рейтингов), `opengraph-image.png`/`twitter-image.png` (1200×630, сделаны вручную: при смене текста перегенерируйте), `apple-icon.png`. После запуска добавьте сайт в Google Search Console и Яндекс Вебмастер и отправьте sitemap.
 - Аналитика и пиксели не подключены.
 - Шрифты: Unbounded + Manrope через `next/font/google` (нужен доступ в сеть при сборке); замена — в `src/app/layout.tsx` и переменных `--font-display` / `--font-sans` в `globals.css`.
-- Название «Jolda CRM» и логотип (куб из `LOGO.svg`) теперь и в приложении, и на сайте (`public/logo.svg`, `src/app/icon.svg`).
+- Название «Vinly Business» и логотип (знак «дорога-V» из `LOGO.svg`) теперь и в приложении, и на сайте (`public/logo.svg`, `src/app/icon.svg`).
 - Широкие кадры `public/screens/desktop-*.webp` сняты в macOS-версии приложения (release-сборка, демо-база), с обрезанным заголовком окна.
 
 ## Правила контента

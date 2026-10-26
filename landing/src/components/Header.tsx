@@ -9,7 +9,7 @@ export function Header() {
     <header className="header">
       <div className="container header-inner">
         <a href="#top" className="brand" aria-label={`${brand.name} — наверх`}>
-          <img src="/logo.svg" alt="Jolda" width={95} height={30} className="brand-mark" />
+          <img src="/logo.svg" alt="Vinly" width={99} height={30} className="brand-mark" />
           <span className="brand-name" aria-hidden="true">CRM</span>
         </a>
         <nav className="nav" aria-label="Разделы страницы">
