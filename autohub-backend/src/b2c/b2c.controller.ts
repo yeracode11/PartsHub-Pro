@@ -99,7 +99,7 @@ export class B2CController {
           stock: item.quantity,
           condition: item.condition,
           images: images,
-          sellerName: item.organization?.name || 'AutoHub Store',
+          sellerName: item.organization?.name || 'Vinly',
           sellerId: item.organizationId,
           rating: 4.5, // Дефолтный рейтинг
           reviewCount: Math.floor(Math.random() * 100) + 10, // Случайное количество отзывов
@@ -137,7 +137,7 @@ export class B2CController {
           stock: item.quantity,
           condition: item.condition,
           images: images,
-          sellerName: item.organization?.name || 'AutoHub Store',
+          sellerName: item.organization?.name || 'Vinly',
           sellerId: item.organizationId,
           rating: 4.5,
           reviewCount: Math.floor(Math.random() * 100) + 10,
@@ -175,7 +175,7 @@ export class B2CController {
         stock: item.quantity,
         condition: item.condition,
         images: images,
-        sellerName: item.organization?.name || 'AutoHub Store',
+        sellerName: item.organization?.name || 'Vinly',
         sellerId: item.organizationId,
         rating: 4.5,
         reviewCount: Math.floor(Math.random() * 100) + 10,

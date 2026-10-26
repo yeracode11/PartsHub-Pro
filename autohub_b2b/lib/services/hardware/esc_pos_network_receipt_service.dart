@@ -32,7 +32,7 @@ class EscPosNetworkReceiptService {
       final ts = DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now());
       printer.setStyles(PosStyles(align: PosAlign.center));
       printer.text(
-        'Jolda CRM',
+        'Vinly Business',
         styles: const PosStyles(align: PosAlign.center, bold: true),
         linesAfter: 1,
       );

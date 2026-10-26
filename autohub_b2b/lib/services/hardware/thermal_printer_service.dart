@@ -546,8 +546,8 @@ class ThermalPrinterService {
     buf.writeln('TEXT 24,24,"4",0,1,1,"TEST PRINTER"');
     buf.writeln('TEXT 24,100,"3",0,1,1,"WiFi: $_wifiIp:$_wifiPort"');
     buf.writeln('TEXT 24,160,"3",0,1,1,"${paperWidthMm.toInt()}x${paperHeightMm.toInt()} mm"');
-    buf.writeln('QRCODE 24,230,L,6,A,0,"AUTOHUB-TEST"');
-    buf.writeln('TEXT 200,260,"3",0,1,1,"AutoHub B2B"');
+    buf.writeln('QRCODE 24,230,L,6,A,0,"VINLY-TEST"');
+    buf.writeln('TEXT 200,260,"3",0,1,1,"Vinly Business"');
     buf.writeln('PRINT 1,1');
     return await _sendToWifi(utf8.encode(buf.toString()));
   }

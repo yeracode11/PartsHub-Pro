@@ -58,7 +58,7 @@ function telegramConfig() {
 
 async function sendTelegram(cfg: NonNullable<ReturnType<typeof telegramConfig>>, lead: Lead, receivedAt: string) {
   const lines = [
-    '<b>Заявка на демо Jolda CRM</b>',
+    '<b>Заявка на демо Vinly Business</b>',
     '',
     `Имя: <b>${esc(lead.name)}</b>`,
     `Телефон: <b>${esc(lead.phone)}</b>`,

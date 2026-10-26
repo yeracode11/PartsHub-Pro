@@ -47,7 +47,7 @@ class _LoginPageState extends State<LoginPage> {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Text('AutoHub Admin', style: Theme.of(context).textTheme.headlineSmall),
+                        Text('Vinly Admin', style: Theme.of(context).textTheme.headlineSmall),
                         const SizedBox(height: 8),
                         Text(
                           'Доступ только для роли superadmin',

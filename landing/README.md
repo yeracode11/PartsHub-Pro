@@ -1,4 +1,4 @@
-# Jolda CRM — лендинг
+# Vinly Business — лендинг
 
 Продающая страница для владельцев авторазборок, СТО и магазинов запчастей в Казахстане.
 Цель — заявки на демонстрацию. Next.js 16 (App Router), TypeScript, обычный CSS, шрифты Unbounded (заголовки) и Manrope (текст) через next/font/google, самохостятся при сборке.
@@ -54,12 +54,12 @@ node scripts/optimize-screens.mjs <папка-с-png>
 
 ## Перед запуском
 
-- Политика в `public/privacy-policy.html` написана под сайт (оператор ТОО «Darasoft», как в приложении; данные формы, Telegram, отсутствие cookie и аналитики). Это черновик, а не юридическая консультация: срок хранения заявок не задан, формулировки нужно проверить с юристом.
+- Политика в `public/privacy-policy.html` написана под сайт (оператор ИП «ERASOFT», как в приложении; данные формы, Telegram, отсутствие cookie и аналитики). Это черновик, а не юридическая консультация: срок хранения заявок не задан, формулировки нужно проверить с юристом.
 - Домен: задайте `NEXT_PUBLIC_SITE_URL` (например `https://example.kz`) и пересоберите сайт. **Пока он не задан, индексация закрыта**: `robots.txt` отдаёт `Disallow: /`, на странице `noindex`, sitemap пустой. С доменом открываются `robots.txt` (закрыт только `/api/`), `sitemap.xml`, canonical, `index, follow`.
 - SEO: title/description, Open Graph и Twitter-карточка, canonical, JSON-LD (`SoftwareApplication` и `FAQPage` из `src/content/site.ts`, без цен и рейтингов), `opengraph-image.png`/`twitter-image.png` (1200×630, сделаны вручную: при смене текста перегенерируйте), `apple-icon.png`. После запуска добавьте сайт в Google Search Console и Яндекс Вебмастер и отправьте sitemap.
 - Аналитика и пиксели не подключены.
 - Шрифты: Unbounded + Manrope через `next/font/google` (нужен доступ в сеть при сборке); замена — в `src/app/layout.tsx` и переменных `--font-display` / `--font-sans` в `globals.css`.
-- Название «Jolda CRM» и логотип (куб из `LOGO.svg`) теперь и в приложении, и на сайте (`public/logo.svg`, `src/app/icon.svg`).
+- Название «Vinly Business» и логотип (знак «дорога-V» из `LOGO.svg`) теперь и в приложении, и на сайте (`public/logo.svg`, `src/app/icon.svg`).
 - Широкие кадры `public/screens/desktop-*.webp` сняты в macOS-версии приложения (release-сборка, демо-база), с обрезанным заголовком окна.
 
 ## Правила контента

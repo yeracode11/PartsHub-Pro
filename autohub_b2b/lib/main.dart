@@ -80,7 +80,7 @@ class AutoHubApp extends StatelessWidget {
       ],
       child: MaterialApp(
         navigatorKey: rootNavigatorKey,
-        title: 'Jolda CRM',
+        title: 'Vinly Business',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
         builder: (context, child) {
@@ -334,7 +334,7 @@ class _MainScreenState extends State<MainScreen> {
       case 10:
         return 'Услуги';
       default:
-        return 'AutoHub B2B';
+        return 'Vinly Business';
     }
   }
 
@@ -443,13 +443,13 @@ class _MainScreenState extends State<MainScreen> {
                                       crossAxisAlignment: CrossAxisAlignment.end,
                                       children: [
                                         Image.asset(
-                                          'assets/icons/jolda-logo.png',
+                                          'assets/icons/vinly-logo.png',
                                           height: 26,
                                           fit: BoxFit.contain,
                                         ),
                                         const SizedBox(width: 6),
                                         const Text(
-                                          'CRM',
+                                          'Business',
                                           style: TextStyle(
                                             fontSize: 21,
                                             fontWeight: FontWeight.bold,
@@ -719,13 +719,13 @@ class _MainScreenState extends State<MainScreen> {
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           Image.asset(
-                            'assets/icons/jolda-logo.png',
+                            'assets/icons/vinly-logo.png',
                             height: 26,
                             fit: BoxFit.contain,
                           ),
                           const SizedBox(width: 6),
                           const Text(
-                            'CRM',
+                            'Business',
                             style: TextStyle(
                               fontSize: 21,
                               fontWeight: FontWeight.bold,

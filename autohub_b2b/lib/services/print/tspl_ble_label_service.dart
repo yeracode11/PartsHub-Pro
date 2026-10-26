@@ -65,8 +65,8 @@ class TsplBleLabelService {
     final int xRight = W - 16;
     int y = 16;
 
-    // --- Заголовок «Jolda CRM» ---
-    buf.writeln('TEXT $xLeft,$y,"4",0,1,1,"Jolda CRM"');
+    // --- Заголовок «Vinly Business» ---
+    buf.writeln('TEXT $xLeft,$y,"4",0,1,1,"Vinly Business"');
     y += 42;
 
     // Горизонтальная линия.
@@ -145,7 +145,7 @@ class TsplBleLabelService {
     buf.writeln('CLS');
     buf.writeln('CODEPAGE UTF-8');
     buf.writeln('TEXT 16,20,"4",0,1,1,"TSPL TEST"');
-    buf.writeln('TEXT 16,70,"2",0,1,1,"Jolda BLE OK"');
+    buf.writeln('TEXT 16,70,"2",0,1,1,"Vinly BLE OK"');
     buf.writeln('PRINT 1,1');
     return buf.toString();
   }

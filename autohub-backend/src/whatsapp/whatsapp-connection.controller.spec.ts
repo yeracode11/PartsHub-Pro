@@ -22,7 +22,7 @@ describe('WhatsAppConnectionController', () => {
       {
         phoneNumberId: '1398564366663975',
         wabaId: '3483066548542535',
-        displayName: 'AutoPlus Test WhatsApp',
+        displayName: 'Vinly Test WhatsApp',
         // Попытка подделать tenant через body — контроллер должен игнорировать это поле.
         organizationId: 'org-attacker',
       } as any,
@@ -33,7 +33,7 @@ describe('WhatsAppConnectionController', () => {
       expect.objectContaining({
         phoneNumberId: '1398564366663975',
         wabaId: '3483066548542535',
-        displayName: 'AutoPlus Test WhatsApp',
+        displayName: 'Vinly Test WhatsApp',
       }),
     );
   });
@@ -47,7 +47,7 @@ describe('WhatsAppConnectionController', () => {
       {
         phoneNumberId: '1398564366663975',
         wabaId: '3483066548542535',
-        displayName: 'AutoPlus Test WhatsApp',
+        displayName: 'Vinly Test WhatsApp',
       } as any,
     );
 

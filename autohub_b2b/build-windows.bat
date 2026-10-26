@@ -2,7 +2,7 @@
 REM Скрипт для сборки B2B приложения для Windows
 REM Запускать на Windows машине с установленным Flutter
 
-echo 🔨 Building AutoHub B2B for Windows...
+echo 🔨 Building Vinly Business for Windows...
 
 REM Проверяем Flutter
 where flutter >nul 2>nul

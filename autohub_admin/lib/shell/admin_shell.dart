@@ -23,7 +23,7 @@ class _AdminShellState extends State<AdminShell> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('AutoHub Admin'),
+        title: const Text('Vinly Admin'),
         actions: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),

@@ -1,5 +1,5 @@
 name: autohub_admin
-description: AutoHub B2B — internal macOS superadmin panel (UI + API only).
+description: Vinly Business — internal macOS superadmin panel (UI + API only).
 publish_to: 'none'
 
 version: 1.0.0+1

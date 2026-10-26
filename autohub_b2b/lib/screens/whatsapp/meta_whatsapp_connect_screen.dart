@@ -33,7 +33,7 @@ class _MetaWhatsAppConnectScreenState
 
     // Тестовые значения — только в dev-сборке, никогда в production.
     if (Environment.isDevelopment) {
-      _displayNameController.text = 'AutoPlus Test WhatsApp';
+      _displayNameController.text = 'Vinly Test WhatsApp';
       _phoneNumberIdController.text = '1398564366663975';
       _wabaIdController.text = '3483066548542535';
     }
@@ -126,7 +126,7 @@ class _MetaWhatsAppConnectScreenState
                 controller: _displayNameController,
                 decoration: const InputDecoration(
                   labelText: 'Display name',
-                  hintText: 'Например: AutoPlus WhatsApp',
+                  hintText: 'Например: Vinly WhatsApp',
                   prefixIcon: Icon(Icons.badge_outlined),
                 ),
                 textInputAction: TextInputAction.next,

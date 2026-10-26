@@ -64,7 +64,7 @@ class _AutoHubAdminAppState extends State<AutoHubAdminApp> {
     return BlocProvider.value(
       value: _authBloc,
       child: MaterialApp(
-        title: 'AutoHub Admin',
+        title: 'Vinly Admin',
         theme: AdminTheme.light(),
         navigatorKey: AuthNavigator.navigatorKey,
         home: BlocBuilder<AuthBloc, AuthState>(
