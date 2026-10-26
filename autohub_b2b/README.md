@@ -1,10 +1,10 @@
-# AutoHub B2B
+# Vinly Business
 
 ![Flutter](https://img.shields.io/badge/Flutter-3.32.8-blue)
 ![Dart](https://img.shields.io/badge/Dart-3.8.1-blue)
 ![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20iOS%20%7C%20Android%20%7C%20Web-green)
 
-**AutoHub B2B** — комплексная B2B-платформа для управления автобизнесом (авторазборы, автосервисы, автомойки).
+**Vinly Business** — комплексная B2B-платформа для управления автобизнесом (авторазборы, автосервисы, автомойки).
 
 ## 🚀 Особенности
 

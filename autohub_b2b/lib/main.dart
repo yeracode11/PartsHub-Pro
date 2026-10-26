@@ -80,7 +80,7 @@ class AutoHubApp extends StatelessWidget {
       ],
       child: MaterialApp(
         navigatorKey: rootNavigatorKey,
-        title: 'Jolda CRM',
+        title: 'Vinly Business',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
         builder: (context, child) {
@@ -334,7 +334,7 @@ class _MainScreenState extends State<MainScreen> {
       case 10:
         return 'Услуги';
       default:
-        return 'AutoHub B2B';
+        return 'Vinly Business';
     }
   }
 

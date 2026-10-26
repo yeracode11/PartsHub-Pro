@@ -56,7 +56,7 @@ class ReceiptDocumentData {
   static ReceiptDocumentData sample() {
     final now = DateTime.now();
     return ReceiptDocumentData(
-      companyName: 'Jolda CRM',
+      companyName: 'Vinly Business',
       companySubtitle: 'Демонстрационный документ',
       orderNumber: 'DEMO-${now.millisecondsSinceEpoch % 100000}',
       issuedAt: now,
@@ -158,7 +158,7 @@ class ReceiptDocumentData {
 
   /// В документе для клиента — название организации, а не платформы.
   static String _company(String? name) =>
-      name != null && name.trim().isNotEmpty ? name.trim() : 'Jolda CRM';
+      name != null && name.trim().isNotEmpty ? name.trim() : 'Vinly Business';
 
   static String? _vehicleInfo(OrderModel order) {
     final vehicle = order.vehicle;

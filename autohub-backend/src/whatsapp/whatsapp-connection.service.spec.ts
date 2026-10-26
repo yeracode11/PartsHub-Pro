@@ -34,7 +34,7 @@ describe('WhatsAppConnectionService', () => {
     const result = await service.createForOrganization('org-1', {
       phoneNumberId: '1398564366663975',
       wabaId: '3483066548542535',
-      displayName: 'AutoPlus Test WhatsApp',
+      displayName: 'Vinly Test WhatsApp',
     });
 
     expect(result).not.toHaveProperty('accessToken');
@@ -90,7 +90,7 @@ describe('WhatsAppConnectionService', () => {
         phoneNumberId: '1398564366663975',
         wabaId: '3483066548542535',
         phoneNumber: null,
-        displayName: 'AutoPlus Test WhatsApp',
+        displayName: 'Vinly Test WhatsApp',
         accessToken: 'super-secret',
         status: WhatsAppConnectionStatus.ACTIVE,
         createdAt: new Date(),

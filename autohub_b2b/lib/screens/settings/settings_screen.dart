@@ -297,9 +297,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final p = _packageInfo;
     showAboutDialog(
       context: context,
-      applicationName: 'Jolda CRM',
+      applicationName: 'Vinly Business',
       applicationVersion: p != null ? '${p.version} (${p.buildNumber})' : '—',
-      applicationLegalese: '© 2026 AutoHub B2B',
+      applicationLegalese: '© 2026 Vinly Business',
       children: const [
         SizedBox(height: 16),
         Text(

@@ -683,7 +683,7 @@ class BleEscPosSession {
       lf, lf,
       ...'-'.codeUnits,
       lf,
-      ...'AUTOHUB PULSE'.codeUnits,
+      ...'VINLY PULSE'.codeUnits,
       cr, lf,
       esc, 0x64, 28, // ESC d — протяг N строк после вывода
       esc, 0x4a, 200, // ESC J — протяг ~200 точек вертикали
@@ -706,7 +706,7 @@ class BleEscPosSession {
     return [
       ...g.reset(),
       ...g.text(
-        'Jolda CRM',
+        'Vinly Business',
         styles: const PosStyles(align: PosAlign.center, bold: true),
       ),
       ...g.feed(1),
@@ -739,7 +739,7 @@ class BleEscPosSession {
     return [
       ...g.reset(),
       ...g.text(
-        'Jolda CRM',
+        'Vinly Business',
         styles: const PosStyles(align: PosAlign.center, bold: true),
       ),
       ...g.emptyLines(1),

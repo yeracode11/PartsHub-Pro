@@ -532,7 +532,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(height: 8),
           const Center(
             child: Text(
-              'AutoHub B2B v1.0.0',
+              'Vinly Business v1.0.0',
               style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
             ),
           ),
@@ -619,7 +619,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void _showAboutAppDialog(BuildContext context) {
     showAboutDialog(
       context: context,
-      applicationName: 'AutoHub B2B',
+      applicationName: 'Vinly Business',
       applicationVersion: '1.0.0',
       applicationLegalese: '© 2026 ТОО «AutoHub». Все права защищены.',
       children: [
