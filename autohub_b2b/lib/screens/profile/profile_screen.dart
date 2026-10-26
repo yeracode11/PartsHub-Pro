@@ -621,7 +621,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       context: context,
       applicationName: 'Vinly Business',
       applicationVersion: '1.0.0',
-      applicationLegalese: '© 2026 ТОО «AutoHub». Все права защищены.',
+      applicationLegalese: '© 2026 ИП «ERASOFT». Все права защищены.',
       children: [
         const SizedBox(height: 16),
         const Text(

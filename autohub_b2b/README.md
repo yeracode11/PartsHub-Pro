@@ -407,7 +407,7 @@ Made with ❤️ in Kazakhstan 🇰🇿
 
 Оператором персональных данных является:
 
-ТОО Darasoft
+ИП ERASOFT, БИН 040821500737
 Казахстан
 Email: eracode11@gmail.com
 
@@ -580,7 +580,7 @@ eracode11@gmail.com
 
 13. Контактная информация
 
-ТОО Darasoft
+ИП ERASOFT, БИН 040821500737
 Казахстан
 
 Email:
