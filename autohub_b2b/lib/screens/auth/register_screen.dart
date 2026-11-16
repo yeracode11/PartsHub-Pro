@@ -6,6 +6,8 @@ import 'package:autohub_b2b/blocs/auth/auth_event.dart';
 import 'package:autohub_b2b/blocs/auth/auth_state.dart';
 import 'package:autohub_b2b/screens/legal/privacy_policy_screen.dart';
 import 'package:autohub_b2b/screens/legal/terms_of_use_screen.dart';
+import 'package:autohub_b2b/screens/auth/whatsapp_verify_screen.dart';
+import 'package:autohub_b2b/services/auth/whatsapp_verification_service.dart';
 import 'package:autohub_b2b/widgets/auth/auth_design.dart';
 import 'package:autohub_b2b/widgets/auth/auth_form_field.dart';
 import 'package:autohub_b2b/widgets/auth/auth_phone_field.dart';
@@ -205,7 +207,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  void _submit(AuthState state) {
+  Future<void> _submit(AuthState state) async {
     if (state is AuthLoading) return;
     if (_formKey.currentState?.validate() != true) return;
     if (!_agreedToTerms) {
@@ -217,6 +219,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (phone == null) return;
 
     FocusScope.of(context).unfocus();
+    setState(() => _errorMessage = null);
+
+    // Бесплатное подтверждение номера: пользователь пишет код боту в WhatsApp.
+    final result = await WhatsAppVerifyScreen.open(
+      context,
+      phone: phone,
+      purpose: WhatsAppVerificationPurpose.register,
+    );
+    if (!mounted || result == null) return;
+
+    final String? verificationToken = switch (result) {
+      WhatsAppVerified(:final verificationToken) => verificationToken,
+      WhatsAppVerificationUnavailable() => null,
+    };
+
     context.read<AuthBloc>().add(
           AuthSignUpRequested(
             phone: phone,
@@ -224,6 +241,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             name: _nameController.text.trim(),
             organizationName: _organizationController.text.trim(),
             businessType: _businessType,
+            phoneVerificationToken: verificationToken,
           ),
         );
   }

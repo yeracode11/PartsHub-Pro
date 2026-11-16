@@ -4,6 +4,8 @@ import 'package:autohub_b2b/blocs/auth/auth_bloc.dart';
 import 'package:autohub_b2b/blocs/auth/auth_event.dart';
 import 'package:autohub_b2b/blocs/auth/auth_state.dart';
 import 'package:autohub_b2b/screens/auth/register_screen.dart';
+import 'package:autohub_b2b/screens/auth/whatsapp_verify_screen.dart';
+import 'package:autohub_b2b/services/auth/whatsapp_verification_service.dart';
 import 'package:autohub_b2b/widgets/auth/auth_design.dart';
 import 'package:autohub_b2b/widgets/auth/auth_form_field.dart';
 import 'package:autohub_b2b/widgets/auth/auth_phone_field.dart';
@@ -102,6 +104,20 @@ class _LoginScreenState extends State<LoginScreen> {
                   isLoading: state is AuthLoading,
                   onPressed: state is AuthLoading ? null : () => _submit(state),
                 ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                    shape: const RoundedRectangleBorder(
+                      borderRadius: AuthDesign.fieldRadius,
+                    ),
+                  ),
+                  icon: const Icon(Icons.chat_outlined),
+                  label: const Text('Войти через WhatsApp, без пароля'),
+                  onPressed: state is AuthLoading
+                      ? null
+                      : () => _signInWithWhatsApp(),
+                ),
               ],
             ),
           ),
@@ -133,6 +149,30 @@ class _LoginScreenState extends State<LoginScreen> {
             password: _passwordController.text,
           ),
         );
+  }
+
+  /// Подходит и когда пароль забыт: номер подтверждается кодом в WhatsApp.
+  Future<void> _signInWithWhatsApp() async {
+    final phone = _phoneKey.currentState?.toE164();
+    if (phone == null) {
+      setState(() => _errorMessage = 'Введите номер телефона');
+      return;
+    }
+
+    FocusScope.of(context).unfocus();
+    setState(() => _errorMessage = null);
+
+    final result = await WhatsAppVerifyScreen.open(
+      context,
+      phone: phone,
+      purpose: WhatsAppVerificationPurpose.login,
+    );
+    if (!mounted) return;
+    if (result is WhatsAppVerified) {
+      context
+          .read<AuthBloc>()
+          .add(AuthWhatsAppSignInRequested(result.verificationToken));
+    }
   }
 
   @override

@@ -17,6 +17,7 @@ import { RegisterDto } from './dto/register.dto';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { BusinessType } from '../common/enums/business-type.enum';
 import { UserRole } from '../common/enums/user-role.enum';
+import { PhoneVerificationService } from '../phone-verification/phone-verification.service';
 
 @Injectable()
 export class AuthService {
@@ -27,6 +28,7 @@ export class AuthService {
     private readonly organizationRepository: Repository<Organization>,
     private readonly jwtService: JwtService,
     private readonly organizationsService: OrganizationsService,
+    private readonly phoneVerification: PhoneVerificationService,
   ) {}
 
   /**
@@ -60,7 +62,47 @@ export class AuthService {
       throw new UnauthorizedException('Неверный телефон или пароль');
     }
 
-    // Генерируем JWT токены
+    return this.issueTokens(user);
+  }
+
+  /** Есть ли активный аккаунт с этим номером (для экрана WhatsApp-подтверждения). */
+  async isPhoneRegistered(rawPhone: string): Promise<boolean> {
+    const phoneE164 = normalizePhoneE164(rawPhone);
+    return (await this.findUserByPhone(phoneE164)) != null;
+  }
+
+  /** Вход без пароля: номер подтверждён через WhatsApp. */
+  async loginWithWhatsApp(verificationToken: string) {
+    const { phone } = await this.phoneVerification.consumeToken(
+      verificationToken,
+      ['login'],
+    );
+    const user = await this.findUserByPhone(phone);
+    if (!user) {
+      throw new NotFoundException('Аккаунт с этим номером не найден');
+    }
+    if (!user.isActive) {
+      throw new UnauthorizedException('Пользователь деактивирован');
+    }
+    return this.issueTokens(user);
+  }
+
+  /** Сброс пароля по номеру, подтверждённому через WhatsApp; сразу входит. */
+  async resetPasswordWithWhatsApp(verificationToken: string, newPassword: string) {
+    const { phone } = await this.phoneVerification.consumeToken(
+      verificationToken,
+      ['reset_password'],
+    );
+    const user = await this.findUserByPhone(phone);
+    if (!user || !user.isActive) {
+      throw new NotFoundException('Аккаунт с этим номером не найден');
+    }
+    const hashed = await bcrypt.hash(newPassword, 10);
+    await this.userRepository.update({ id: user.id }, { password: hashed });
+    return this.issueTokens(user);
+  }
+
+  private issueTokens(user: User) {
     const payload = {
       sub: user.id,
       email: user.email,
@@ -142,6 +184,20 @@ export class AuthService {
     const existingUser = await this.findUserByPhone(phoneE164);
     if (existingUser) {
       throw new ConflictException('Пользователь с таким телефоном уже зарегистрирован');
+    }
+
+    if (registerDto.phoneVerificationToken) {
+      const verified = await this.phoneVerification.consumeToken(
+        registerDto.phoneVerificationToken,
+        ['register'],
+      );
+      if (phoneDigitsKey(verified.phone) !== phoneDigitsKey(phoneE164)) {
+        throw new BadRequestException(
+          'Номер не совпадает с подтверждённым в WhatsApp',
+        );
+      }
+    } else if (this.phoneVerification.isRequiredForRegistration) {
+      throw new BadRequestException('Подтвердите номер через WhatsApp');
     }
 
     const displayName = registerDto.name.trim();
