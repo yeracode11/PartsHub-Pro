@@ -848,7 +848,7 @@ class _FindPartScreenState extends State<FindPartScreen>
         MobileScanner(
           controller: _scannerController,
           onDetect: _onBarcodeDetect,
-          errorBuilder: (context, error, child) {
+          errorBuilder: (context, error) {
             _log('FindPartScreen: MobileScanner error: $error');
             return Container(
               color: Colors.black,
