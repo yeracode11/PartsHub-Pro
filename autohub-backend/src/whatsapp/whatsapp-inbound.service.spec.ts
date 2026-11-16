@@ -6,6 +6,7 @@ import { MetaWhatsAppService } from './meta-whatsapp.service';
 import { MetaWhatsAppConfig } from './meta-whatsapp.config';
 import { QwenService } from '../ai/qwen.service';
 import { StockService } from '../inventory/stock.service';
+import { PhoneVerificationService } from '../phone-verification/phone-verification.service';
 
 describe('WhatsAppInboundService', () => {
   let service: WhatsAppInboundService;
@@ -18,6 +19,7 @@ describe('WhatsAppInboundService', () => {
   const metaConfig = { fallbackAccessToken: 'server-token' };
   const qwenService = { parseIntent: jest.fn() };
   const stockService = { buildCheckStockReply: jest.fn() };
+  const phoneVerification = { handleInboundMessage: jest.fn() };
 
   const textPayload = {
     object: 'whatsapp_business_account',
@@ -46,6 +48,7 @@ describe('WhatsAppInboundService', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    phoneVerification.handleInboundMessage.mockResolvedValue(null);
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         WhatsAppInboundService,
@@ -55,6 +58,7 @@ describe('WhatsAppInboundService', () => {
         { provide: MetaWhatsAppConfig, useValue: metaConfig },
         { provide: QwenService, useValue: qwenService },
         { provide: StockService, useValue: stockService },
+        { provide: PhoneVerificationService, useValue: phoneVerification },
       ],
     }).compile();
 
@@ -220,6 +224,7 @@ describe('WhatsAppInboundService', () => {
         { provide: MetaWhatsAppConfig, useValue: { fallbackAccessToken: '' } },
         { provide: QwenService, useValue: qwenService },
         { provide: StockService, useValue: stockService },
+        { provide: PhoneVerificationService, useValue: phoneVerification },
       ],
     }).compile();
     const localService = moduleRef.get(WhatsAppInboundService);
@@ -326,5 +331,28 @@ describe('WhatsAppInboundService', () => {
     );
     expect(qwenService.parseIntent).not.toHaveBeenCalled();
     expect(metaWhatsAppService.sendTextMessage).not.toHaveBeenCalled();
+  });
+
+  it('answers a Vinly verification code even without a tenant, skipping Qwen', async () => {
+    historyService.findByExternalMessageId.mockResolvedValue(null);
+    tenantResolver.resolveByPhoneNumberId.mockResolvedValue(null);
+    phoneVerification.handleInboundMessage.mockResolvedValue('✅ Номер подтверждён');
+    metaWhatsAppService.sendTextMessage.mockResolvedValue({ messageId: 'out' });
+
+    await service.handleWebhookPayload(textPayload);
+
+    expect(phoneVerification.handleInboundMessage).toHaveBeenCalledWith({
+      from: '77776442004',
+      text: 'камри 70 передние колодки есть?',
+      messageId: 'wamid.dup',
+    });
+    expect(metaWhatsAppService.sendTextMessage).toHaveBeenCalledWith(
+      '1398564366663975',
+      '77776442004',
+      '✅ Номер подтверждён',
+      'server-token',
+    );
+    expect(historyService.createInbound).not.toHaveBeenCalled();
+    expect(qwenService.parseIntent).not.toHaveBeenCalled();
   });
 });

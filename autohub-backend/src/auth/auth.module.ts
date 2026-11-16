@@ -11,11 +11,14 @@ import { User } from '../users/entities/user.entity';
 import { Organization } from '../organizations/entities/organization.entity';
 import { OrganizationsModule } from '../organizations/organizations.module';
 import { resolveJwtSecret } from './jwt-secret';
+import { PhoneVerificationModule } from '../phone-verification/phone-verification.module';
+import { WhatsAppAuthController } from './whatsapp-auth.controller';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([User, Organization]),
     OrganizationsModule,
+    PhoneVerificationModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -31,7 +34,7 @@ import { resolveJwtSecret } from './jwt-secret';
       inject: [ConfigService],
     }),
   ],
-  controllers: [AuthController],
+  controllers: [AuthController, WhatsAppAuthController],
   providers: [AuthService, JwtStrategy, JwtAuthGuard],
   exports: [AuthService, JwtStrategy, JwtAuthGuard, PassportModule, TypeOrmModule],
 })

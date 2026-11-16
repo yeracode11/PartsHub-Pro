@@ -1,4 +1,4 @@
-import { IsIn, IsNotEmpty, IsString, MinLength } from 'class-validator';
+import { IsIn, IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class RegisterDto {
   @IsString()
@@ -25,4 +25,9 @@ export class RegisterDto {
   @IsString()
   @IsIn(['service', 'parts'], { message: 'Выберите СТО или авторазбор' })
   businessType: 'service' | 'parts';
+
+  /** Токен из WhatsApp-подтверждения (POST /api/auth/whatsapp/status). */
+  @IsOptional()
+  @IsString()
+  phoneVerificationToken?: string;
 }

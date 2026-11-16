@@ -49,6 +49,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   AuthBloc() : super(AuthInitial()) {
     on<AuthCheckRequested>(_onAuthCheckRequested);
     on<AuthSignInRequested>(_onSignInRequested);
+    on<AuthWhatsAppSignInRequested>(_onWhatsAppSignInRequested);
     on<AuthSignUpRequested>(_onSignUpRequested);
     on<AuthSignOutRequested>(_onSignOutRequested);
     on<AuthProfileUpdated>(_onProfileUpdated);
@@ -128,64 +129,92 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         'password': event.password,
       });
 
-      final jwtData = jwtResponse.data;
-      final organizationPhone = jwtData['user']?['organization']?['phone'];
-
-      // Шаг 3: Создаем UserModel из данных бэкенда
-      final userModel = UserModel(
-        uid: jwtData['user']['id'],
-        name: jwtData['user']['name'] ?? 'User',
-        email: jwtData['user']['email'],
-        role: _parseRole(jwtData['user']['role']),
-        businessType: _parseBusinessType(jwtData['user']['organization']['businessType']),
-        createdAt: DateTime.now(),
-      );
-      
-      // До сохранения токена и синхронизации: кэш и офлайн-очередь другой
-      // организации не должны уйти на сервер с токеном этого пользователя.
-      await LocalDataGuard.ensureOwner(
-        jwtData['user']['organizationId']?.toString(),
-      );
-
-      // Шаг 4: Сохраняем JWT токены и полные данные пользователя
-      await _storage.saveUserData({
-        'uid': userModel.uid,
-        'name': userModel.name,
-        'email': userModel.email,
-        'role': userModel.role.toString(),
-        'businessType': userModel.businessType.toString(),
-        'createdAt': userModel.createdAt.toIso8601String(),
-        'organizationId': jwtData['user']['organizationId'],
-        'organization': jwtData['user']['organization'],
-        if (organizationPhone != null) 'phone': organizationPhone,
-      });
-      
-      await _storage.saveAuthTokens(
-        authToken: jwtData['accessToken'],  // JWT токен!
-        refreshToken: jwtData['refreshToken'],
-      );
-      
-      emit(AuthAuthenticated(userModel));
-      unawaited(ServiceLocator().syncService.syncAll());
+      await _completeSignIn(jwtResponse.data, emit);
     } on DioException catch (e) {
-      if (e.type == DioExceptionType.connectionError ||
-          e.type == DioExceptionType.connectionTimeout ||
-          e.type == DioExceptionType.sendTimeout ||
-          e.type == DioExceptionType.receiveTimeout ||
-          e.message?.contains('Connection refused') == true) {
-        emit(const AuthError(
-          'Сервер временно недоступен. Проверьте подключение к интернету или повторите попытку позже.',
-        ));
-        return;
-      }
-      if (e.response != null) {
-        emit(AuthError(_messageFromAuthResponse(e.response)));
-      } else {
-        emit(AuthError('Ошибка подключения к серверу'));
-      }
+      _emitSignInError(e, emit);
     } catch (e) {
       emit(AuthError(userFacingApiMessage(e)));
     }
+  }
+
+  /// Вход без пароля: номер подтверждён через WhatsApp.
+  Future<void> _onWhatsAppSignInRequested(
+      AuthWhatsAppSignInRequested event, Emitter<AuthState> emit) async {
+    try {
+      emit(AuthLoading());
+      await _storage.clearAll();
+
+      final response = await _authDio().post('/api/auth/whatsapp/login', data: {
+        'verificationToken': event.verificationToken,
+      });
+
+      await _completeSignIn(response.data, emit);
+    } on DioException catch (e) {
+      _emitSignInError(e, emit);
+    } catch (e) {
+      emit(AuthError(userFacingApiMessage(e)));
+    }
+  }
+
+  void _emitSignInError(DioException e, Emitter<AuthState> emit) {
+    if (e.type == DioExceptionType.connectionError ||
+        e.type == DioExceptionType.connectionTimeout ||
+        e.type == DioExceptionType.sendTimeout ||
+        e.type == DioExceptionType.receiveTimeout ||
+        e.message?.contains('Connection refused') == true) {
+      emit(const AuthError(
+        'Сервер временно недоступен. Проверьте подключение к интернету или повторите попытку позже.',
+      ));
+      return;
+    }
+    if (e.response != null) {
+      emit(AuthError(_messageFromAuthResponse(e.response)));
+    } else {
+      emit(const AuthError('Ошибка подключения к серверу'));
+    }
+  }
+
+  /// Общий хвост входа: сохраняем токены и пользователя из ответа бэкенда.
+  Future<void> _completeSignIn(
+      dynamic jwtData, Emitter<AuthState> emit) async {
+    final organizationPhone = jwtData['user']?['organization']?['phone'];
+
+    // Шаг 3: Создаем UserModel из данных бэкенда
+    final userModel = UserModel(
+      uid: jwtData['user']['id'],
+      name: jwtData['user']['name'] ?? 'User',
+      email: jwtData['user']['email'],
+      role: _parseRole(jwtData['user']['role']),
+      businessType: _parseBusinessType(jwtData['user']['organization']['businessType']),
+      createdAt: DateTime.now(),
+    );
+    
+    // До сохранения токена и синхронизации: кэш и офлайн-очередь другой
+    // организации не должны уйти на сервер с токеном этого пользователя.
+    await LocalDataGuard.ensureOwner(
+      jwtData['user']['organizationId']?.toString(),
+    );
+
+    // Шаг 4: Сохраняем JWT токены и полные данные пользователя
+    await _storage.saveUserData({
+      'uid': userModel.uid,
+      'name': userModel.name,
+      'email': userModel.email,
+      'role': userModel.role.toString(),
+      'businessType': userModel.businessType.toString(),
+      'createdAt': userModel.createdAt.toIso8601String(),
+      'organizationId': jwtData['user']['organizationId'],
+      'organization': jwtData['user']['organization'],
+      if (organizationPhone != null) 'phone': organizationPhone,
+    });
+    
+    await _storage.saveAuthTokens(
+      authToken: jwtData['accessToken'],  // JWT токен!
+      refreshToken: jwtData['refreshToken'],
+    );
+    
+    emit(AuthAuthenticated(userModel));
+    unawaited(ServiceLocator().syncService.syncAll());
   }
 
   UserRole _parseRole(String? role) => UserRole.parse(role);
@@ -212,6 +241,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         'organizationName': event.organizationName.trim(),
         'role': 'owner',
         'businessType': event.businessType,
+        if (event.phoneVerificationToken != null)
+          'phoneVerificationToken': event.phoneVerificationToken,
       });
 
       final registerData = registerResponse.data;

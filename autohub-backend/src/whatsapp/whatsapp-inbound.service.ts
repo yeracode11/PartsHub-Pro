@@ -8,6 +8,7 @@ import { MetaWhatsAppConfig } from './meta-whatsapp.config';
 import { QwenService } from '../ai/qwen.service';
 import { QwenIntentResult } from '../ai/qwen-intent.types';
 import { StockService } from '../inventory/stock.service';
+import { PhoneVerificationService } from '../phone-verification/phone-verification.service';
 import {
   formatGreeting,
   formatHandoff,
@@ -32,6 +33,7 @@ export class WhatsAppInboundService {
     private readonly metaConfig: MetaWhatsAppConfig,
     private readonly qwenService: QwenService,
     private readonly stockService: StockService,
+    private readonly phoneVerification: PhoneVerificationService,
   ) {}
 
   /**
@@ -86,6 +88,12 @@ export class WhatsAppInboundService {
     const tenant = await this.tenantResolver.resolveByPhoneNumberId(
       event.phoneNumberId,
     );
+
+    if (event.type === 'text' && event.textBody) {
+      const handled = await this.tryHandlePhoneVerification(event, tenant);
+      if (handled) return;
+    }
+
     if (!tenant) {
       this.logger.warn(
         `Unknown Meta phone_number_id=${event.phoneNumberId} messageId=${event.messageId}`,
@@ -155,6 +163,48 @@ export class WhatsAppInboundService {
       event.messageId,
       intent && CATALOG_INTENTS.has(intent.intent) ? 'stock' : 'echo',
     );
+  }
+
+  /**
+   * Код подтверждения номера Vinly. Ответ в окне 24ч после входящего —
+   * бесплатный сервисный, шаблон Meta не нужен.
+   */
+  private async tryHandlePhoneVerification(
+    event: {
+      phoneNumberId: string;
+      messageId: string;
+      from: string;
+      recipientWaId: string;
+      textBody?: string;
+    },
+    tenant: { connection: { accessToken: string } } | null,
+  ): Promise<boolean> {
+    let reply: string | null;
+    try {
+      reply = await this.phoneVerification.handleInboundMessage({
+        from: event.from,
+        text: event.textBody ?? '',
+        messageId: event.messageId,
+      });
+    } catch (error) {
+      this.logger.error(
+        `[VERIFY] inbound failed messageId=${event.messageId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      return false;
+    }
+    if (!reply) return false;
+
+    await this.sendWhatsAppText(
+      tenant?.connection ?? { accessToken: '' },
+      event.phoneNumberId,
+      event.recipientWaId,
+      reply,
+      event.messageId,
+      'verify',
+    );
+    return true;
   }
 
   private async resolveQwenIntent(
@@ -240,7 +290,7 @@ export class WhatsAppInboundService {
     recipientWaId: string,
     body: string,
     inboundMessageId: string,
-    kind: 'echo' | 'stock',
+    kind: 'echo' | 'stock' | 'verify',
   ): Promise<void> {
     const envToken = this.metaConfig.fallbackAccessToken?.trim();
     const connectionToken = connection.accessToken?.trim();

@@ -22,6 +22,7 @@ import { WhatsAppTenantResolver } from './whatsapp-tenant-resolver.service';
 import { WhatsAppInboundService } from './whatsapp-inbound.service';
 import { QwenModule } from '../ai/qwen.module';
 import { InventoryModule } from '../inventory/inventory.module';
+import { PhoneVerificationModule } from '../phone-verification/phone-verification.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { InventoryModule } from '../inventory/inventory.module';
     VehiclesModule,
     QwenModule,
     InventoryModule,
+    PhoneVerificationModule,
   ],
   controllers: [
     WhatsAppController,
