@@ -50,7 +50,7 @@ class _BarcodeScannerPageState extends State<BarcodeScannerPage> {
       body: MobileScanner(
         controller: _controller,
         onDetect: _onDetect,
-        errorBuilder: (context, error, child) => const Center(
+        errorBuilder: (context, error) => const Center(
           child: Padding(
             padding: EdgeInsets.all(24),
             child: Text(

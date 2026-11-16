@@ -43,7 +43,7 @@ dependencies:
   dio: ^5.7.0
   
   # Сканер QR и штрихкодов
-  mobile_scanner: ^5.2.3
+  mobile_scanner: ^7.0.1
   
   # Barcode Scanner & Printer
   printing: ^5.13.3
