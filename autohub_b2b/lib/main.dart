@@ -216,6 +216,9 @@ class _MainScreenState extends State<MainScreen> {
 
   /// Гость видит все пункты меню. Вошедший кладовщик — только склад и настройки.
   bool _canAccessSection(String section, AuthState authState) {
+    // Модуль WhatsApp временно скрыт из меню (экран и код сохранены).
+    if (section == 'whatsapp') return false;
+
     if (authState is! AuthAuthenticated) return true;
 
     // Авторазбор продаёт запчасти, а не обслуживает машины: авто клиента живёт в CRM и в заказе.
