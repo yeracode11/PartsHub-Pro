@@ -6,6 +6,8 @@ const paths: Record<string, React.ReactNode> = {
   roles: (<><circle cx="9" cy="8" r="3.2" /><path d="M3 19c.6-3.3 3-5 6-5s5.4 1.7 6 5" /><path d="M16 5.2a3 3 0 0 1 0 5.6M18 14.2c1.7.7 2.8 2.2 3.1 4.8" /></>),
   shield: (<><path d="M12 3 4.5 6v5.5c0 4.4 3 8 7.5 9.5 4.5-1.5 7.5-5.1 7.5-9.5V6z" /><path d="m9 12 2.2 2.2L15.5 10" /></>),
   chat: (<><path d="M4 5.5h16v10H9.5L5.5 19v-3.5H4z" /><path d="M8 9.5h8M8 12.5h5" /></>),
+  cart: (<><path d="M3 4h2.5l2 11h10.5l2-8H6.5" /><circle cx="9" cy="19" r="1.2" /><circle cx="17" cy="19" r="1.2" /></>),
+  chart: (<><path d="M4 20V4M4 20h16" /><path d="m8 15 3.5-4 3 2.5L19 8" /></>),
   check: <path d="m5 12.5 4.2 4.2L19 7" />,
 };
 

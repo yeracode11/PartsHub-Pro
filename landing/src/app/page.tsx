@@ -1,3 +1,4 @@
+import { DesktopTabs } from '@/components/DesktopTabs';
 import { Header } from '@/components/Header';
 import { Icon } from '@/components/Icon';
 import { LeadForm } from '@/components/LeadForm';
@@ -5,7 +6,7 @@ import Image from 'next/image';
 import { PhoneFrame } from '@/components/PhoneFrame';
 import { StickyCta } from '@/components/StickyCta';
 import { siteUrl } from '@/lib/site-url';
-import { audience, brand, extras, faq, features, form, hero, steps } from '@/content/site';
+import { audience, brand, extras, faq, features, form, hero, showDesktop, steps } from '@/content/site';
 
 const jsonLd = {
   '@context': 'https://schema.org',
@@ -81,13 +82,34 @@ export default function Home() {
             </div>
             <div className="cards-3">
               {audience.items.map((i) => (
-                <article key={i.title} className="card">
+                <a key={i.title} href={i.href} className="card card-link">
                   <span className="icon-tile"><Icon name={i.icon} /></span>
                   <h3>{i.title}</h3>
                   <p>{i.text}</p>
-                </article>
+                  <span className="card-more">Подробнее<span aria-hidden="true">→</span></span>
+                </a>
               ))}
             </div>
+          </div>
+        </section>
+
+        <section id="modules" className="section section-soft modules">
+          <div className="container">
+            <div className="section-head">
+              <h2>Что внутри</h2>
+              <p>Пять областей работы. Откройте нужную: ниже по каждой — экраны и список возможностей.</p>
+            </div>
+            <ul className="module-grid">
+              {features.map((f) => (
+                <li key={f.id}>
+                  <a href={`#${f.id}`} className="module">
+                    <span className="icon-tile"><Icon name={f.icon} /></span>
+                    <span className="module-title">{f.label}</span>
+                    <span className="module-text">{f.summary}</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
           </div>
         </section>
 
@@ -114,29 +136,31 @@ export default function Home() {
                 ))}
               </div>
             </div>
-            {f.desktop && (
-              <figure className="container desktop-shot">
-                <div className="desktop-win">
-                  <Image
-                    src={`/screens/desktop-${f.desktop.name}.webp`}
-                    alt={f.desktop.alt}
-                    width={1800}
-                    height={981}
-                    sizes="(max-width: 1232px) 100vw, 1200px"
-                  />
-                </div>
-                <figcaption>{f.desktop.caption}</figcaption>
-              </figure>
-            )}
           </section>
         ))}
+
+        {showDesktop && (
+        <section id="desktop" className="section section-soft">
+          <div className="container">
+            <div className="section-head">
+              <h2>И на компьютере</h2>
+              <p>Те же данные в окне для Windows и macOS: таблицы, боковое меню и большие экраны для кассы и записи.</p>
+            </div>
+            <DesktopTabs
+              shots={features.flatMap((f) =>
+                f.desktop ? [{ id: f.id, label: f.label, name: f.desktop.name, alt: f.desktop.alt, caption: f.desktop.caption }] : [],
+              )}
+            />
+          </div>
+        </section>
+        )}
 
         <section className="section">
           <div className="container">
             <div className="section-head">
               <h2>{extras.title}</h2>
             </div>
-            <div className="cards-4">
+            <div className="cards-3">
               {extras.items.map((i) => (
                 <article key={i.title} className="card">
                   <span className="icon-tile"><Icon name={i.icon} /></span>

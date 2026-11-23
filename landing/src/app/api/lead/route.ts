@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
 
-const BUSINESS_TYPES = ['dismantler', 'service', 'shop', 'other'] as const;
+const BUSINESS_TYPES = ['dismantler', 'service', 'other'] as const;
 
 type Lead = {
   name: string;
@@ -37,7 +37,6 @@ function safe(lead: Lead) {
 const BUSINESS_LABELS: Record<Lead['businessType'], string> = {
   dismantler: 'Авторазбор',
   service: 'СТО',
-  shop: 'Магазин запчастей',
   other: 'Другое',
 };
 
