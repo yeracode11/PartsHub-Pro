@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { defaultCountry, findCountry, maxDigits } from '@/lib/countries';
 
 export const runtime = 'nodejs';
 
@@ -19,19 +20,23 @@ function clean(v: unknown, max: number): string {
 function parse(body: unknown): Lead | null {
   if (!body || typeof body !== 'object') return null;
   const b = body as Record<string, unknown>;
+  const country = b.country === undefined ? defaultCountry : findCountry(b.country);
+  if (!country) return null;
   const phone = clean(b.phone, 20).replace(/\D/g, '');
   const name = clean(b.name, 100);
   const city = clean(b.city, 80);
   const businessType = clean(b.businessType, 20) as Lead['businessType'];
   if (name.length < 2 || city.length < 2) return null;
-  if (!/^[78]?\d{10}$/.test(phone)) return null;
+  // Номер приходит национальной частью; для +7 допускаем и запись с ведущими 7/8.
+  const national = country.dial === '7' && phone.length === 11 && /^[78]/.test(phone) ? phone.slice(1) : phone;
+  if (national.length !== maxDigits(country)) return null;
   if (!BUSINESS_TYPES.includes(businessType)) return null;
-  return { name, phone: `+7${phone.slice(-10)}`, city, businessType, comment: clean(b.comment, 1000) };
+  return { name, phone: `+${country.dial}${national}`, city, businessType, comment: clean(b.comment, 1000) };
 }
 
 /** Для логов: без имени и с замаскированным телефоном (персональные данные в лог не пишем). */
 function safe(lead: Lead) {
-  return { businessType: lead.businessType, city: lead.city, phone: `+7******${lead.phone.slice(-4)}` };
+  return { businessType: lead.businessType, city: lead.city, phone: `+******${lead.phone.slice(-4)}` };
 }
 
 const BUSINESS_LABELS: Record<Lead['businessType'], string> = {

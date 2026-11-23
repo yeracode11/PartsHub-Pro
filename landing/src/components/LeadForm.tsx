@@ -1,19 +1,16 @@
 'use client';
 
 import { useId, useState } from 'react';
+import { CountryPicker } from '@/components/CountryPicker';
 import { form } from '@/content/site';
+import { defaultCountry, formatNational, maxDigits, normalizeNational, type Country } from '@/lib/countries';
 
 type Errors = Partial<Record<'name' | 'phone' | 'city', string>>;
 type Status = 'idle' | 'sending' | 'ok' | 'error';
 
-function formatPhone(digits: string): string {
-  const d = digits.slice(0, 10);
-  const parts = [d.slice(0, 3), d.slice(3, 6), d.slice(6, 8), d.slice(8, 10)].filter(Boolean);
-  return parts.join(' ');
-}
-
 export function LeadForm() {
   const uid = useId();
+  const [country, setCountry] = useState<Country>(defaultCountry);
   const [phone, setPhone] = useState('');
   const [errors, setErrors] = useState<Errors>({});
   const [status, setStatus] = useState<Status>('idle');
@@ -23,11 +20,11 @@ export function LeadForm() {
     const fd = new FormData(e.currentTarget);
     const name = String(fd.get('name') ?? '').trim();
     const city = String(fd.get('city') ?? '').trim();
-    const digits = phone.replace(/\D/g, '');
+    const digits = phone;
 
     const next: Errors = {};
     if (name.length < 2) next.name = 'Укажите имя';
-    if (digits.length !== 10) next.phone = 'Введите 10 цифр номера';
+    if (digits.length !== maxDigits(country)) next.phone = `Введите номер полностью: ${maxDigits(country)} цифр после +${country.dial}`;
     if (city.length < 2) next.city = 'Укажите город';
     setErrors(next);
     if (Object.keys(next).length) return;
@@ -40,6 +37,7 @@ export function LeadForm() {
         body: JSON.stringify({
           name,
           phone: digits,
+          country: country.code,
           city,
           businessType: fd.get('businessType'),
           comment: fd.get('comment'),
@@ -75,13 +73,20 @@ export function LeadForm() {
       </div>
 
       <div className="field">
-        <label htmlFor={id('phone')}>Телефон (WhatsApp)</label>
+        <label id={id('phone-label')} htmlFor={id('phone')}>Телефон (WhatsApp)</label>
         <div className="phone-row">
-          <span className="phone-prefix" aria-hidden="true">+7</span>
+          <CountryPicker
+            value={country}
+            labelledBy={id('phone-label')}
+            onChange={(c) => {
+              setCountry(c);
+              setPhone((p) => p.slice(0, maxDigits(c)));
+            }}
+          />
           <input
             id={id('phone')} name="phone" className="input" type="tel" inputMode="tel" autoComplete="tel-national"
-            placeholder="701 234 56 78" value={formatPhone(phone.replace(/\D/g, ''))}
-            onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').replace(/^[78](?=\d{10})/, ''))}
+            placeholder={country.placeholder} value={formatNational(phone, country)}
+            onChange={(e) => setPhone(normalizeNational(e.target.value, country))}
             aria-invalid={!!errors.phone} aria-describedby={errors.phone ? id('phone-err') : undefined}
           />
         </div>
