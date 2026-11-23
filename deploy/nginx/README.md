@@ -1,6 +1,6 @@
 # nginx для лендинга vinly.darasoft.kz
 
-Конфиг проксирует домен на контейнер `autohub-landing` (порт `LANDING_PORT` на хосте, по умолчанию 3003).
+Конфиг проксирует домен на контейнер `autohub-landing` (порт `LANDING_PORT` на хосте, по умолчанию 3003; на этом сервере 3003 занят, используется 3010).
 Файл: `vinly.darasoft.kz.conf`. Выполняется на сервере (Ubuntu, nginx 1.24).
 
 ## 1. Запустить лендинг
@@ -9,13 +9,14 @@
 
 ```
 LANDING_SITE_URL=https://vinly.darasoft.kz
+LANDING_PORT=3010
 TELEGRAM_BOT_TOKEN=...
 TELEGRAM_CHAT_ID=...
 ```
 
 ```
 docker compose up -d --build landing
-curl -sI http://127.0.0.1:3003/ | head -1     # ожидается HTTP/1.1 200 OK
+curl -sI http://127.0.0.1:3010/ | head -1     # ожидается HTTP/1.1 200 OK
 ```
 
 `LANDING_SITE_URL` попадает в сборку, поэтому при смене нужна пересборка. Пока он не задан, сайт закрыт от индексации.
