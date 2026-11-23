@@ -78,4 +78,4 @@ TELEGRAM_CHAT_ID=...
 LANDING_SITE_URL=https://ваш-домен   # без него сайт закрыт от индексации
 ```
 
-Запуск: `docker compose up -d --build landing`. Домен и HTTPS нужно направить на порт сайта через ваш обратный прокси; в репозитории конфигурации прокси нет. `LANDING_SITE_URL` попадает в сборку, поэтому после смены нужна пересборка.
+Запуск: `docker compose up -d --build landing`. Домен и HTTPS направляются на порт сайта через nginx: готовый конфиг и порядок установки — `deploy/nginx/` (`vinly.darasoft.kz.conf`, `README.md`). `LANDING_SITE_URL` попадает в сборку, поэтому после смены нужна пересборка.
