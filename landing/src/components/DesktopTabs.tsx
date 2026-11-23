@@ -5,7 +5,7 @@ import { useRef, useState } from 'react';
 
 type Shot = { id: string; label: string; name: string; alt: string; caption: string };
 
-/** Десктопные кадры приложения: один на экране, переключение вкладками. Файлы — public/screens/desktop-<name>.webp. */
+/** Десктопные кадры приложения: один на экране, переключение вкладками. Файлы — public/screens/desktop-<name>-vinly.webp. */
 export function DesktopTabs({ shots }: { shots: Shot[] }) {
   const [active, setActive] = useState(0);
   const tabs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -44,7 +44,7 @@ export function DesktopTabs({ shots }: { shots: Shot[] }) {
         <div className="desktop-win">
           <Image
             key={shot.name}
-            src={`/screens/desktop-${shot.name}.webp`}
+            src={`/screens/desktop-${shot.name}-vinly.webp`}
             alt={shot.alt}
             width={1800}
             height={981}

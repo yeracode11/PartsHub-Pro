@@ -222,7 +222,7 @@ export default function Home() {
 
       <footer className="footer">
         <div className="container footer-inner">
-          <span>© 2026 {brand.name}. {brand.region}.</span>
+          <span>© 2026 {brand.name}. {brand.legal}. {brand.region}.</span>
           <a href="/privacy-policy.html" target="_blank" rel="noopener">Политика конфиденциальности</a>
         </div>
       </footer>

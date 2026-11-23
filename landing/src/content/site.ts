@@ -7,9 +7,10 @@
 export const brand = {
   name: 'Vinly Business',
   region: 'Казахстан',
+  legal: 'ИП ERASOFT, БИН 040821500737',
 };
 
-/** Раздел «На компьютере» (кадры public/screens/desktop-*.webp, у дашборда десктопного кадра нет). */
+/** Раздел «На компьютере» (кадры public/screens/desktop-*-vinly.webp, у дашборда десктопного кадра нет). */
 export const showDesktop = true;
 
 export const nav = [
@@ -69,7 +70,7 @@ export type Feature = {
   /** Одна строка для обзора модулей. */
   summary: string;
   icon: string;
-  /** Широкий кадр десктопной версии (public/screens/desktop-<name>.webp). */
+  /** Широкий кадр десктопной версии (public/screens/desktop-<name>-vinly.webp). */
   desktop?: { name: string; alt: string; caption: string };
 };
 
