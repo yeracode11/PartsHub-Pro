@@ -207,6 +207,18 @@ export class WhatsAppInboundService {
     return true;
   }
 
+  /**
+   * Ответ бота на текст покупателя для любого канала (официальный API или QR-шлюз).
+   * Никогда не бросает: при сбое Qwen вернёт вежливое «не понял».
+   */
+  async generateBotReply(
+    organizationId: string,
+    text: string,
+  ): Promise<string> {
+    const intent = await this.resolveQwenIntent(text, organizationId);
+    return this.buildOutboundReply(organizationId, text, intent);
+  }
+
   private async resolveQwenIntent(
     messageText: string,
     organizationId: string,
@@ -295,7 +307,11 @@ export class WhatsAppInboundService {
     const envToken = this.metaConfig.fallbackAccessToken?.trim();
     const connectionToken = connection.accessToken?.trim();
     const accessToken = envToken || connectionToken;
-    const tokenSource = envToken ? 'env' : connectionToken ? 'connection' : 'none';
+    const tokenSource = envToken
+      ? 'env'
+      : connectionToken
+        ? 'connection'
+        : 'none';
 
     if (!accessToken) {
       this.logger.error(

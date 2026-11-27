@@ -66,6 +66,11 @@ services:
       GREEN_API_ID_INSTANCE: ${GREEN_API_ID_INSTANCE:-7105313983}
       GREEN_API_INSTANCE_NAME: ${GREEN_API_INSTANCE_NAME:-7105313983}
       GREEN_API_TOKEN_INSTANCE: ${GREEN_API_TOKEN_INSTANCE:-}
+      # WhatsApp магазинов по QR (свой шлюз вместо Green API)
+      WA_GATEWAY_URL: ${WA_GATEWAY_URL:-http://whatsapp-gateway:3005}
+      WA_GATEWAY_API_KEY: ${WA_GATEWAY_API_KEY:-}
+      WA_GATEWAY_WEBHOOK_SECRET: ${WA_GATEWAY_WEBHOOK_SECRET:-}
+      WA_BOT_PAUSE_AFTER_MANAGER_MIN: ${WA_BOT_PAUSE_AFTER_MANAGER_MIN:-120}
     ports:
       - '${BACKEND_PORT:-3002}:3000'
     volumes:
@@ -75,6 +80,27 @@ services:
         condition: service_healthy
       loki:
         condition: service_started
+    restart: unless-stopped
+
+  whatsapp-gateway:
+    build:
+      context: ./whatsapp-gateway
+      dockerfile: Dockerfile
+    container_name: autohub-whatsapp-gateway
+    environment:
+      PORT: 3005
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Те же значения, что WA_GATEWAY_API_KEY / WA_GATEWAY_WEBHOOK_SECRET у backend (.env на сервере)
+      GATEWAY_API_KEY: ${WA_GATEWAY_API_KEY:-}
+      GATEWAY_WEBHOOK_SECRET: ${WA_GATEWAY_WEBHOOK_SECRET:-}
+      BACKEND_WEBHOOK_URL: http://backend:3000/webhooks/wa-gateway
+      SEND_MIN_DELAY_MS: ${WA_SEND_MIN_DELAY_MS:-3000}
+      SEND_MAX_PER_MINUTE: ${WA_SEND_MAX_PER_MINUTE:-12}
+      SEND_MAX_PER_DAY: ${WA_SEND_MAX_PER_DAY:-500}
+      SEND_MAX_NEW_CHATS_PER_DAY: ${WA_SEND_MAX_NEW_CHATS_PER_DAY:-30}
+    # Порт наружу не публикуем: шлюз доступен только backend внутри docker-сети.
+    volumes:
+      - whatsapp_sessions:/app/sessions
     restart: unless-stopped
 
   landing:
@@ -98,3 +124,4 @@ volumes:
   postgres_data:
   grafana_data:
   loki_data:
+  whatsapp_sessions:
