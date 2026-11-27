@@ -23,6 +23,12 @@ import { WhatsAppInboundService } from './whatsapp-inbound.service';
 import { QwenModule } from '../ai/qwen.module';
 import { InventoryModule } from '../inventory/inventory.module';
 import { PhoneVerificationModule } from '../phone-verification/phone-verification.module';
+import { WhatsAppWebInstance } from './web/whatsapp-web-instance.entity';
+import { WaGatewayConfig } from './web/wa-gateway.config';
+import { WaGatewayClient } from './web/wa-gateway.client';
+import { WhatsAppWebService } from './web/whatsapp-web.service';
+import { WhatsAppWebController } from './web/whatsapp-web.controller';
+import { WaGatewayWebhookController } from './web/wa-gateway-webhook.controller';
 
 @Module({
   imports: [
@@ -31,6 +37,7 @@ import { PhoneVerificationModule } from '../phone-verification/phone-verificatio
       MessageHistory,
       WhatsAppConnection,
       WhatsAppMetaRecipientCache,
+      WhatsAppWebInstance,
     ]),
     VehiclesModule,
     QwenModule,
@@ -44,6 +51,8 @@ import { PhoneVerificationModule } from '../phone-verification/phone-verificatio
     WhatsAppConnectionController,
     TemplatesController,
     MessageHistoryController,
+    WhatsAppWebController,
+    WaGatewayWebhookController,
   ],
   providers: [
     WhatsAppService,
@@ -55,6 +64,9 @@ import { PhoneVerificationModule } from '../phone-verification/phone-verificatio
     WhatsAppTenantResolver,
     WhatsAppInboundService,
     WhatsAppMetaRecipientCacheService,
+    WaGatewayConfig,
+    WaGatewayClient,
+    WhatsAppWebService,
   ],
   exports: [
     WhatsAppService,
@@ -64,6 +76,7 @@ import { PhoneVerificationModule } from '../phone-verification/phone-verificatio
     WhatsAppConnectionService,
     WhatsAppTenantResolver,
     WhatsAppInboundService,
+    WhatsAppWebService,
   ],
 })
 export class WhatsAppModule {}

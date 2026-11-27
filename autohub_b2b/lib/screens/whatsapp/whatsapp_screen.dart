@@ -13,6 +13,7 @@ import 'package:autohub_b2b/widgets/unauthorized_placeholder.dart';
 import 'package:autohub_b2b/widgets/offline_placeholder.dart';
 import 'package:autohub_b2b/utils/auth_guard.dart';
 import 'package:autohub_b2b/screens/whatsapp/meta_whatsapp_connect_screen.dart';
+import 'package:autohub_b2b/screens/whatsapp/whatsapp_web_card.dart';
 
 enum _ScreenState { loading, ready, forbidden, error }
 
@@ -64,7 +65,8 @@ class _WhatsAppScreenState extends State<WhatsAppScreen> {
           (e.response?.statusCode == 401 || e.response?.statusCode == 403)) {
         setState(() {
           _state = _ScreenState.forbidden;
-          _errorMessage = extractApiErrorMessage(e.response?.data) ??
+          _errorMessage =
+              extractApiErrorMessage(e.response?.data) ??
               'У вас нет доступа к модулю WhatsApp. Войдите под владельцем или менеджером.';
         });
       } else if (isNetworkError(e)) {
@@ -75,8 +77,10 @@ class _WhatsAppScreenState extends State<WhatsAppScreen> {
       } else {
         setState(() {
           _state = _ScreenState.error;
-          _errorMessage =
-              userFacingApiMessage(e, prefix: 'Не удалось загрузить статус WhatsApp');
+          _errorMessage = userFacingApiMessage(
+            e,
+            prefix: 'Не удалось загрузить статус WhatsApp',
+          );
         });
       }
     }
@@ -110,7 +114,10 @@ class _WhatsAppScreenState extends State<WhatsAppScreen> {
         return const Center(child: CircularProgressIndicator());
 
       case _ScreenState.forbidden:
-        return UnauthorizedPlaceholder(message: _errorMessage, isForbidden: true);
+        return UnauthorizedPlaceholder(
+          message: _errorMessage,
+          isForbidden: true,
+        );
 
       case _ScreenState.error:
         if (_isOffline) {
@@ -160,37 +167,48 @@ class _WhatsAppScreenState extends State<WhatsAppScreen> {
       padding: EdgeInsets.all(isMobile ? 16 : 24),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 560),
-        child: Card(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            WhatsAppWebCard(isOwner: isOwner),
+            const SizedBox(height: 16),
+            _buildMetaCard(isOwner),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMetaCard(bool isOwner) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Meta WhatsApp Cloud API',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
-                      ),
+                Expanded(
+                  child: Text(
+                    'Meta WhatsApp Cloud API',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.refresh),
-                      onPressed: _load,
-                      tooltip: 'Обновить',
-                    ),
-                  ],
+                  ),
                 ),
-                const SizedBox(height: 16),
-                if (_connection != null)
-                  ..._buildConnectedBody(_connection!)
-                else
-                  ..._buildNotConnectedBody(isOwner),
+                IconButton(
+                  icon: const Icon(Icons.refresh),
+                  onPressed: _load,
+                  tooltip: 'Обновить',
+                ),
               ],
             ),
-          ),
+            const SizedBox(height: 16),
+            if (_connection != null)
+              ..._buildConnectedBody(_connection!)
+            else
+              ..._buildNotConnectedBody(isOwner),
+          ],
         ),
       ),
     );
@@ -227,9 +245,7 @@ class _WhatsAppScreenState extends State<WhatsAppScreen> {
           onPressed: _openConnectForm,
           icon: const Icon(Icons.link),
           label: const Text('Подключить WhatsApp'),
-          style: FilledButton.styleFrom(
-            minimumSize: const Size.fromHeight(48),
-          ),
+          style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
         ),
       ],
     ];
